@@ -7,6 +7,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "build": "tsc && vite build && electron-builder",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
@@ -34,16 +36,16 @@
     ]
   },
   "dependencies": {
-    "googleapis": "^171.4.0",
+    "bottleneck": "^2.19.5",
+    "chokidar": "^4.0.3",
+    "google-auth-library": "^10.9.1",
     "lucide-react": "^0.577.0",
-    "nodemailer": "^8.0.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.13.0",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
-    "@types/nodemailer": "^7.0.11",
     "@types/react": "^18.2.64",
     "@types/react-dom": "^18.2.21",
     "@typescript-eslint/eslint-plugin": "^7.1.1",
@@ -57,7 +59,8 @@
     "typescript": "^5.2.2",
     "vite": "^5.1.6",
     "vite-plugin-electron": "^0.28.6",
-    "vite-plugin-electron-renderer": "^0.14.5"
+    "vite-plugin-electron-renderer": "^0.14.5",
+    "vitest": "^3.2.7"
   },
   "main": "dist-electron/main.js"
 }
