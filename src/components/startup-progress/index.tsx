@@ -1,6 +1,8 @@
 import './startup-progress.css'
 import { useState, useEffect } from 'react';
 import { Loader2, Check, X } from 'lucide-react';
+import Modal from '../modal';
+import ProgressModal from '../progress-modal';
 
 type ProgressStep = {
     message: string;
@@ -9,6 +11,8 @@ type ProgressStep = {
 }
 
 export default function StartupProgress(){
+
+    const [isModalOpen, setIsModalOpen] = useState(false)
 
     const [minorStep, setMinorStep] = useState<ProgressStep>({
         message: "",
@@ -25,12 +29,19 @@ export default function StartupProgress(){
         window.ipcRenderer.on("startup-progress", (_, step: ProgressStep) => {
             if(step.importance === "minor")
                 setMinorStep(step);
-            else setMajorStep(step)
+            else 
+                setMajorStep(step)
         });
     }, []);
 
     return (
         <div className="startup-progress">
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} items={[{
+                    title: "Progress Details",
+                    content: <ProgressModal/>
+                }
+            ]}
+            />
             {majorStep.message &&
                 <div className={`progress-step ${majorStep.status} ${majorStep.importance}`}>
                     {majorStep.status === 'loading' && <Loader2 size={12} className="spinner"/>}
@@ -39,6 +50,9 @@ export default function StartupProgress(){
                     <span>{majorStep.message}</span>
                 </div>
             }
+            <button className='details-button' onClick={()=>{setIsModalOpen(true)}}>
+                Show detailed progress
+            </button>
             {minorStep.message &&
                 <div className={`progress-step ${minorStep.status} ${minorStep.importance}`}>
                     {minorStep.status === 'loading' && <Loader2 size={12} className="spinner"/>}

@@ -9,15 +9,30 @@
     }
 }
 
-.onOff-wrapper{
+.cockpit-wrapper{
+
+    width: 50%;
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    align-items: end;
 
     .onOff-button{
+        position: relative;
         display: flex;
         align-items: center;
         width: 196px;
         height: 185px;
         justify-content: center;
         border-radius: 50%;
+        left:50%;
+        transform: translate(-50%);
+    }
+
+    .directory-menu {
+        position: absolute;
+        right:0;
+        
     }
     
     .spinner {

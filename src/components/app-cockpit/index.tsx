@@ -1,20 +1,23 @@
-import './OnOff-buttons.css'
+import './app-cockpit.css'
 import { Loader2, Power, Square, Plus, LogIn } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useServerStore, useUserStore, useLocalStore } from '../../store/store'
 import { useConfirm } from '../../hooks/useConfirm';
 import { IStartupOptions } from '../../lib/types';
+import { DirectoryMenu } from '../directory-menu';
 import Modal from '../modal';
 import JoinServer from '../join-server';
 
-export default function OnOffButton() {
+export default function AppCockpit() {
 
     const { userEmail } = useUserStore();
-    const { loadingServers, servers, selectedServer, lockStatus, setLockStatus, loadServers } = useServerStore();
-    const { playitggPath, javaFlags, checklist } = useLocalStore();
+    const { loadingServers, loadingHosting, servers, selectedServer, lockStatus, setLockStatus, loadServers } = useServerStore();
+    const { playitggPath, allocatedRAM, checklist } = useLocalStore();
     const { confirm, popup } = useConfirm();
     const [loadingButton, setLoadingButton] = useState({ onOff: false, create: false, join: false })
     const [isModalOpen, setIsModalOpen] = useState(false)
+
+    const isOwner = lockStatus.hostEmail === userEmail || !loadingServers;
 
     async function handleCreate() {
         const acceptCreate = await confirm({
@@ -69,7 +72,7 @@ export default function OnOffButton() {
             folderId: selectedServer.id,
             serverPath: selectedServer.path,
             playitggPath: playitggPath,
-            javaFlags: javaFlags,
+            RAMoptions: allocatedRAM,
         }
 
         const result = await window.ipcRenderer.invoke("start-server", options)
@@ -163,14 +166,14 @@ export default function OnOffButton() {
     )
 
     return (
-        <div className='onOff-wrapper'>
+        <div className='cockpit-wrapper'>
             {lockStatus && lockStatus.status === "online"
                 ?
                 <button
                     className='onOff-button'
                     title="Stop the server"
                     onClick={handleStop}
-                    disabled={lockStatus.hostEmail !== userEmail || loadingServers}>
+                    disabled={!isOwner}>
                     {loadingButton.onOff || loadingServers
                         ? <Loader2 size={128} className='spinner' />
                         : <Square size={120} fill="currentColor" />
@@ -181,13 +184,16 @@ export default function OnOffButton() {
                     className='onOff-button'
                     title="Start the server"
                     onClick={handleStart}
-                    disabled={loadingButton.onOff || loadingServers}>
+                    disabled={loadingButton.onOff || loadingServers || loadingHosting}>
                     {loadingButton.onOff || loadingServers
                         ? <Loader2 size={128} className='spinner' />
                         : <Power size={128} />
                     }
                 </button>
             }
+            <div className='directory-menu'>
+                <DirectoryMenu isOwner/>
+            </div>
         </div>
     )
 }

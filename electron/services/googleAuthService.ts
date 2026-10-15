@@ -99,7 +99,6 @@ export async function authorizedFetch(
 	options: RequestInit = { method: "GET" },
 	headers: Record<string, string> = { "Content-Type": "application/json" }
 ) {
-	
 	await refreshIfNeeded(client);
 	const accessToken = client.credentials.access_token;
 
@@ -117,15 +116,11 @@ export async function authorizedFetch(
 		throw new Error(errorText);
 	}
 
-	if (res.status === 204) {
-		return null;
-	}
+	if (res.status === 204) return null;
 
 	const text = await res.text();
-
-	if (!text) {
-		return null;
-	}
+	
+	if (!text) return null;
 
 	return JSON.parse(text);
 }

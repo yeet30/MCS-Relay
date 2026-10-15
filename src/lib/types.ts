@@ -31,16 +31,14 @@ export interface ILockStatus {
     onlinePlayers?: string[]
 };
 
-export interface IJavaFlags {
-    minRAM: number,
-    maxRAM: number,
-    customFlags: string
-}
-
 export interface ILocalVariables{
     selectedIndex: number;
     playitggPath: string;
-    javaFlags: IJavaFlags;
+    watcherBlacklist: string[];
+    allocatedRAM: {
+        MIN: number,
+        MAX: number
+    },
     checklist: {
         download: boolean,
         upload: boolean,
@@ -61,5 +59,27 @@ export interface IStartupOptions {
     folderId: string;
     serverPath: string,
     playitggPath: string;
-    javaFlags: IJavaFlags
+    RAMoptions: {
+        MIN: number;
+        MAX: number;
+    };
+}
+
+export interface IWatcherUpdates {
+    changedFiles: Map<string,IFileEntry>
+    removedFiles: Map<string,IFileEntry>
+}
+
+export interface IFileEntry {
+    version: number,
+    size: number,
+    modifiedAt: number
+}
+
+export interface IManifest {
+    version: number,
+    updatedAt: number,
+    authorName: string,
+    authorEmail: string,
+    files: Record<string, IFileEntry>
 }

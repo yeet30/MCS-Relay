@@ -38,18 +38,25 @@ interface LocalVariables{
         playitgg: boolean;
     }
     playitggPath: string;
-    javaFlags: {
-        minRAM: number,
-        maxRAM: number,
-        customFlags: string
+    allocatedRAM: {
+        MIN: number,
+        MAX: number
     }
 
     loadLocalVariables: () => Promise<void>
     setSelectedIndex: (index: number) => Promise<void>
-    setJavaFlags: (min: number, max: number, customFlags: string) => Promise<void>
+    setAllocatedRAM: (min: number, max: number) => Promise<void>
     setPlayitggPath: (path: string) => void
     setChecklist: (list: IChecklist) => void
 };
+
+interface WatcherManifet {
+    trackedFiles: Set<string>
+
+    addFile: (path: string) => void
+    removeFile: (path: string) => void
+    setTrackedFiles: (trackedFiles: Set<string> )=> void
+}
 
 const useServerStore = create<ServerStore>((set,get) => ({
     servers: [],
@@ -129,23 +136,22 @@ const useLocalStore = create<LocalVariables>((set) => ({
         playitgg: true
     },
     playitggPath: "",
-    javaFlags: {
-        minRAM: 2048,
-        maxRAM: 4096,
-        customFlags: ""
+    allocatedRAM: {
+        MIN: 2048,
+        MAX: 4096,
     },
 
     loadLocalVariables:
         async function() {
             const path = await window.ipcRenderer.invoke("get-local-variable", "playitggPath")
             const index = await window.ipcRenderer.invoke("get-local-variable", "selectedIndex")
-            const javaFlags = await window.ipcRenderer.invoke("get-local-variable", "javaFlags")
+            const allocatedRAM = await window.ipcRenderer.invoke("get-local-variable", "allocatedRAM")
             const checkList = await window.ipcRenderer.invoke("get-local-variable", "checklist")
             
             set({
                 playitggPath: path,
                 selectedIndex: index,
-                javaFlags: javaFlags || {minRAM: 2048, maxRAM: 4096, customFlags: ""},
+                allocatedRAM: allocatedRAM || {MIN: 2048, MAX: 4096},
                 checklist: checkList
             })
         },
@@ -155,15 +161,14 @@ const useLocalStore = create<LocalVariables>((set) => ({
             await window.ipcRenderer.invoke("set-local-variable", "selectedIndex" ,index)
         },
 
-    setJavaFlags:
-        async function (min: number, max: number, customFlags: string){
-            const javaFlags = {
-                minRAM: min,
-                maxRAM: max,
-                customFlags: customFlags
+    setAllocatedRAM:
+        async function (min: number, max: number){
+            const allocatedRAM = {
+                MIN: min,
+                MAX: max
             }
-            set({javaFlags: javaFlags})
-            await window.ipcRenderer.invoke("set-local-variable", "javaFlags", javaFlags)
+            set({allocatedRAM: allocatedRAM})
+            await window.ipcRenderer.invoke("set-local-variable", "allocatedRAM", allocatedRAM)
         },
     
     setPlayitggPath: 
@@ -179,6 +184,20 @@ const useLocalStore = create<LocalVariables>((set) => ({
         }
 }))
 
+const useWatcherManifest = create<WatcherManifet>((set,get)=>({
+    trackedFiles: new Set<string>(),
 
+    addFile: (path) => {
+        const buffTracked = new Set<string>(get().trackedFiles)
+        buffTracked.add(path)
+        set({trackedFiles: buffTracked})
+    },
+    removeFile(path) {
+        const buff = new Set<string>(get().trackedFiles)
+        buff.delete(path)
+        set({trackedFiles: buff})
+    },
+    setTrackedFiles: (tracked: Set<string>) => set({trackedFiles: tracked})
+}))
 
-export {useServerStore, useUserStore, useLocalStore};
+export {useServerStore, useUserStore, useLocalStore, useWatcherManifest};

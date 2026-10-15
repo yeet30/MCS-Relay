@@ -1,7 +1,6 @@
 import { spawn, ChildProcess, exec, execSync } from "child_process";
 import fs from "fs";
 import path from "path";
-import { IJavaFlags } from "../../src/lib/types";
 
 let serverProcess: ChildProcess | null = null;
 let playitggProcess: ChildProcess | null = null;
@@ -19,75 +18,43 @@ export function launchPlayitgg(playitggPath: string): ChildProcess | null {
     return playitggProcess;
 }
 
-function parseRunScript(scriptPath: string): string[] | null {
-    const content = fs.readFileSync(scriptPath, "utf-8");
-    const javaLine = content
-        .split("\n")
-        .map(l => l.trim())
-        .find(l => l.startsWith("java "));
+export function launchServer(serverPath: string, ram: {MIN: number, MAX: number}, onError?: (msg: string) => void) {
+    const files = fs.readdirSync(serverPath);
+    const jarFiles = files.filter(f => f.endsWith(".jar"));
 
-    if (!javaLine) return null;
+    if(jarFiles.length === 0)
+        return {
+            success : false,
+            error: "Error: No .jar file found in the directory."
+        }
+    if(jarFiles.length > 1)
+        return {
+            success : false,
+            error: "Error: Multiple .jar files are present in the directory."
+        }
 
-    // Strip shell argument-forwarding tokens
-    const cleaned = javaLine
-        .replace(/%\*/g, "")       // Windows: %*
-        .replace(/"?\$@"?/g, "")   // Unix: "$@" or $@
-        .trim();
-
-    // Split into args, respecting quoted strings
-    const args: string[] = [];
-    const regex = /(?:[^\s"]+|"[^"]*")+/g;
-    let match;
-    while ((match = regex.exec(cleaned)) !== null)
-        args.push(match[0].replace(/^"|"$/g, ""));
-
-    return [...args.slice(1), "nogui"];
-}
-
-export function launchServer(serverPath: string, javaFlags: IJavaFlags, onError?: (msg: string) => void) {
     try {
         execSync("java -version", { stdio: "ignore" });
     } catch {
         return { success: false, error: "Java not installed" };
     }
 
-    fs.writeFileSync(path.join(serverPath, "eula.txt"), "eula=true\n");
+    const jarFile = jarFiles[0]
 
-    const isWindows = process.platform === "win32";
-    const scriptName = isWindows ? "run.bat" : "run.sh";
-    const scriptPath = path.join(serverPath, scriptName);
+    fs.writeFileSync(path.join(serverPath, "eula.txt"), "eula=true\n")
 
-    const runArgs = [`-Xmx${javaFlags.maxRAM}M`, `-Xms${javaFlags.minRAM}M`, javaFlags.customFlags].filter(Boolean)
-
-    if (fs.existsSync(scriptPath)) {
-        const parsed = parseRunScript(scriptPath); // returns args WITHOUT "java"
-        if (!parsed)
-            return { success: false, error: "Located the run file but no java command was found in it." };
-        runArgs.push(...parsed)
-    } else {
-        const jarFiles = fs.readdirSync(serverPath).filter(f => f.endsWith(".jar"));
-        if (jarFiles.length === 0)
-            return { success: false, error: "No .jar file and no run script found." };
-        if (jarFiles.length > 1)
-            return { success: false, error: "Multiple .jar files found and no run script to disambiguate." };
-
-        runArgs.push("-jar", jarFiles[0], "nogui");
-    }
-
-    console.log("attempting to run with args:", runArgs)
-
-    serverProcess = spawn("java", runArgs, {
-        cwd: serverPath,
-        stdio: ["pipe", "pipe", "pipe"],
-        windowsHide: true,
-    });
+    serverProcess = spawn(
+        "java",
+        [`-Xmx${ram.MAX}M`, `-Xms${ram.MIN}M`, "-jar", jarFile, "nogui"],
+        { cwd: serverPath, stdio: ["pipe", "pipe", "pipe"], windowsHide: true }
+    );
 
     serverProcess.on("close", (code) => {
         if (code !== 0)
-            onError?.(`[System] Java exited with code ${code}`);
-    });
+            onError?.(`[System] Java exited with code ${code}`)
+    })
 
-    return { success: true, process: serverProcess };
+    return { success: true, process: serverProcess }
 }
 
 export function killServer() {

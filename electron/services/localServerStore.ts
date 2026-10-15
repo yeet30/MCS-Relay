@@ -15,10 +15,10 @@ const defaultStore: Store = {
     localVariables: {
         selectedIndex: 0,
         playitggPath: "",
-        javaFlags: {
-            minRAM: 2048,
-            maxRAM: 4096,
-            customFlags: ""
+        watcherBlacklist: [],
+        allocatedRAM: {
+            MIN: 2048,
+            MAX: 4096
         },
         checklist: {
             download: true,

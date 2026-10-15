@@ -1,7 +1,7 @@
 {
   "name": "minecraft-distributed-hosting",
   "private": true,
-  "version": "0.0.2",
+  "version": "0.0.0",
   "description": "Distributed Minecraft server hosting",
   "author": "Yeet30",
   "type": "module",
@@ -34,7 +34,6 @@
     ]
   },
   "dependencies": {
-    "chokidar": "^5.0.0",
     "googleapis": "^171.4.0",
     "lucide-react": "^0.577.0",
     "nodemailer": "^8.0.2",

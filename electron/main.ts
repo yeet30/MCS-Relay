@@ -7,15 +7,27 @@ import {
 	createServerFolder,
 	deleteServerFolder,
 	getRootWithContents,
-	downloadServerFolder,
-	uploadServerFolder,
 	inviteUserToServer,
 	removeUserPermission,
 	getJoinedServers,
 	joinServerById,
 	renameServerFolder,
 } from './services/googleDriveService'
-import { startWatcher } from "./services/watcher";
+import { downloadServerFolder, uploadServerFolder } from './services/fileTransferService'
+import { 
+	startWatcher, 
+	stopWatcher, 
+	manifestEvents, 
+	isWatcherRunning, 
+	getWatcherUpdates,
+	getTrackedFiles,
+	mutateTrackedFiles,
+	getBlacklist,
+	setWatcherBlacklist,
+	writeLocalManifest,
+	getFilesToDownload,
+	getFilesToUpload
+} from './services/watcher-manifest'
 import { startServer, getServerLock, updateLockFile, stopServer, getMaxPlayers } from './services/serverService' 
 import { launchServer, getServerProcess, getPlayitggProcess, killPlayitgg, killServer } from './services/childrenProcesses'
 import { getServerPath, setServerPath, getLocalVariable, setLocalVariable } from './services/localServerStore'
@@ -297,8 +309,6 @@ ipcMain.handle("start-server", async (_, options: IStartupOptions) => {
 
 
 	win?.webContents.send("show-progress");
-	const serverDir = getServerPath(options.folderId);
-  	if (serverDir) startWatcher(serverDir);
     const result = await startServer(options, sendProgress);
 
     if (!result.success) {
@@ -311,7 +321,7 @@ ipcMain.handle("start-server", async (_, options: IStartupOptions) => {
     // Launch the actual MC server process
 	if(options.checklist.serverConsole){
 		win?.webContents.send("server-started");
-		launchRes = launchServer(options.serverPath, options.javaFlags, (msg) => {
+		launchRes = launchServer(options.serverPath, options.RAMoptions, (msg) => {
 			win?.webContents.send("server-output", msg)
 		});
 
@@ -411,14 +421,15 @@ ipcMain.handle("drive-get-root", async () => {
 	return await getRootWithContents();
 })
 
-ipcMain.handle("choose-file-directory", async () => {
-	const result = await dialog.showOpenDialog({ properties: ["openFile"] })
+ipcMain.handle("choose-file-directory", async (_, serverPath) => {
+	const result = await dialog.showOpenDialog({ 
+		properties: ["openFile"],
+		defaultPath: serverPath
+	})
 
-	if (result.canceled) return null;
+	if (result.canceled || result.filePaths.length === 0) return null;
 
-	const filePath = result.filePaths[0];
-
-	return filePath;
+	return  result.filePaths[0];
 })
 
 ipcMain.handle("set-server-path", async (_, serverId) => {
@@ -440,11 +451,11 @@ ipcMain.handle("get-max-players", (_, serverPath) => {
 })
 
 ipcMain.handle("sync-server", async (_, serverId) => {
-	return await downloadServerFolder(serverId, sendProgress)
+	return await downloadServerFolder(serverId)
 })
 
 ipcMain.handle("upload-server-folder", async (_, serverId) => {
-	return await uploadServerFolder(serverId, sendProgress);
+	return await uploadServerFolder(serverId);
 })
 
 ipcMain.handle("drive-invite-user", async (_, serverId, email, message?) => {
@@ -478,6 +489,47 @@ ipcMain.handle("request-drive-scope", async () => {
 ipcMain.handle("rename-server", async (_, folderId, newName) => {
 	return await renameServerFolder(folderId, newName);
 });
+
+ipcMain.handle("open-folder", async (_, folderPath)=> {
+	return await shell.openPath(folderPath)
+})
+
+ipcMain.handle("start-watcher", async (_, folderPath)=>{
+	await startWatcher(folderPath);
+})
+
+ipcMain.handle("stop-watcher", async ()=>{
+	return stopWatcher();
+})
+
+ipcMain.handle('is-watcher-running', ()=> isWatcherRunning())
+
+manifestEvents.on('change', (change)=> win?.webContents.send('manifest:change', change))
+
+ipcMain.handle("get-watcher-updates", async (_, serverDir) => getWatcherUpdates(serverDir));
+
+ipcMain.handle("get-tracked-files", async () => getTrackedFiles());
+
+ipcMain.handle("mutate-tracked-files", (_, change)=> mutateTrackedFiles(change))
+
+ipcMain.handle("get-blacklist", async () => getBlacklist());
+
+ipcMain.handle("set-blacklist", async (_, serverDir, list) => setWatcherBlacklist(serverDir, new Set(list)));	
+
+ipcMain.handle('write-manifest', (_, serverPath) => writeLocalManifest(serverPath))
+
+//Temporary implemantation to test the functionality
+ipcMain.handle('get-files-to-download', (_, serverDir:string, serverId: string)=>getFilesToDownload(serverDir, serverId))
+
+//Temporary implemantation to test the functionality
+ipcMain.handle('get-files-to-upload', (_, serverDir:string, serverId: string)=>getFilesToUpload(serverDir, serverId))
+
+ipcMain.handle('open-manifest', async (_, serverPath) => {
+	console.log(serverPath);
+	
+	const fullPath = path.join(serverPath, "manifest.json")
+	return await shell.openPath(fullPath)
+})
 
 ipcMain.handle("get-server-lock", async (_, folderId) => {
 	return await getServerLock(folderId);

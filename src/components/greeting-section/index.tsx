@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import PermissionInformation from '../permission-information';
 import ServerConsole from '../server-console';
 import PlayitggLink from '../playitgg-link';
-import OnOffButton from '../OnOff-button';
+import AppCockpit from '../app-cockpit';
 import StartupProgress from '../startup-progress';
 
 export default function GreetingSection() {
@@ -52,9 +52,9 @@ export default function GreetingSection() {
             <div className='first-page'>
                 <h2 className="greeting-title">Welcome, {userName}!</h2>
                 <div className='starter-section'>
-                    <div><OnOffButton/></div>
-                    {showProgress && <div><StartupProgress/></div>}
+                    <AppCockpit/>
                     <div><SelectServer/></div>
+                    {<div><StartupProgress/></div>}
                     <div><PlayitggLink/></div>
                 </div>
             </div>
