@@ -1,18 +1,17 @@
 import path from "path";
 import fs, { existsSync } from "fs";
-import { IManifest } from "../../src/lib/types";
+import { IManifest, IFileEntry } from "../../src/lib/types";
 import { getOAuthClient, authorizedFetch, refreshIfNeeded } from "./googleAuthService";
 import { OAuth2Client } from "google-auth-library";
 import { getServerPath } from "./localServerStore";
 import { createFolder } from "./googleDriveService";
-import { PROTECTED_DIRECTORIES } from "./watcher-manifest";
+import { PROTECTED_DIRECTORIES, applyManifestChanges, getFilesToDownload, getFilesToUpload, localManifest } from "./watcher-manifest";
+import { unlink } from 'node:fs/promises';
 
 const DRIVE_BASE_URL = "https://www.googleapis.com/drive/v3/files";
-let filesToDownload = new Set<string>("z.txt")
-let filesToUpload = new Set<string>("asdawasd.txt")
 
 type TFolderNode = { type: "folder", children: Map<string, TDirectoryNode> }
-type TDirectoryNode = { type: "file" } | TFolderNode
+type TDirectoryNode = { type: "file", stats: IFileEntry} | TFolderNode
 interface IDriveItem {
     id: string,
     name: string,
@@ -26,11 +25,10 @@ export async function readDriveManifest(folderId: string): Promise<null | IManif
     const url = `${DRIVE_BASE_URL}?q=${encodeURIComponent(query)}&fields=files(id)`;
     const data = await authorizedFetch(client, url);
 
-    if (!data.files || data.files.length === 0)
-        return null
+    if (!data?.files || data.files.length === 0) return null
 
     const manifestFileId = data.files[0].id
-    let manifestData = await authorizedFetch(
+    const manifestData = await authorizedFetch(
         client,
         `${DRIVE_BASE_URL}/${manifestFileId}?alt=media`,
         { method: "GET" },
@@ -40,11 +38,11 @@ export async function readDriveManifest(folderId: string): Promise<null | IManif
     return manifestData
 }
 
-function buildTransferMap(filesToBeTransfered: Set<string>): TFolderNode {
+function buildTransferMap(filesToBeTransfered: Map<string, IFileEntry>): TFolderNode {
     const root: TFolderNode = { type: "folder", children: new Map<string, TDirectoryNode>() }
 
-    for (const file of filesToBeTransfered) {
-        const parts = file.split(/[\\/]+/).filter(Boolean);
+    for (const [filePath, fileEntry] of Object.entries(filesToBeTransfered)) {
+        const parts = filePath.split(/[\\/]+/).filter(Boolean);
         const length = parts.length
         let currentNode: TDirectoryNode  = root
 
@@ -57,7 +55,13 @@ function buildTransferMap(filesToBeTransfered: Set<string>): TFolderNode {
             if (!currentNode.children.has(currentPart))
                 currentNode.children.set(
                     currentPart,
-                    isLast ? { type: "file" } : { type: "folder", children: new Map() }
+                    isLast ? 
+                        { type: "file" , stats: {
+                            version: fileEntry.version,
+                            size: fileEntry.size,
+                            modifiedAt: fileEntry.modifiedAt
+                        }} : 
+                        { type: "folder", children: new Map() }
                 )
 
             if (!isLast) currentNode = currentNode.children.get(currentPart)! //descends into the newly created directory
@@ -90,7 +94,23 @@ async function listFolderIDs(client: OAuth2Client, folderId: string): Promise<ID
     return items
 }
 
-async function downloadFile(client: OAuth2Client, fileId: string) {
+async function deleteLocalFiles(localPath: string, files: Map<string,IFileEntry>): Promise<Map<string,string>>{
+    const results = await Promise.allSettled(
+        [...files.keys()].map(async file => {
+            await unlink(path.join(localPath, file));
+            return file;
+        }
+    ))
+
+    const failedDeletions = new Map<string,string>()
+
+    results.forEach((result, index) => {
+        if (result.status === "rejected") failedDeletions.set([...files.keys()][index], result.reason);
+    })
+    return failedDeletions
+}
+
+async function downloadFile(client: OAuth2Client, fileId: string, localItemPath: string) {
     await refreshIfNeeded(client);
     const accessToken = client.credentials.access_token;
 
@@ -99,28 +119,41 @@ async function downloadFile(client: OAuth2Client, fileId: string) {
         { headers: { Authorization: `Bearer ${accessToken}` } }
     );
 
-    if (!res.ok) throw new Error(await res.text());
-    return Buffer.from(await res.arrayBuffer());
+    if (!res.ok) 
+        return{
+            success: false,
+            error: await res.text()
+        }
+
+    const buffer = Buffer.from(await res.arrayBuffer());
+    fs.writeFileSync(localItemPath, buffer)
+
+    return { success: true }
 }
 
-async function downloadFolderRecursive( client: OAuth2Client, folderId: string, localPath: string, fileMap: TFolderNode) {
+async function downloadFolderRecursive( client: OAuth2Client, folderId: string, localPath: string, fileMap: TFolderNode):
+Promise<{succesfulDownloads: Map<string,IFileEntry>, failedDownloads: Map<string,IFileEntry>}>
+{
     const driveItems: IDriveItem[] = await listFolderIDs(client, folderId);
     const driveItemsByName = new Map(driveItems.map(item=>[item.name, item]))
 
-    for (const [name, node] of fileMap.children) {
-        if (PROTECTED_DIRECTORIES.has(name)) continue;
+    let succesfulDownloads = new Map<string,IFileEntry>()
+    let failedDownloads= new Map<string,IFileEntry>()
 
-        const driveItem = driveItemsByName.get(name)
+    for (const [fileName, node] of fileMap.children) {
+        if (PROTECTED_DIRECTORIES.has(fileName)) continue;
+
+        const driveItem = driveItemsByName.get(fileName)
         if (!driveItem) {
-            console.warn("In manifest but not found in Drive:", path.join(localPath, name));
+            console.warn("In manifest but not found in Drive:", path.join(localPath, fileName));
             continue;
         }
 
-        const localItemPath = path.join(localPath, name);
+        const localItemPath = path.join(localPath, fileName);
 
         if(node.type === "folder"){
             if (driveItem.mimeType !== "application/vnd.google-apps.folder") {
-                console.warn("Manifest expected a folder but Drive has a file:", name);
+                console.warn("Manifest expected a folder but Drive has a file:", fileName);
                 continue;
             }
             
@@ -135,7 +168,9 @@ async function downloadFolderRecursive( client: OAuth2Client, folderId: string, 
                     fs.mkdirSync(localItemPath);
             }
 
-            await downloadFolderRecursive(client, driveItem.id, localItemPath, node);
+            const recursiveRes = await downloadFolderRecursive(client, driveItem.id, localItemPath, node);
+            for (const [k, v] of recursiveRes.succesfulDownloads) succesfulDownloads.set(k, v);
+            for (const [k, v] of recursiveRes.failedDownloads) failedDownloads.set(k, v);
         }
         else {
             try {
@@ -148,13 +183,21 @@ async function downloadFolderRecursive( client: OAuth2Client, folderId: string, 
                 console.warn(error)
             }
             
-            const data = await downloadFile(client, driveItem.id);
-            fs.writeFileSync(localItemPath, data);
+            const downloadRes = await downloadFile(client, driveItem.id, localItemPath);
+            if (downloadRes.success) {
+                succesfulDownloads.set(fileName, node.stats)
+                localManifest.files[fileName] = node.stats
+            }
+            else failedDownloads.set(fileName, node.stats)
         }
+    }
+    return {
+        succesfulDownloads: succesfulDownloads, 
+        failedDownloads: failedDownloads 
     }
 }
 
-export async function downloadServerFolder(serverId: string,) {
+export async function downloadServerFolder(serverId: string, overrideWarning: boolean = false) {
     const client = getOAuthClient();
     const localPath = getServerPath(serverId);
 
@@ -163,8 +206,19 @@ export async function downloadServerFolder(serverId: string,) {
     try {
         if (!fs.existsSync(localPath)) fs.mkdirSync(localPath, { recursive: true });
 
-        const fileTransferMap = buildTransferMap(filesToDownload)
-        await downloadFolderRecursive(client, serverId, localPath, fileTransferMap);
+        const diffRes = await getFilesToDownload(localPath, serverId, overrideWarning)
+        if(!diffRes.success)
+            return {
+            success: false,
+            error: diffRes.error
+        }
+        await deleteLocalFiles(localPath, diffRes.filesToRemove!)
+
+        const fileTransferMap = buildTransferMap(diffRes.filesToDownload!)
+        const downloadRes = await downloadFolderRecursive(client, serverId, localPath, fileTransferMap);
+        if(!downloadRes.failedDownloads.size)
+            localManifest.version = diffRes.driveVersion as number
+        applyManifestChanges(localPath)
         return { success: true };
     } 
     catch (err: any) {
@@ -176,54 +230,63 @@ export async function downloadServerFolder(serverId: string,) {
 
 }
 
-async function uploadFile( client: OAuth2Client, localFilePath: string, localItemName: string, parentId: string, existing?: IDriveItem) {
+async function uploadFile( client: OAuth2Client, localFilePath: string, fileName: string, parentId: string, existing?: IDriveItem) {
     await refreshIfNeeded(client);
     const accessToken = client.credentials.access_token;
 
-    const metadata = { name: localItemName, parents: existing ? undefined : [parentId] };
-    const initUrl = existing
-        ? `https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=resumable`
-        : `https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable`;
+    try {
+        const metadata = { name: fileName, parents: existing ? undefined : [parentId] };
+        const initUrl = existing
+            ? `https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=resumable`
+            : `https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable`;
 
-    const initRes = await fetch(initUrl, {
-        method: existing ? "PATCH" : "POST",
-        headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json; charset=UTF-8"
-        },
-        body: JSON.stringify(metadata)
-    });
+        const initRes = await fetch(initUrl, {
+            method: existing ? "PATCH" : "POST",
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json; charset=UTF-8"
+            },
+            body: JSON.stringify(metadata)
+        });
 
-    if (!initRes.ok) throw new Error(await initRes.text());
+        if (!initRes.ok) throw new Error(await initRes.text());
 
-    const sessionUrl = initRes.headers.get("Location");
-    if (!sessionUrl) throw new Error("No resumable session URL returned by Drive.");
+        const sessionUrl = initRes.headers.get("Location");
+        if (!sessionUrl) throw new Error("No resumable session URL returned by Drive.");
 
-    const fileBuffer = fs.readFileSync(localFilePath);
+        const fileBuffer = fs.readFileSync(localFilePath);
 
-    const uploadRes = await fetch(sessionUrl, {
-        method: "PUT",
-        headers: {
-            "Content-Type": "application/octet-stream",
-            "Content-Length": String(fileBuffer.length)
-        },
-        body: fileBuffer
-    });
+        const uploadRes = await fetch(sessionUrl, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/octet-stream",
+                "Content-Length": String(fileBuffer.length)
+            },
+            body: fileBuffer
+        });
 
-    if (!uploadRes.ok) throw new Error(await uploadRes.text());
-
-    return await uploadRes.json();
+        if (!uploadRes.ok) return {success: false, error: await uploadRes.text()}
+        return {success: true, data: await uploadRes.json()}
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+    
 }
 
-async function uploadFolderRecursive(client: OAuth2Client, localPath: string, parentId: string, fileMap: TFolderNode) {
+async function uploadFolderRecursive(client: OAuth2Client, localPath: string, parentId: string, fileMap: TFolderNode):
+Promise<{succesfulUploads: Map<string,IFileEntry>, failedUploads: Map<string,IFileEntry>}> 
+{
     const driveItems = await listFolderIDs(client, parentId);
     const driveItemsByName = new Map(driveItems.map(item=>[item.name, item]))
 
-    for (const [localItemName, node] of fileMap.children) {
-        if (PROTECTED_DIRECTORIES.has(localItemName)) continue;
+    let succesfulUploads = new Map<string,IFileEntry>()
+    let failedUploads= new Map<string,IFileEntry>()
 
-        const localItemPath = path.join(localPath, localItemName)
-        const driveItem = driveItemsByName.get(localItemName)
+    for (const [fileName, node] of fileMap.children) {
+        if (PROTECTED_DIRECTORIES.has(fileName)) continue;
+
+        const localItemPath = path.join(localPath, fileName)
+        const driveItem = driveItemsByName.get(fileName)
 
         if (node.type === "folder") {
             try {
@@ -246,23 +309,35 @@ async function uploadFolderRecursive(client: OAuth2Client, localPath: string, pa
                 continue
             }
             else
-                folderId = await createFolder(client, path.basename(localItemName), parentId);
+                folderId = await createFolder(client, path.basename(fileName), parentId);
 
-            await uploadFolderRecursive(client, localItemPath, folderId, node);
+            const recursiveRes = await uploadFolderRecursive(client, localItemPath, folderId, node);
+            for (const [k, v] of recursiveRes.succesfulUploads) succesfulUploads.set(k, v);
+            for (const [k, v] of recursiveRes.failedUploads) failedUploads.set(k, v);
         } 
         else {
             try {
                 const info = fs.statSync(localItemPath)
                 if(!info.isFile()){
-                    console.warn("Manifest expected a file but found a directory:", path.join(localPath, localItemName));
+                    console.warn("Manifest expected a file but found a directory:", localItemPath);
                     continue
                 }
             } catch (error) {
-                console.warn("In manifest but not found in Local:", path.join(localPath, localItemName), " Error: ", error);
+                console.warn("In manifest but not found in Local:", localItemPath, " Error: ", error);
                 continue;
             }
-            await uploadFile(client, localItemPath, localItemName, parentId, driveItem);
+
+            const uploadRes = await uploadFile(client, localItemPath, fileName, parentId, driveItem);
+            if (uploadRes.success) {
+                succesfulUploads.set(fileName, node.stats)
+                localManifest.files[fileName] = node.stats
+            }
+            else failedUploads.set(fileName, node.stats)
         }
+    }
+    return { 
+        succesfulUploads: succesfulUploads, 
+        failedUploads: failedUploads 
     }
 }
 
@@ -273,8 +348,14 @@ export async function uploadServerFolder(serverId: string,) {
     if (!localPath) return { success: false, error: "No local path set." };
 
     try {
-        const fileTransferMap = buildTransferMap(filesToUpload) 
-        await uploadFolderRecursive(client, localPath, serverId, fileTransferMap);
+        const diffRes = await getFilesToUpload(localPath, serverId)
+
+        const fileTransferMap = buildTransferMap(diffRes.filesToUpload!) 
+        const uploadRes = await uploadFolderRecursive(client, localPath, serverId, fileTransferMap);
+
+        if (!uploadRes.failedUploads.size)
+            localManifest.version++
+        applyManifestChanges(localPath)
         return { success: true };
     } catch (err: any) {
         return { success: false, error: err.message };

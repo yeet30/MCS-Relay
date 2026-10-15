@@ -2,7 +2,7 @@ import { watch, FSWatcher } from 'chokidar';
 import fs from 'fs';
 import path from 'path';
 import EventEmitter from 'events';
-import { IWatcherEntry, IWatcherUpdates, IManifest } from '../../src/lib/types';
+import { IFileEntry, IWatcherUpdates, IManifest } from '../../src/lib/types';
 import { getLocalVariable, setLocalVariable } from './localServerStore';
 import { readDriveManifest } from './fileTransferService';
 import { getUserInfo } from './googleAuthService';
@@ -13,16 +13,16 @@ let ignoredNames = new Set<string>([...PROTECTED_DIRECTORIES])
 let trackedFiles = new Set<string>()
 let ignoredPatterns: RegExp[] = [];
 let watcherUpdates: IWatcherUpdates = {
-    toAdd: new Map<string, IWatcherEntry>(),
-    toRemove: new Map<string, IWatcherEntry>()
+    changedFiles: new Map<string, IFileEntry>(),
+    removedFiles: new Map<string, IFileEntry>()
 };
 let localChanges: IWatcherUpdates = {
-    toAdd: new Map<string, IWatcherEntry>(),
-    toRemove: new Map<string, IWatcherEntry>()
+    changedFiles: new Map<string, IFileEntry>(),
+    removedFiles: new Map<string, IFileEntry>()
 };
 let watcher: FSWatcher | null = null;
 export const manifestEvents = new EventEmitter()
-let localManifest: IManifest = {
+export let localManifest: IManifest = {
     version: 0,
     updatedAt: Date.now(),
     authorName: "",
@@ -66,8 +66,8 @@ export async function startWatcher(serverDir: string) {
 
     stopWatcher()
     watcherUpdates = {
-        toAdd: new Map<string, IWatcherEntry>(),
-        toRemove: new Map<string, IWatcherEntry>()
+        changedFiles: new Map<string, IFileEntry>(),
+        removedFiles: new Map<string, IFileEntry>()
     };
     ignoredNames = new Set(getLocalVariable("watcherBlacklist"))
     rebuildIgnoredPatterns(serverDir)
@@ -105,62 +105,50 @@ export async function startWatcher(serverDir: string) {
 function detectLocalChanges(serverDir: string) {
     formatWatcherUpdates(serverDir)
     for (const [filePath, value] of Object.entries(localManifest.files)) {
-        const watcherInstance = watcherUpdates.toAdd.get(filePath)
+        const watcherInstance = watcherUpdates.changedFiles.get(filePath)
         if (watcherInstance) {
             if (watcherInstance.modifiedAt === value.modifiedAt)
-                watcherUpdates.toAdd.delete(filePath)
+                watcherUpdates.changedFiles.delete(filePath)
             else
                 continue
         }
         else {
-            watcherUpdates.toRemove.set(filePath, { size: 0, modifiedAt: 0 })
-            watcherUpdates.toAdd.delete(filePath)
+            watcherUpdates.removedFiles.set(filePath, { version: 0, size: 0, modifiedAt: 0 })
+            watcherUpdates.changedFiles.delete(filePath)
         }
     }
 
-    localChanges.toAdd = watcherUpdates.toAdd
-    localChanges.toRemove = watcherUpdates.toRemove
+    localChanges.changedFiles = watcherUpdates.changedFiles
+    localChanges.removedFiles = watcherUpdates.removedFiles
 }
 
 export function getLocalChanges(): IWatcherUpdates { return localChanges }
 
 function manifestUpsert(serverDir: string, p: string) {
     const rel = path.relative(serverDir, p)
-    console.log(`File ${rel} has been added to the manifest.`)
+    console.log(`File ${rel} has been changed.`)
     manifestEvents.emit('change', { opertion: 'upsert', path: rel })
     trackedFiles.add(rel)
-    watcherUpdates.toRemove.delete(rel)
-    watcherUpdates.toAdd.set(rel, { size: 0, modifiedAt: 0 })
+    watcherUpdates.removedFiles.delete(rel)
+    watcherUpdates.changedFiles.set(rel, { version: 0, size: 0, modifiedAt: 0 })
 }
 
 function manifestRemove(serverDir: string, p: string) {
     const rel = path.relative(serverDir, p)
-    console.log(`File ${rel} has been removed from the manifest.`)
+    console.log(`File ${rel} has been removed from the directory.`)
     manifestEvents.emit('change', { opertion: 'remove', path: rel })
     trackedFiles.delete(rel)
-    watcherUpdates.toAdd.delete(rel)
-    watcherUpdates.toRemove.set(rel, { size: 0, modifiedAt: Date.now() })
+    watcherUpdates.changedFiles.delete(rel)
+    watcherUpdates.removedFiles.set(rel, { version: 0, size: 0, modifiedAt: Date.now() })
 }
 
-export async function writeLocalManifest(serverDir: string) {
-    readLocalManifest(serverDir)
-    formatWatcherUpdates(serverDir)
+export async function applyManifestChanges(serverDir: string) {
     const userInfo = await getUserInfo()
 
-    for (const [filePath, value] of watcherUpdates.toAdd) {
-        const existing = localManifest.files[filePath]
-
-        localManifest.files[filePath] = {
-            version: existing ? (existing.version + 1) : 0,
-            size: value.size,
-            modifiedAt: value.modifiedAt
-        }
-    }
-    for (const filePath of watcherUpdates.toRemove.keys())
+    for (const filePath of watcherUpdates.removedFiles.keys())
         delete localManifest.files[filePath]
 
     localManifest.updatedAt = Date.now()
-    localManifest.version++;
     localManifest.authorName = userInfo.name
     localManifest.authorEmail = userInfo.email
 
@@ -168,9 +156,9 @@ export async function writeLocalManifest(serverDir: string) {
     const manifestPath = getLocalManifestPath(serverDir)
     fs.writeFileSync(tempPath, JSON.stringify(localManifest, null, 4), "utf8")
     fs.renameSync(tempPath, manifestPath);
-    watcherUpdates.toAdd.clear()
-    watcherUpdates.toRemove.clear()
-    console.log("The manifest.json has been written.");
+    watcherUpdates.changedFiles.clear()
+    watcherUpdates.removedFiles.clear()
+    console.log("The changes made to the files has been written to the manifest.");
 }
 
 export function setWatcherBlacklist(serverDir: string, blacklist: Set<string>) {
@@ -201,7 +189,7 @@ export function getTrackedFiles(): Set<string> { return trackedFiles }
 export function isWatcherRunning(): boolean { return !(watcher === null) }
 
 function formatWatcherUpdates(serverDir: string) {
-    for (const [filePath, update] of watcherUpdates.toAdd) {
+    for (const [filePath, update] of watcherUpdates.changedFiles) {
         const stats = fs.statSync(path.join(serverDir, filePath))
         update.size = stats.size
         update.modifiedAt = stats.mtimeMs
@@ -219,20 +207,20 @@ export function getWatcherUpdates(serverDir: string): IWatcherUpdates {
  * @param manifestA Manifest object to be cycled through
  * @param manifestB Manifest object to be compared to
  */
-function getManifestDifference(manifestA: IManifest, manifestB: IManifest): Set<string> {
-    const fileDifference = new Set<string>();
+function getManifestDifference(manifestA: IManifest, manifestB: IManifest): Map<string, IFileEntry> {
+    const fileDifference = new Map<string, IFileEntry>();
     for (const [filePath, instanceA] of Object.entries(manifestA.files)) {
         const instanceB = manifestB.files[filePath]
         if (!instanceB || instanceA.version > instanceB.version)
-            fileDifference.add(filePath)
+            fileDifference.set(filePath, instanceA)
     }
     return fileDifference
 }
 
-function getFilesToDelete(localManifest: IManifest, driveManifest: IManifest): Set<string> {
-    const toDelete = new Set<string>();
-    for (const filePath of Object.keys(driveManifest.files))
-        if (!localManifest.files[filePath]) toDelete.add(filePath);
+function getFilesToDelete(localManifest: IManifest, driveManifest: IManifest): Map<string, IFileEntry> {
+    const toDelete = new Map<string, IFileEntry>();
+    for (const [filePath, file] of Object.entries(driveManifest.files))
+        if (!localManifest.files[filePath]) toDelete.set(filePath, file);
     return toDelete;
 }
 
@@ -247,8 +235,9 @@ export async function getFilesToDownload(serverDir: string, serverId: string, ov
     else if (!localManifest.files)
         return {
             success: true,
-            filesToDownload: new Set(Object.keys(driveManifest.files)),
-            filesToRemove: new Set<string>()
+            filesToDownload: new Map<string, IFileEntry>(Object.entries(driveManifest.files)),
+            filesToRemove: new Map(),
+            driveVersion: 0
         }
     else if (localManifest.version > driveManifest.version && !overrideWarning)
         return {
@@ -266,13 +255,15 @@ export async function getFilesToDownload(serverDir: string, serverId: string, ov
     return {
         success: true,
         filesToDownload: filesToDownload,
-        filesToRemove: filesToRemove
+        filesToRemove: filesToRemove,
+        driveVersion: driveManifest.version
     }
 }
 
 export async function getFilesToUpload(serverDir: string, serverId: string, overrideWarning: boolean = false) {
     const driveManifest = await readDriveManifest(serverId)
-    writeLocalManifest(serverDir)
+    readLocalManifest(serverDir)
+    formatWatcherUpdates(serverDir)
 
     if (!localManifest.files)
         return {
@@ -282,8 +273,8 @@ export async function getFilesToUpload(serverDir: string, serverId: string, over
     else if (!driveManifest)
         return {
             success: true,
-            filesToUpload: new Set(Object.keys(localManifest.files)),
-            filesToRemove: new Set<string>()
+            filesToUpload: new Map<string, IFileEntry>(Object.entries(localManifest.files)),
+            filesremovedFiles: new Map()
         }
     else if (driveManifest.version > localManifest.version && !overrideWarning)
         return {
@@ -295,12 +286,18 @@ export async function getFilesToUpload(serverDir: string, serverId: string, over
                 + `\n\nOr proceed with uploading ONLY if you know what you are doing!`
         }
     
-    const filesToUpload = getManifestDifference(localManifest, driveManifest)
-    const filesToRemove = getFilesToDelete(localManifest, driveManifest)
+    const filesToUpload = new Map<string, IFileEntry>([
+        ...watcherUpdates.changedFiles,
+        ...getManifestDifference(localManifest, driveManifest)
+    ])
+    const filesToRemove = new Map<string, IFileEntry>([
+        ...watcherUpdates.removedFiles,
+        ...getFilesToDelete(localManifest, driveManifest),
+    ]);
 
     return {
         success: true,
         filesToUpload: filesToUpload,
-        filesToRemove: filesToRemove
+        filesremovedFiles: filesToRemove
     }
 }

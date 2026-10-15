@@ -65,17 +65,12 @@ export interface IStartupOptions {
     };
 }
 
-export interface IWatcherEntry {
-    size: number,
-    modifiedAt: number
-}
-
 export interface IWatcherUpdates {
-    toAdd: Map<string,IWatcherEntry>
-    toRemove: Map<string,IWatcherEntry>
+    changedFiles: Map<string,IFileEntry>
+    removedFiles: Map<string,IFileEntry>
 }
 
-export interface IManifestEntry {
+export interface IFileEntry {
     version: number,
     size: number,
     modifiedAt: number
@@ -86,5 +81,5 @@ export interface IManifest {
     updatedAt: number,
     authorName: string,
     authorEmail: string,
-    files: Record<string, IManifestEntry>
+    files: Record<string, IFileEntry>
 }
