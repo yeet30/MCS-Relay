@@ -47,7 +47,9 @@ export default function ServerSlot({ server }: { server: ServerSummary }) {
                 cancelText: 'Keep',
             }
             : {
-                message: `Leave "${server.name}"? You lose access to the shared folder. Your local copy stays on this PC.`,
+                message: `Leave "${server.name}"? You lose access to the shared folder. Your local copy stays on this PC.
+
+World files you uploaded stay in the server, because the others still need them, and keep using your Google storage until the owner deletes the server.`,
                 confirmText: 'Leave',
                 cancelText: 'Stay',
             });
