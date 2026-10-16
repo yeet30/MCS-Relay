@@ -1,0 +1,1649 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Drive Launcher Blueprint</title>
+<style>
+/* Drive Launcher architecture review: shared stylesheet.
+   Layout: one reading column (46rem of text) inside a 52rem page; figures, tables and code may use the full width.
+   Visual language: an engineering drawing set. Part 1 marks problems in redline red, Part 2 draws the plan in blueprint blue. */
+:root {
+  --paper: #f3f5f3;
+  --sheet: #fbfcfb;
+  --ink: #16201d;
+  --ink-2: #46524e;
+  --muted: #6f7c78;
+  --rule: #d3dad7;
+  --wash: #e7ecea;
+  --accent: #0c666b;
+  --accent-wash: #dfeeed;
+  --plan: #1d5ca6;
+  --plan-wash: #e2ecf8;
+  --redline: #c22e2d;
+  --redline-wash: #f6e0df;
+  --crit: #d03b3b;
+  --high: #ec835a;
+  --med: #e9a710;
+  --low: #94a19d;
+  --good: #128a12;
+  --good-wash: #e0f0e0;
+  --code-bg: #e8edeb;
+  --font-display: "Bahnschrift", "DIN Alternate", "Arial Nova", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Sitka Text", "Sitka", "Iowan Old Style", "Palatino Linotype", Cambria, Georgia, serif;
+  --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e1312;
+    --sheet: #141a19;
+    --ink: #e2e9e6;
+    --ink-2: #b0bcb8;
+    --muted: #84918d;
+    --rule: #2a3431;
+    --wash: #1b2321;
+    --accent: #5ab2b4;
+    --accent-wash: #15302f;
+    --plan: #6ea5ea;
+    --plan-wash: #162538;
+    --redline: #ef6a66;
+    --redline-wash: #3b1d1c;
+    --crit: #e05a5a;
+    --high: #ec835a;
+    --med: #f2b531;
+    --low: #6c7975;
+    --good: #3cc23c;
+    --good-wash: #16301a;
+    --code-bg: #1a2220;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e1312;
+  --sheet: #141a19;
+  --ink: #e2e9e6;
+  --ink-2: #b0bcb8;
+  --muted: #84918d;
+  --rule: #2a3431;
+  --wash: #1b2321;
+  --accent: #5ab2b4;
+  --accent-wash: #15302f;
+  --plan: #6ea5ea;
+  --plan-wash: #162538;
+  --redline: #ef6a66;
+  --redline-wash: #3b1d1c;
+  --crit: #e05a5a;
+  --high: #ec835a;
+  --med: #f2b531;
+  --low: #6c7975;
+  --good: #3cc23c;
+  --good-wash: #16301a;
+  --code-bg: #1a2220;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.62;
+  font-variant-numeric: lining-nums;
+  text-rendering: optimizeLegibility;
+}
+.page { max-width: 52rem; margin: 0 auto; padding-inline: clamp(16px, 4vw, 44px); padding-block: 40px 96px; }
+.page > * { min-width: 0; }
+p, li { max-width: 46rem; }
+p { margin: .75rem 0; }
+a { color: var(--accent); }
+strong { font-weight: 700; }
+em { font-style: italic; }
+
+/* ---------- Masthead and title block ---------- */
+.masthead { padding-bottom: .5rem; margin-bottom: 1rem; }
+.kicker {
+  font-family: var(--font-display); font-size: .76rem; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--muted); display: flex; flex-wrap: wrap; gap: .4rem 1rem;
+}
+.kicker .part { color: var(--ink); font-weight: 600; }
+.masthead h1 {
+  font-family: var(--font-display); font-weight: 600; font-stretch: 87.5%;
+  font-size: clamp(2.4rem, 6.2vw, 3.5rem); line-height: 1; letter-spacing: -0.015em;
+  margin: .55rem 0 .9rem; text-wrap: balance;
+}
+.dek { font-size: 1.13rem; line-height: 1.5; color: var(--ink-2); max-width: 41rem; margin: 0 0 1.4rem; }
+.titleblock {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1.5px solid var(--ink); background: var(--sheet); margin: 0;
+}
+.titleblock div { padding: .5rem .75rem .55rem; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); min-width: 0; }
+.titleblock dt {
+  font-family: var(--font-display); font-size: .64rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+}
+.titleblock dd { margin: .12rem 0 0; font-family: var(--font-display); font-size: .86rem; line-height: 1.35; overflow-wrap: anywhere; }
+
+/* ---------- Headings ---------- */
+h2 {
+  font-family: var(--font-display); font-weight: 600; font-size: 1.68rem; line-height: 1.15;
+  margin: 3.4rem 0 1rem; padding-top: .75rem; border-top: 1px solid var(--ink);
+  display: flex; gap: .8rem; align-items: baseline; text-wrap: balance;
+}
+h2 .sec { font-size: .8rem; letter-spacing: .1em; color: var(--muted); font-weight: 500; flex: none; }
+h3 { font-family: var(--font-display); font-weight: 600; font-size: 1.2rem; line-height: 1.25; margin: 2.2rem 0 .55rem; text-wrap: balance; }
+h4 { font-family: var(--font-display); font-weight: 600; font-size: 1rem; margin: 1.4rem 0 .35rem; }
+.lead { font-size: 1.06rem; color: var(--ink-2); }
+
+ul, ol { padding-left: 1.3rem; margin: .7rem 0; }
+li { margin: .35rem 0; }
+li::marker { color: var(--muted); }
+
+/* ---------- Code ---------- */
+code {
+  font-family: var(--font-mono); font-size: .84em; background: var(--code-bg);
+  border-radius: 3px; padding: .05em .32em; overflow-wrap: anywhere;
+}
+pre {
+  font-family: var(--font-mono); font-size: .78rem; line-height: 1.55; color: var(--ink);
+  background: var(--sheet); border: 1px solid var(--rule); border-left: 3px solid var(--ink-2);
+  border-radius: 4px; padding: .85rem 1rem; overflow-x: auto; margin: 1.2rem 0; tab-size: 2;
+}
+pre code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+pre .c { color: var(--muted); }
+pre .hl { color: var(--redline); font-weight: 600; }
+pre .ok { color: var(--plan); font-weight: 600; }
+pre .file {
+  display: block; font-family: var(--font-display); font-size: .7rem; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: .45rem;
+}
+.ref { font-family: var(--font-mono); font-size: .76rem; color: var(--muted); }
+
+/* ---------- Figures ---------- */
+figure { margin: 2.1rem 0; break-inside: avoid; }
+.frame { background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; padding: 14px; overflow-x: auto; }
+.frame svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.frame pre.tree { line-height: 1.34; }
+.frame pre { margin: 0; border: 0; padding: 0; background: none; font-size: .76rem; line-height: 1.6; }
+figcaption {
+  font-family: var(--font-display); font-size: .86rem; line-height: 1.45; color: var(--ink-2);
+  margin-top: .6rem; max-width: 46rem;
+}
+figcaption .no { font-weight: 600; color: var(--ink); margin-right: .3rem; }
+
+/* ---------- Tables ---------- */
+.table-wrap { overflow-x: auto; margin: 1.4rem 0; }
+table { border-collapse: collapse; width: 100%; font-size: .88rem; line-height: 1.45; }
+caption {
+  caption-side: top; text-align: left; font-family: var(--font-display); font-weight: 600;
+  font-size: .92rem; padding-bottom: .5rem; color: var(--ink);
+}
+th {
+  font-family: var(--font-display); font-weight: 600; font-size: .7rem; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--muted); text-align: left; padding: .45rem .65rem;
+  border-bottom: 2px solid var(--ink); vertical-align: bottom;
+}
+td { padding: .5rem .65rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td code { font-size: .8em; white-space: nowrap; overflow-wrap: normal; }
+@media (max-width: 560px) { .titleblock { grid-template-columns: minmax(0, 1fr); } }
+tr { break-inside: avoid; }
+td.k { font-family: var(--font-display); font-weight: 600; white-space: nowrap; }
+
+/* ---------- Callouts ---------- */
+.callout {
+  border: 1px solid var(--rule); border-left: 4px solid var(--ink-2); background: var(--sheet);
+  border-radius: 4px; padding: .8rem 1.05rem; margin: 1.4rem 0; break-inside: avoid;
+}
+.callout.good { border-left-color: var(--good); }
+.callout.red { border-left-color: var(--redline); }
+.callout.plan { border-left-color: var(--plan); }
+.callout .label {
+  display: block; font-family: var(--font-display); font-size: .7rem; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: .2rem;
+}
+.callout p { margin: .3rem 0; }
+.callout > :last-child { margin-bottom: 0; }
+
+/* ---------- Severity chips, tally, findings ---------- */
+.sev {
+  --c: var(--low);
+  display: inline-flex; align-items: center; gap: .38rem; white-space: nowrap;
+  font-family: var(--font-display); font-weight: 600; font-size: .64rem; letter-spacing: .1em;
+  text-transform: uppercase; line-height: 1; color: var(--ink);
+  padding: .3rem .5rem .26rem; border-radius: 3px;
+  background: color-mix(in srgb, var(--c) 15%, var(--sheet));
+  border: 1px solid color-mix(in srgb, var(--c) 60%, var(--sheet));
+}
+.sev::before { content: ""; width: .55rem; height: .55rem; border-radius: 2px; background: var(--c); flex: none; }
+.sev.crit { --c: var(--crit); }
+.sev.high { --c: var(--high); }
+.sev.med { --c: var(--med); }
+.sev.low { --c: var(--low); }
+.tally { display: flex; flex-wrap: wrap; gap: .55rem; margin: 1.1rem 0 .4rem; }
+.tally .sev { font-size: .74rem; padding: .48rem .7rem .44rem; }
+.tally .sev b { font-size: 1rem; letter-spacing: 0; margin-right: .15rem; font-variant-numeric: tabular-nums; }
+
+.fref {
+  font-family: var(--font-display); font-weight: 600; font-size: .8em; color: var(--redline);
+  white-space: nowrap;
+}
+.findings { margin: .8rem 0 2rem; border-top: 1px solid var(--rule); }
+.finding {
+  --c: var(--low);
+  display: grid; grid-template-columns: 3.1rem minmax(0, 1fr); column-gap: .85rem;
+  padding: .8rem .2rem .85rem .85rem; border-left: 4px solid var(--c); border-bottom: 1px solid var(--rule);
+  break-inside: avoid;
+}
+.finding.crit { --c: var(--crit); }
+.finding.high { --c: var(--high); }
+.finding.med { --c: var(--med); }
+.finding.low { --c: var(--low); }
+.finding .fid { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; line-height: 1.3; }
+.finding .fbody { min-width: 0; }
+.finding h4 { margin: 0; font-size: 1.01rem; line-height: 1.3; }
+.finding .ref { display: block; margin-top: .2rem; }
+.finding p { margin: .35rem 0 0; font-size: .92rem; line-height: 1.5; }
+.finding p.lesson { color: var(--ink-2); }
+.finding p.lesson b {
+  font-family: var(--font-display); font-weight: 600; font-size: .68rem; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted); margin-right: .35rem;
+}
+
+/* ---------- Habit / principle grid ---------- */
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); gap: .9rem 1.4rem; margin: 1.2rem 0; }
+.habit { border-top: 2px solid var(--ink); padding-top: .55rem; break-inside: avoid; min-width: 0; }
+.habit h4 { margin: 0 0 .25rem; font-size: 1rem; }
+.habit p { margin: .2rem 0; font-size: .92rem; line-height: 1.5; }
+.habit .refs { font-family: var(--font-display); font-size: .78rem; color: var(--redline); }
+.habit.plan { border-top-color: var(--plan); }
+
+/* ---------- Diagrams (inline SVG) ---------- */
+.dg text { font-family: var(--font-display); font-size: 12px; fill: var(--ink); }
+.dg .b { font-weight: 600; }
+.dg .sm { font-size: 10.5px; fill: var(--ink-2); }
+.dg .xs { font-size: 9.6px; fill: var(--muted); }
+.dg .cap { font-size: 9.6px; letter-spacing: .12em; fill: var(--muted); }
+.dg .mono { font-family: var(--font-mono); font-size: 10px; }
+.dg .red { fill: var(--redline); }
+.dg .pl { fill: var(--plan); }
+.dg .gd { fill: var(--good); }
+.dg .mid { text-anchor: middle; }
+.dg .end { text-anchor: end; }
+.dg .it { font-style: italic; }
+.dg .box { fill: var(--sheet); stroke: var(--ink-2); stroke-width: 1.1; }
+.dg .box-strong { fill: var(--sheet); stroke: var(--ink); stroke-width: 1.8; }
+.dg .box-soft { fill: var(--wash); stroke: var(--rule); stroke-width: 1; }
+.dg .zone { fill: none; stroke: var(--muted); stroke-width: 1; stroke-dasharray: 5 4; }
+.dg .box-accent { fill: var(--accent-wash); stroke: var(--accent); stroke-width: 1.2; }
+.dg .box-plan { fill: var(--plan-wash); stroke: var(--plan); stroke-width: 1.3; }
+.dg .box-red { fill: var(--redline-wash); stroke: var(--redline); stroke-width: 1.2; }
+.dg .box-good { fill: var(--good-wash); stroke: var(--good); stroke-width: 1.2; }
+.dg .ln { stroke: var(--ink-2); stroke-width: 1.25; fill: none; }
+.dg .ln-faint { stroke: var(--rule); stroke-width: 1; fill: none; }
+.dg .ln-life { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 4; fill: none; }
+.dg .ln-red { stroke: var(--redline); stroke-width: 1.4; fill: none; }
+.dg .ln-plan { stroke: var(--plan); stroke-width: 1.5; fill: none; }
+.dg .ln-good { stroke: var(--good); stroke-width: 1.5; fill: none; }
+.dg .dash { stroke-dasharray: 5 4; }
+.dg .ah { fill: var(--ink-2); }
+.dg .ah-red { fill: var(--redline); }
+.dg .ah-plan { fill: var(--plan); }
+.dg .ah-good { fill: var(--good); }
+.dg .h { paint-order: stroke; stroke: var(--sheet); stroke-width: 4px; stroke-linejoin: round; }
+.dg .svc { font-size: 11.5px; font-weight: 600; }
+.dg .rl circle, .dg .rl rect { fill: var(--redline); }
+.dg .rl text { fill: var(--sheet); font-size: 8.6px; font-weight: 700; text-anchor: middle; }
+.dg .pn circle, .dg .pn rect { fill: var(--plan); }
+.dg .pn text { fill: var(--sheet); font-size: 9px; font-weight: 700; text-anchor: middle; }
+.dg .num circle { fill: var(--ink); }
+.dg .num text { fill: var(--sheet); font-size: 9.5px; font-weight: 700; text-anchor: middle; }
+.dg .on-bar { fill: var(--sheet); }
+.dg .bar-work { fill: var(--accent); }
+.dg .bar-good { fill: var(--good); }
+.dg .bar-red { fill: var(--redline); }
+.dg .bar-red-soft { fill: var(--redline-wash); stroke: var(--redline); stroke-width: 1; }
+.dg .bar-muted { fill: var(--low); }
+.dg .bar-plan { fill: var(--plan); }
+.dg .grid { stroke: var(--rule); stroke-width: 1; }
+.dg .axis { stroke: var(--ink-2); stroke-width: 1; }
+.dg .fill-paper { fill: var(--sheet); }
+.dg .band { fill: var(--wash); }
+
+/* ---------- UI mockups (Part 2) ---------- */
+.mock {
+  font-family: var(--font-display); font-size: .86rem; line-height: 1.35; color: var(--ink);
+  background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; padding: 1rem 1.1rem;
+  max-width: 34rem; break-inside: avoid;
+}
+.mock + .mock { margin-top: .8rem; }
+.mock-head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.mock-title { font-weight: 600; font-size: 1rem; }
+.mock-sub { color: var(--ink-2); font-size: .82rem; }
+.mock-pill {
+  --c: var(--low);
+  display: inline-flex; align-items: center; gap: .35rem; font-size: .7rem; font-weight: 600;
+  letter-spacing: .08em; text-transform: uppercase; padding: .22rem .5rem .2rem; border-radius: 99px;
+  background: color-mix(in srgb, var(--c) 16%, var(--sheet)); border: 1px solid color-mix(in srgb, var(--c) 55%, var(--sheet));
+}
+.mock-pill::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: var(--c); }
+.mock-pill.good { --c: var(--good); }
+.mock-pill.warn { --c: var(--med); }
+.mock-pill.bad { --c: var(--crit); }
+.mock-pill.info { --c: var(--plan); }
+.mock-btns { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+.mock-btn {
+  font: inherit; font-size: .8rem; font-weight: 600; padding: .38rem .75rem; border-radius: 5px;
+  border: 1px solid var(--ink-2); background: var(--sheet); color: var(--ink);
+}
+.mock-btn.primary { background: var(--plan); border-color: var(--plan); color: var(--sheet); }
+.mock-rows { margin-top: .7rem; border-top: 1px solid var(--rule); }
+.mock-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: .9rem; align-items: center;
+  padding: .38rem 0; border-bottom: 1px solid var(--rule); font-size: .8rem;
+}
+.mock-row .path { font-family: var(--font-mono); font-size: .74rem; overflow-wrap: anywhere; min-width: 0; }
+.mock-row .n { color: var(--ink-2); font-variant-numeric: tabular-nums; text-align: right; }
+.mock-meter { height: 8px; border-radius: 4px; background: var(--wash); overflow: hidden; margin-top: .55rem; }
+.mock-meter i { display: block; height: 100%; background: var(--plan); border-radius: 4px; }
+.mock-stats { display: flex; flex-wrap: wrap; gap: .3rem 1.1rem; margin-top: .5rem; font-size: .8rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.mock-stats b { color: var(--ink); }
+.lanes { margin-top: .8rem; display: grid; gap: .45rem; }
+.lane { display: grid; grid-template-columns: 3.2rem minmax(0, 1fr) 4.6rem; gap: .6rem; align-items: center; font-size: .76rem; }
+.lane .ln-name { color: var(--muted); font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; }
+.lane .ln-file { font-family: var(--font-mono); font-size: .72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.lane .ln-bar { grid-column: 2; height: 5px; border-radius: 3px; background: var(--wash); overflow: hidden; margin-top: -.2rem; }
+.lane .ln-bar i { display: block; height: 100%; background: var(--plan); }
+.lane .ln-n { text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.lane.idle .ln-file { color: var(--muted); font-family: var(--font-display); }
+.mock-fail { margin-top: .7rem; padding: .5rem .65rem; border: 1px solid color-mix(in srgb, var(--crit) 55%, var(--sheet)); border-radius: 5px; background: color-mix(in srgb, var(--crit) 8%, var(--sheet)); font-size: .78rem; }
+.mock-fail .path { font-family: var(--font-mono); font-size: .72rem; }
+.mock-group { display: grid; grid-template-columns: 1rem minmax(0, 1fr) auto auto; gap: .6rem; align-items: center; padding: .36rem 0; border-bottom: 1px solid var(--rule); font-size: .8rem; }
+.mock-group .tw { color: var(--muted); }
+.mock-group .path { font-family: var(--font-mono); font-size: .74rem; min-width: 0; overflow-wrap: anywhere; }
+.mock-group .n { color: var(--ink-2); font-variant-numeric: tabular-nums; text-align: right; }
+.mock-group.ign { color: var(--muted); }
+.mock-group.ign .path { text-decoration: line-through; text-decoration-color: var(--muted); }
+.mock-tag { font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--rule); border-radius: 3px; padding: .1rem .3rem; }
+.mock-wrap { display: grid; gap: .9rem; margin: 1.2rem 0; }
+
+/* ---------- Roadmap ---------- */
+.steps { list-style: none; padding: 0; margin: 1.2rem 0; counter-reset: step; }
+.steps li { counter-increment: step; display: grid; grid-template-columns: 2.6rem minmax(0, 1fr); gap: .2rem .9rem; padding: .75rem 0; border-top: 1px solid var(--rule); max-width: none; break-inside: avoid; }
+.steps li::before {
+  content: counter(step); font-family: var(--font-display); font-weight: 600; font-size: 1.5rem; line-height: 1;
+  color: var(--plan); grid-row: span 2; padding-top: .1rem;
+}
+.steps h4 { margin: 0; }
+.steps p { margin: .15rem 0 0; font-size: .93rem; }
+
+.tight li { margin: .2rem 0; }
+.muted { color: var(--muted); }
+.nowrap { white-space: nowrap; }
+hr.end { border: 0; border-top: 3px solid var(--ink); margin: 3rem 0 1rem; }
+.endnote { font-family: var(--font-display); font-size: .84rem; color: var(--ink-2); }
+
+@page { size: A4; margin: 16mm 17mm 17mm; }
+@media print {
+  html { font-size: 13.4px; }
+  body { background: #fff; font-size: 13.4px; }
+  .page { max-width: none; padding: 0; }
+  .frame svg { min-width: 0; }
+  h2 { break-after: avoid; margin-top: 2.4rem; }
+  h3, h4 { break-after: avoid; }
+  figure, table, pre, .callout, .finding, .habit, .mock, .titleblock { break-inside: avoid; }
+  a { color: inherit; text-decoration: none; }
+  .break { break-before: page; }
+  .masthead h1 { font-size: 3.1rem; }
+  pre { font-size: .76rem; }
+}
+
+.masthead h1 { color: var(--ink); }
+.kicker .part { color: var(--plan); }
+h2 { border-top-color: var(--plan); }
+h2 .sec { color: var(--plan); }
+pre { border-left-color: var(--plan); }
+.titleblock { border-color: var(--plan); }
+@page {
+  @bottom-left { content: "Drive Launcher Blueprint · Part 2 of 2"; font-family: Bahnschrift, "Segoe UI", sans-serif; font-size: 8pt; color: #6f7c78; }
+  @bottom-right { content: counter(page) " / " counter(pages); font-family: Bahnschrift, "Segoe UI", sans-serif; font-size: 8pt; color: #6f7c78; }
+}
+</style>
+</head>
+<body>
+<main class="page">
+
+<header class="masthead">
+  <div class="kicker"><span class="part">Part 2 of 2</span><span>Architecture review</span><span>Drive Launcher</span></div>
+  <h1>Drive Launcher Blueprint</h1>
+  <p class="dek">The same app, the same screens and the same idea, on a structure you can trust: one owner for the session, a lock that holds for as long as the work does, a sync that knows what changed on each side, and transfers that run in parallel and report their progress.</p>
+  <dl class="titleblock">
+    <div><dt>Drawing</dt><dd>Session, sync and UI</dd></div>
+    <div><dt>Status</dt><dd>Proposed design</dd></div>
+    <div><dt>Builds on</dt><dd>Part 1 · Drive Launcher As-Built (findings F1–F41)</dd></div>
+    <div><dt>Date</dt><dd>14 October 2026</dd></div>
+    <div><dt>Stack</dt><dd>Unchanged: Electron, React, zustand, chokidar, plus Bottleneck</dd></div>
+    <div><dt>Level</dt><dd>Junior-friendly: every new term is explained where it first appears</dd></div>
+  </dl>
+</header>
+
+<h2><span class="sec">01</span>What we're building</h2>
+<p>The goals come straight from how you described the app:</p>
+<ul>
+  <li><strong>Show which files changed during the session</strong>, live, while people play.</li>
+  <li><strong>Notice changes made between sessions</strong>, on your PC or in the cloud, and warn before anything gets overwritten.</li>
+  <li><strong>Move files in parallel lanes</strong> that adapt to your bandwidth and to Google's rate limits, with each lane's current file, failures, an overall progress bar and a time estimate.</li>
+  <li><strong>Have a structure</strong> where adding the next feature doesn't break the last one.</li>
+</ul>
+<p>Six rules shape everything below. They're the opposite of the patterns behind Part 1's findings.</p>
+<div class="grid2">
+  <div class="habit plan"><h4>One owner per fact</h4><p>The main process owns all state. Each fact has exactly one module that writes it; the UI only displays what it's told.</p></div>
+  <div class="habit plan"><h4>Decide, then do</h4><p>Pure functions decide what should happen and return a plan. Separate code carries the plan out. Deciding is easy to test; doing is easy to watch.</p></div>
+  <div class="habit plan"><h4>Name the phases</h4><p>A session moves through named phases. Each button and each event is allowed only in certain phases, so repeats and races do nothing.</p></div>
+  <div class="habit plan"><h4>Hold the lock for the whole job</h4><p>The lock is renewed from the moment you claim it until the upload is committed, and every renewal checks it's still yours.</p></div>
+  <div class="habit plan"><h4>Expect failure</h4><p>Every network call can fail. Retry what can be retried, report the rest clearly, and never report success for work that didn't happen.</p></div>
+  <div class="habit plan"><h4>Type the edges</h4><p>One shared contract describes every IPC channel. Errors cross it as values, never as surprises.</p></div>
+</div>
+
+<h2><span class="sec">02</span>The new shape</h2>
+<p>Compare this with Figure 1 of Part 1. There, main.ts called everything and two services imported each other. Here the code is arranged in layers. <strong>Arrows only point down</strong>: a layer may use the ones below it, never the ones above. Information that has to travel up, such as "the upload is 40% done", travels as events.</p>
+
+<figure>
+<div class="frame">
+<svg class="dg" viewBox="0 0 760 530" role="img" aria-label="Layered architecture. Renderer: screens, stores that mirror the main process, and a typed api.ts. Bridge: preload exposes window.api, checked against shared/ipc.ts. Entry: main.ts for window, tray and lifecycle, and ipc/handlers.ts where errors become Results. Orchestration: SessionController, the state machine. Building blocks: Processes, LockService, SyncEngine and TransferEngine. Adapters: DriveClient and AppData. Outside: Java and playit.gg, Google Drive, and the server folder on this PC. Calls point down; events flow up from the session and the engines to the renderer.">
+  <defs>
+    <marker id="g1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+    <marker id="g1p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-plan"/></marker>
+  </defs>
+  <text x="8" y="46" class="cap">RENDERER</text>
+  <text x="8" y="114" class="cap">BRIDGE</text>
+  <text x="8" y="182" class="cap">ENTRY</text>
+  <text x="8" y="258" class="cap">ORCHESTRATION</text>
+  <text x="8" y="338" class="cap">BUILDING BLOCKS</text>
+  <text x="8" y="418" class="cap">ADAPTERS</text>
+  <text x="8" y="494" class="cap">OUTSIDE</text>
+
+  <rect x="132" y="14" width="158" height="56" rx="5" class="box"/>
+  <text x="144" y="37" class="b">Screens &amp; panels</text>
+  <text x="144" y="55" class="xs">session · sync · servers</text>
+  <rect x="302" y="14" width="158" height="56" rx="5" class="box"/>
+  <text x="314" y="37" class="b">Stores</text>
+  <text x="314" y="55" class="xs">a mirror of main's state</text>
+  <rect x="472" y="14" width="160" height="56" rx="5" class="box"/>
+  <text x="484" y="37" class="b">api.ts</text>
+  <text x="484" y="55" class="xs">typed invoke() and on()</text>
+
+  <rect x="132" y="90" width="500" height="40" rx="5" class="box-plan"/>
+  <text x="144" y="115" class="sm">preload.ts exposes window.api · every channel is checked against shared/ipc.ts</text>
+
+  <rect x="132" y="150" width="158" height="56" rx="5" class="box"/>
+  <text x="144" y="173" class="b">main.ts</text>
+  <text x="144" y="191" class="xs">window · tray · lifecycle</text>
+  <rect x="302" y="150" width="330" height="56" rx="5" class="box"/>
+  <text x="314" y="173" class="b">ipc/handlers.ts</text>
+  <text x="314" y="191" class="xs">one line per channel; handle() turns errors into Results</text>
+
+  <rect x="132" y="226" width="500" height="56" rx="5" class="box-plan" style="stroke-width:2"/>
+  <text x="144" y="250" class="b" style="font-size:13.5px">SessionController</text>
+  <text x="144" y="268" class="xs">the state machine: the only code that runs a session</text>
+
+  <rect x="132" y="302" width="117" height="64" rx="5" class="box"/>
+  <text x="142" y="323" class="svc">Processes</text>
+  <text x="142" y="340" class="xs">Minecraft · playit</text>
+  <text x="142" y="354" class="xs">start · stop · wait</text>
+  <rect x="259" y="302" width="117" height="64" rx="5" class="box"/>
+  <text x="269" y="323" class="svc">LockService</text>
+  <text x="269" y="340" class="xs">claim · renew</text>
+  <text x="269" y="354" class="xs">release · inspect</text>
+  <rect x="386" y="302" width="117" height="64" rx="5" class="box"/>
+  <text x="396" y="323" class="svc">SyncEngine</text>
+  <text x="396" y="340" class="xs">scan · plan</text>
+  <text x="396" y="354" class="xs">track changes</text>
+  <rect x="521" y="302" width="111" height="64" rx="5" class="box"/>
+  <text x="530" y="323" class="svc">TransferEngine</text>
+  <text x="530" y="340" class="xs">lanes · retries</text>
+  <text x="530" y="354" class="xs">progress · ETA</text>
+  <line x1="503" y1="334" x2="520" y2="334" class="ln" marker-end="url(#g1a)"/>
+
+  <rect x="259" y="386" width="244" height="56" rx="5" class="box"/>
+  <text x="271" y="409" class="svc">DriveClient</text>
+  <text x="271" y="427" class="xs">one OAuth client · retries with backoff</text>
+  <rect x="513" y="386" width="119" height="56" rx="5" class="box"/>
+  <text x="523" y="409" class="svc">AppData</text>
+  <text x="523" y="427" class="xs">base · journal</text>
+
+  <rect x="132" y="462" width="117" height="56" rx="5" class="box-soft"/>
+  <text x="142" y="485" class="b">Java · playit.gg</text>
+  <text x="142" y="503" class="xs">child processes</text>
+  <rect x="259" y="462" width="244" height="56" rx="5" class="box-soft"/>
+  <text x="271" y="485" class="b">Google Drive</text>
+  <text x="271" y="503" class="xs">server files + .launcher/ (manifest, lock, rules)</text>
+  <rect x="513" y="462" width="119" height="56" rx="5" class="box-soft"/>
+  <text x="523" y="485" class="b">This PC</text>
+  <text x="523" y="503" class="xs">server folder</text>
+
+  <line x1="552" y1="70" x2="552" y2="89" class="ln" marker-end="url(#g1a)"/>
+  <line x1="552" y1="130" x2="552" y2="149" class="ln" marker-end="url(#g1a)"/>
+  <line x1="467" y1="206" x2="467" y2="225" class="ln" marker-end="url(#g1a)"/>
+  <line x1="382" y1="282" x2="382" y2="292" class="ln"/>
+  <line x1="190" y1="292" x2="444" y2="292" class="ln"/>
+  <line x1="190" y1="292" x2="190" y2="301" class="ln" marker-end="url(#g1a)"/>
+  <line x1="317" y1="292" x2="317" y2="301" class="ln" marker-end="url(#g1a)"/>
+  <line x1="444" y1="292" x2="444" y2="301" class="ln" marker-end="url(#g1a)"/>
+  <line x1="317" y1="366" x2="317" y2="385" class="ln" marker-end="url(#g1a)"/>
+  <line x1="444" y1="366" x2="444" y2="385" class="ln" marker-end="url(#g1a)"/>
+  <path d="M576 366 V 376 H 490 V 385" class="ln" marker-end="url(#g1a)"/>
+  <line x1="381" y1="442" x2="381" y2="461" class="ln" marker-end="url(#g1a)"/>
+  <line x1="572" y1="442" x2="572" y2="461" class="ln" marker-end="url(#g1a)"/>
+  <line x1="190" y1="366" x2="190" y2="461" class="ln" marker-end="url(#g1a)"/>
+
+  <path d="M632 254 H 690 V 42 H 633" class="ln-plan dash" marker-end="url(#g1p)"/>
+  <path d="M632 334 H 690" class="ln-plan dash"/>
+  <text transform="translate(706 190) rotate(-90)" class="xs pl mid">events ↑ session:state · transfer:progress · changes:batch</text>
+</svg>
+</div>
+<figcaption><span class="no">Figure 1.</span>The proposed layers. Calls go down; progress and state come back up as events. SessionController is the only code that runs a session; SyncEngine uses TransferEngine to move files; nothing below the bridge knows the UI exists. (SyncEngine also reads and writes the base snapshot through AppData and scans the server folder directly; those arrows are left out to keep the picture readable.)</figcaption>
+</figure>
+
+<p>What each layer is for:</p>
+<ul>
+  <li><strong>Renderer.</strong> Draws the state it's given and sends intents ("start this server", "stop"). It never runs a sequence of steps itself.</li>
+  <li><strong>Bridge.</strong> A contract file both sides import, so a renamed channel breaks the build instead of the app.</li>
+  <li><strong>Entry.</strong> main.ts shrinks to window, tray and app lifecycle. Handlers are one-liners that call a service; the shared <code>handle()</code> wrapper converts errors into values.</li>
+  <li><strong>Orchestration.</strong> SessionController is the one place that knows the order of things: check, claim, download, launch, run, stop, upload, release.</li>
+  <li><strong>Building blocks.</strong> Each does one job. LockService doesn't know about transfers and TransferEngine doesn't know about locks; SyncEngine uses TransferEngine only through its <code>run()</code> method.</li>
+  <li><strong>Adapters.</strong> Thin wrappers around the outside world. DriveClient is the only code that talks HTTP to Google, so retries, token refresh and rate-limit handling live in exactly one place.</li>
+</ul>
+
+<h2><span class="sec">03</span>Where the code goes</h2>
+<p>Folders are named after responsibilities, not after kinds of code: no <code>utils</code>, no <code>helpers</code>. A good test: if you can't say what a file is for in one short line, it's doing two jobs.</p>
+<figure>
+<div class="frame">
+<pre class="tree" aria-label="Proposed folder structure">shared/                      imported by both processes
+  ipc.ts                     the contract: every channel, its arguments and its result
+  types.ts                   Manifest, Snapshot, SyncPlan, SessionState, AppError
+  paths.ts                   toPosix() and ignore rules: one path format everywhere
+electron/
+  main.ts                    window, tray, app lifecycle; creates and wires the services
+  ipc/
+    handle.ts                the one place where thrown errors become Results
+    handlers.ts              one line per channel
+  session/
+    SessionController.ts     the state machine; the only code that runs a session
+  lock/
+    LockService.ts           claim, renew, release, inspect (read-only)
+  sync/
+    manifest.ts              read and write manifest.json (v2) and the local base
+    scanner.ts               walk the folder, hash only what looks different
+    planner.ts               planSync(base, local, remote): a pure function
+    changeTracker.ts         chokidar, batched into one event per half second
+  transfer/
+    TransferEngine.ts        job queue on Bottleneck, retries, progress, ETA
+    LaneController.ts        decides how many transfers run at once
+  drive/
+    DriveClient.ts           one OAuth client, token refresh, retry with backoff
+    driveFiles.ts            get, create, update, download, delete, ensureFolders
+  processes/
+    MinecraftProcess.ts      start, stop and wait for exit, player list
+    PlayitProcess.ts         start, read the address with a timeout, stop
+  store/
+    appData.ts               paths and JSON files in the app's data folder
+src/
+  api.ts                     typed invoke() and on() for components
+  stores/                    sessionStore (mirror), serversStore, settingsStore
+  features/
+    session/                 Power button, progress line, console
+    sync/                    SyncStatusCard, ChangesPanel, TransfersPanel
+    servers/                 server picker, Drive Folders, sharing
+    settings/                Scripts, ignore rules</pre>
+</div>
+<figcaption><span class="no">Figure 2.</span>Proposed layout. The renderer is grouped by feature so everything about one screen sits together; the main process is grouped by responsibility.</figcaption>
+</figure>
+
+<h2><span class="sec">04</span>The session as a state machine</h2>
+<p>A <strong>state machine</strong> is a fancy name for a simple idea: the session is always in exactly one named phase, and only certain moves between phases are allowed. You already have the beginnings of one in lock.json's status field. The difference is that the phase now lives in one object in the main process, and every action checks it first.</p>
+
+<figure>
+<div class="frame">
+<svg class="dg" viewBox="0 0 760 462" role="img" aria-label="State machine of a session. The normal path runs from idle to checking, claiming, downloading, launching, running, stopping, uploading, releasing and back to idle. The lock is held and renewed every 15 seconds from claiming to releasing. Side exits: checking can need your decision when both sides changed; claiming can find someone else holding the lock; downloading and launching can fail, which releases the lock; uploading can fail into upload pending, which keeps the lock and the journal so the upload can be retried or resumed at the next start.">
+  <defs>
+    <marker id="g2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+    <marker id="g2r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-red"/></marker>
+  </defs>
+  <rect x="70" y="14" width="150" height="32" rx="16" class="box-soft"/><text x="145" y="35" class="b mid">idle</text>
+  <rect x="70" y="64" width="150" height="32" rx="16" class="box"/><text x="145" y="85" class="b mid">checking</text>
+  <rect x="70" y="114" width="150" height="32" rx="16" class="box"/><text x="145" y="135" class="b mid">claiming</text>
+  <rect x="70" y="164" width="150" height="32" rx="16" class="box"/><text x="145" y="185" class="b mid">downloading</text>
+  <rect x="70" y="214" width="150" height="32" rx="16" class="box"/><text x="145" y="235" class="b mid">launching</text>
+  <rect x="70" y="264" width="150" height="32" rx="16" class="box-plan" style="stroke-width:2"/><text x="145" y="285" class="b mid">running</text>
+  <rect x="70" y="314" width="150" height="32" rx="16" class="box"/><text x="145" y="335" class="b mid">stopping</text>
+  <rect x="70" y="364" width="150" height="32" rx="16" class="box"/><text x="145" y="385" class="b mid">uploading</text>
+  <rect x="70" y="414" width="150" height="32" rx="16" class="box"/><text x="145" y="435" class="b mid">releasing</text>
+
+  <line x1="145" y1="46" x2="145" y2="63" class="ln" marker-end="url(#g2a)"/><text x="232" y="59" class="sm">Start pressed</text>
+  <line x1="145" y1="96" x2="145" y2="113" class="ln" marker-end="url(#g2a)"/><text x="232" y="109" class="sm">nothing to resolve</text>
+  <line x1="145" y1="146" x2="145" y2="163" class="ln" marker-end="url(#g2a)"/><text x="232" y="159" class="sm">claim verified: the lock is mine</text>
+  <line x1="145" y1="196" x2="145" y2="213" class="ln" marker-end="url(#g2a)"/><text x="232" y="209" class="sm">every planned file is in place</text>
+  <line x1="145" y1="246" x2="145" y2="263" class="ln" marker-end="url(#g2a)"/><text x="232" y="259" class="sm">server printed "Done ("</text>
+  <line x1="145" y1="296" x2="145" y2="313" class="ln" marker-end="url(#g2a)"/><text x="232" y="309" class="sm">Stop pressed, or Java exited</text>
+  <line x1="145" y1="346" x2="145" y2="363" class="ln" marker-end="url(#g2a)"/><text x="232" y="359" class="sm">the Java process has exited</text>
+  <line x1="145" y1="396" x2="145" y2="413" class="ln" marker-end="url(#g2a)"/><text x="232" y="409" class="sm">manifest committed</text>
+  <path d="M70 430 H 40 V 30 H 69" class="ln" marker-end="url(#g2a)"/>
+  <text transform="translate(32 230) rotate(-90)" class="xs mid">lock released, back to idle</text>
+
+  <line x1="446" y1="114" x2="446" y2="446" class="ln-plan" style="stroke-width:3"/>
+  <line x1="440" y1="114" x2="452" y2="114" class="ln-plan"/>
+  <line x1="440" y1="446" x2="452" y2="446" class="ln-plan"/>
+  <text transform="translate(462 302) rotate(-90)" class="xs pl mid">lock renewed every 15 s</text>
+
+  <line x1="220" y1="80" x2="485" y2="80" class="ln-red dash" marker-end="url(#g2r)"/>
+  <rect x="486" y="58" width="258" height="44" rx="5" class="box"/>
+  <text x="498" y="76" class="b">Needs your decision</text>
+  <text x="498" y="92" class="xs">both sides changed: pick which version wins</text>
+  <line x1="220" y1="130" x2="485" y2="130" class="ln-red dash" marker-end="url(#g2r)"/>
+  <rect x="486" y="108" width="258" height="44" rx="5" class="box"/>
+  <text x="498" y="126" class="b">Someone else holds the lock</text>
+  <text x="498" y="142" class="xs">back to idle, showing who and what they're doing</text>
+  <line x1="220" y1="180" x2="485" y2="180" class="ln-red dash" marker-end="url(#g2r)"/>
+  <line x1="220" y1="230" x2="485" y2="222" class="ln-red dash" marker-end="url(#g2r)"/>
+  <rect x="486" y="170" width="258" height="62" rx="5" class="box-red"/>
+  <text x="498" y="189" class="b">Failed: lock released</text>
+  <text x="498" y="205" class="xs">nothing was played, so nothing to upload;</text>
+  <text x="498" y="219" class="xs">show the error and offer Retry</text>
+  <line x1="220" y1="380" x2="485" y2="380" class="ln-red dash" marker-end="url(#g2r)"/>
+  <rect x="486" y="352" width="258" height="72" rx="5" class="box-red"/>
+  <text x="498" y="371" class="b">Upload pending: lock kept</text>
+  <text x="498" y="387" class="xs">a journal on this PC remembers the plan;</text>
+  <text x="498" y="401" class="xs">Retry now, or the app resumes the upload</text>
+  <text x="498" y="415" class="xs">on its next start</text>
+</svg>
+</div>
+<figcaption><span class="no">Figure 3.</span>Session phases. The left column is the normal path; the boxes on the right are the ways out of it. The blue bar shows that the lock is held, and renewed, for the whole time the world is in motion, not just while the game runs.</figcaption>
+</figure>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Phase</th><th>What the app does</th><th>lock.json says</th><th>What the user sees</th></tr></thead>
+  <tbody>
+    <tr><td class="k">idle</td><td>Nothing running; the preflight check can run at any time</td><td>free, or someone else's</td><td>Sync status card; Power enabled when it's safe</td></tr>
+    <tr><td class="k">checking</td><td>Read the cloud manifest, scan the folder, build a plan</td><td>unchanged</td><td>"Checking for changes…"</td></tr>
+    <tr><td class="k">claiming</td><td>Write a claim, wait 3 s, read it back</td><td>claiming</td><td>"Reserving the server…"</td></tr>
+    <tr><td class="k">downloading</td><td>Run the download part of the plan</td><td>downloading</td><td>Transfers panel</td></tr>
+    <tr><td class="k">launching</td><td>Start playit.gg and Java, wait for "Done (" (with timeouts)</td><td>launching</td><td>Console and progress line</td></tr>
+    <tr><td class="k">running</td><td>Track changes; refresh the player list</td><td>running + players</td><td>Changes panel; Stop enabled</td></tr>
+    <tr><td class="k">stopping</td><td>Send <code>stop</code>, wait for Java to exit (kill after a timeout)</td><td>stopping</td><td>"Saving the world…"</td></tr>
+    <tr><td class="k">uploading</td><td>Fresh scan, plan, upload, commit the manifest</td><td>uploading</td><td>Transfers panel</td></tr>
+    <tr><td class="k">releasing</td><td>Mark the lock free</td><td>free</td><td>Back to the status card</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Here's the core of the controller. It's simplified, but it's real TypeScript, and the shape is the point: <strong>one method per action, each guarded by the current phase, each step awaited, and every failure handled in one place.</strong></p>
+<pre><code><span class="file">electron/session/SessionController.ts (simplified)</span>export class SessionController {
+  private state: SessionState = { phase: 'idle' };
+
+  constructor(
+    private lock: LockService, private sync: SyncEngine,
+    private minecraft: MinecraftProcess, private playit: PlayitProcess,
+    private emit: (state: SessionState) =&gt; void,  <span class="c">// sends 'session:state' to the UI</span>
+  ) {
+    minecraft.onExit(() =&gt; this.stop());           <span class="c">// a crash takes the normal stop path</span>
+  }
+
+  async start(serverId: string) {
+    if (this.state.phase !== 'idle') throw new AppError('BUSY', 'Already running.');
+    try {
+      this.set({ phase: 'checking', serverId });
+      const report = await this.sync.preflight(serverId);
+      if (report.status === 'diverged') throw new AppError('CONFLICT', 'Pick a version.');
+
+      this.set({ phase: 'claiming', serverId });
+      await this.lock.claim(serverId);             <span class="c">// renews every 15 s from here on</span>
+
+      this.set({ phase: 'downloading', serverId });
+      await this.sync.download(serverId, report);  <span class="c">// transfers, then saves the new base</span>
+
+      this.set({ phase: 'launching', serverId });
+      const address = await this.playit.start({ timeoutMs: 60_000 });
+      await this.minecraft.start({ timeoutMs: 180_000 });  <span class="c">// resolves on "Done ("</span>
+
+      this.set({ phase: 'running', serverId, address });
+    } catch (err) {
+      await this.minecraft.stopAndWait();          <span class="c">// harmless if it never started</span>
+      await this.playit.stop();
+      await this.lock.releaseIfMine(serverId);     <span class="c">// never touches someone else's lock</span>
+      this.set({ phase: 'failed', serverId, error: toAppError(err) });
+      throw err;
+    }
+  }
+
+  async stop() {
+    if (this.state.phase !== 'running') return;    <span class="ok">// a second call does nothing</span>
+    const { serverId } = this.state;
+    this.set({ phase: 'stopping', serverId });
+    await this.minecraft.stopAndWait({ timeoutMs: 60_000 });  <span class="ok">// waits for the exit</span>
+    await this.playit.stop();
+
+    this.set({ phase: 'uploading', serverId });
+    try {
+      await this.sync.uploadSession(serverId);     <span class="c">// scan → plan → transfer → commit</span>
+    } catch (err) {
+      <span class="c">// The lock stays ours; the Retry button calls retryUpload().</span>
+      this.set({ phase: 'upload-pending', serverId, error: toAppError(err) });
+      return;
+    }
+    this.set({ phase: 'releasing', serverId });
+    await this.lock.release(serverId);
+    this.set({ phase: 'idle' });
+  }
+
+  private set(next: SessionState) { this.state = next; this.emit(next); }
+}</code></pre>
+<div class="callout plan">
+  <span class="label">What this fixes from Part 1</span>
+  <p>The upload can't start before Java has exited (F5). Stop runs once, however many times it's called (F9). Every wait has a timeout and every failure releases what it holds (F21). The shutdown sequence exists once instead of three times (F30). Quitting the app and logging out just call <code>stop()</code> and wait for the phase to become idle.</p>
+</div>
+<p>The phases themselves are a type, so the compiler knows which fields exist in which phase:</p>
+<pre><code><span class="file">shared/types.ts (excerpt)</span>export type SessionState =
+  | { phase: 'idle' }
+  | { phase: 'checking' | 'claiming' | 'downloading' | 'launching'
+           | 'stopping' | 'uploading' | 'releasing'; serverId: string }
+  | { phase: 'running'; serverId: string; address?: string }
+  | { phase: 'failed' | 'upload-pending'; serverId: string; error: AppError };</code></pre>
+
+<h2><span class="sec">05</span>A lock you can trust</h2>
+<p>Keep lock.json; change how it's used. The new version records <em>which session</em> holds it, not just which person:</p>
+<pre><code><span class="file">.launcher/lock.json on Drive</span>{
+  "format": 2,
+  "sessionId": "5f0c2a7e-4b1d-4c55-9a3e-0d6b1f2c9e81",
+  "host": { "name": "Steve", "email": "steve@example.com" },
+  "phase": "running",
+  "leaseSeconds": 45,
+  "baseRevision": 42,
+  "address": "abc-def.joinmc.link",
+  "players": ["Steve", "Alex"]
+}</code></pre>
+<p>A <strong>lease</strong> is a lock with a timer: it's yours only as long as you keep renewing it, so a crashed PC can't hold the server forever. Six rules make it trustworthy:</p>
+<ul>
+  <li><strong>Readers never write.</strong> <code>inspect()</code> only reads and answers <em>free</em>, <em>mine</em>, <em>held</em> or <em>stale</em> (held but expired). Looking at a server can't change it (F11).</li>
+  <li><strong>Google's clock is the judge.</strong> Expiry is measured from the file's <code>modifiedTime</code>, compared with the <code>Date</code> header of the same response. Both come from Google, so a PC with a wrong clock can't fool anyone (F34).</li>
+  <li><strong>Claim, then verify.</strong> Write your claim, wait three seconds, read it back. It's yours only if the session ID is yours.</li>
+  <li><strong>Renew for the whole job</strong>, every 15 seconds from the claim to the release, downloads and uploads included (F6). With a 45-second lease, two missed renewals in a row are survivable.</li>
+  <li><strong>Every renewal re-checks ownership.</strong> If the session ID isn't yours any more, the session stops and tells you why.</li>
+  <li><strong>A stale lock that says "uploading" isn't free.</strong> It means someone's upload never finished, so the app explains that instead of letting you start on a half-uploaded world.</li>
+</ul>
+
+<figure>
+<div class="frame">
+<svg class="dg" viewBox="0 0 760 306" role="img" aria-label="Sequence of two members pressing Start one second apart. Both read lock.json and see it free. Steve writes a claim with session S, then Alex writes a claim with session A, which replaces it. Both wait three seconds and read the lock back. Both see session A, so Steve's app backs off and reports that Alex started first, while Alex's app continues and starts downloading.">
+  <defs>
+    <marker id="g3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+  </defs>
+  <rect x="40" y="8" width="160" height="36" rx="5" class="box"/>
+  <text x="120" y="24" class="b mid">Steve's app</text><text x="120" y="38" class="xs mid">presses Start at 18:00:00</text>
+  <rect x="300" y="8" width="160" height="36" rx="5" class="box-soft"/>
+  <text x="380" y="24" class="b mid">lock.json</text><text x="380" y="38" class="xs mid">on Google Drive</text>
+  <rect x="560" y="8" width="160" height="36" rx="5" class="box"/>
+  <text x="640" y="24" class="b mid">Alex's app</text><text x="640" y="38" class="xs mid">presses Start at 18:00:01</text>
+  <line x1="120" y1="44" x2="120" y2="258" class="ln-life"/>
+  <line x1="380" y1="44" x2="380" y2="300" class="ln-life"/>
+  <line x1="640" y1="44" x2="640" y2="258" class="ln-life"/>
+
+  <line x1="120" y1="70" x2="379" y2="70" class="ln" marker-end="url(#g3a)"/>
+  <text x="250" y="65" class="sm mid h">read → free</text>
+  <line x1="640" y1="96" x2="381" y2="96" class="ln" marker-end="url(#g3a)"/>
+  <text x="510" y="91" class="sm mid h">read → free</text>
+  <line x1="120" y1="126" x2="379" y2="126" class="ln" marker-end="url(#g3a)"/>
+  <text x="250" y="121" class="sm mid h">write claim · session S</text>
+  <line x1="640" y1="152" x2="381" y2="152" class="ln" marker-end="url(#g3a)"/>
+  <text x="510" y="147" class="sm mid h">write claim · session A</text>
+  <text x="388" y="174" class="xs">now holds A: Alex wrote last</text>
+
+  <rect x="114" y="184" width="12" height="20" class="box-soft"/>
+  <text x="132" y="198" class="xs">waits 3 s</text>
+  <rect x="634" y="184" width="12" height="20" class="box-soft"/>
+  <text x="628" y="198" class="xs end">waits 3 s</text>
+  <line x1="120" y1="220" x2="379" y2="220" class="ln" marker-end="url(#g3a)"/>
+  <text x="250" y="215" class="sm mid h">read back</text>
+  <line x1="380" y1="242" x2="121" y2="242" class="ln dash" marker-end="url(#g3a)"/>
+  <text x="250" y="237" class="sm mid h">session A</text>
+  <line x1="640" y1="220" x2="381" y2="220" class="ln" marker-end="url(#g3a)"/>
+  <text x="510" y="215" class="sm mid h">read back</text>
+  <line x1="380" y1="242" x2="639" y2="242" class="ln dash" marker-end="url(#g3a)"/>
+  <text x="510" y="237" class="sm mid h">session A</text>
+
+  <rect x="30" y="258" width="180" height="40" rx="5" class="box-red"/>
+  <text x="120" y="275" class="b mid">not mine → back off</text>
+  <text x="120" y="290" class="xs mid">"Alex started first"</text>
+  <rect x="550" y="258" width="180" height="40" rx="5" class="box-good"/>
+  <text x="640" y="275" class="b mid">mine → start downloading</text>
+  <text x="640" y="290" class="xs mid">renew every 15 s from now on</text>
+</svg>
+</div>
+<figcaption><span class="no">Figure 4.</span>Two members press Start one second apart. Both see a free lock and both write a claim, but only one claim can be in the file afterwards, and reading it back tells each app who won.</figcaption>
+</figure>
+
+<pre><code><span class="file">electron/lock/LockService.ts (simplified)</span>const LEASE_SECONDS = 45;
+const RENEW_EVERY_MS = 15_000;
+
+export class LockService {
+  private sessionId = crypto.randomUUID();       <span class="c">// new for every session</span>
+  private phase: LockPhase = 'claiming';
+  private timer?: NodeJS.Timeout;
+
+  constructor(
+    private drive: DriveClient, private me: Host,
+    private onLost: (reason: string) =&gt; void,
+  ) {}
+
+  <span class="c">/** Read-only. Never writes, whatever it finds. */</span>
+  async inspect(serverId: string): Promise&lt;LockView&gt; {
+    <span class="c">// the content, the file's modifiedTime and the response's Date header</span>
+    const file = await this.drive.readLock(serverId);
+    if (!file || file.content.phase === 'free') return { state: 'free' };
+    const lock = file.content;
+    if (lock.sessionId === this.sessionId) return { state: 'mine', lock };
+    const ageSeconds = (file.serverNow - file.modifiedTime) / 1000;  <span class="c">// Google's clock</span>
+    return { state: ageSeconds &gt; lock.leaseSeconds ? 'stale' : 'held', lock };
+  }
+
+  async claim(serverId: string) {
+    const before = await this.inspect(serverId);
+    if (before.state === 'held')
+      throw new AppError('LOCK_HELD', `${before.lock.host.name} is using the server.`);
+    if (before.state === 'stale' &amp;&amp; before.lock.phase === 'uploading')
+      throw new AppError('UNFINISHED_UPLOAD', 'The last upload never finished.');
+
+    await this.write(serverId, 'claiming');
+    await sleep(3_000);                          <span class="c">// give a competing claim time to land</span>
+    if ((await this.inspect(serverId)).state !== 'mine')
+      throw new AppError('LOCK_HELD', 'Someone else started at the same moment.');
+    this.scheduleRenewal(serverId);
+  }
+
+  <span class="c">// A setTimeout chain instead of setInterval, so two renewals never overlap.</span>
+  private scheduleRenewal(serverId: string) {
+    this.timer = setTimeout(async () =&gt; {
+      try {
+        if ((await this.inspect(serverId)).state !== 'mine')
+          return this.onLost('Another member took over the server.');
+        await this.write(serverId, this.phase);  <span class="c">// same content, fresh modifiedTime</span>
+      } catch {
+        <span class="c">// A network blip. The 45 s lease survives two missed renewals: try again.</span>
+      }
+      this.scheduleRenewal(serverId);
+    }, RENEW_EVERY_MS);
+  }
+}</code></pre>
+<div class="callout">
+  <span class="label">An honest limit</span>
+  <p>Google Drive doesn't offer a "write this only if nobody changed it since I read it" operation, which is what a perfect lock needs. Claim-then-verify shrinks the window for a tie from minutes to a couple of seconds, and the ownership check on every renewal is the second safety net: if two apps ever both believed they won, the loser finds out within 15 seconds, long before its server finishes starting. For a group of friends that's plenty.</p>
+</div>
+
+<h2><span class="sec">06</span>Knowing what changed: three snapshots</h2>
+<p>Part 1 showed that one version number per side can't tell "I changed this" from "they changed this". The fix is the same idea git uses. Keep a third snapshot, the <strong>base</strong>: the state your PC and the cloud last agreed on. Then compare file by file.</p>
+
+<figure>
+<div class="frame">
+<svg class="dg" viewBox="0 0 760 290" role="img" aria-label="Three snapshots. Base, what this PC and the cloud last agreed on, stored as base.json at revision 42. Local, the server folder right now, from a fresh scan with no network requests. Remote, manifest.json on Drive at revision 43 by Alex, read with one request. Base compared with local gives your changes; base compared with remote gives their changes. All three go into planSync, a pure function that returns uploads, downloads, deletions and conflicts.">
+  <defs>
+    <marker id="g4a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+  </defs>
+  <rect x="20" y="104" width="190" height="82" rx="6" class="box-strong"/>
+  <text x="36" y="129" class="b" style="font-size:14px">Base</text>
+  <text x="36" y="147" class="xs">what this PC and the cloud</text>
+  <text x="36" y="160" class="xs">last agreed on</text>
+  <text x="36" y="177" class="xs pl">base.json · revision 42</text>
+  <rect x="300" y="14" width="200" height="74" rx="6" class="box"/>
+  <text x="316" y="38" class="b" style="font-size:14px">Local</text>
+  <text x="316" y="56" class="xs">your server folder right now</text>
+  <text x="316" y="72" class="xs pl">fresh scan · 0 requests</text>
+  <rect x="300" y="202" width="200" height="74" rx="6" class="box"/>
+  <text x="316" y="226" class="b" style="font-size:14px">Remote</text>
+  <text x="316" y="244" class="xs">manifest.json on Drive</text>
+  <text x="316" y="260" class="xs pl">revision 43 by Alex · 1 request</text>
+  <rect x="560" y="94" width="184" height="102" rx="6" class="box-plan" style="stroke-width:2"/>
+  <text x="574" y="119" class="b" style="font-size:13px">planSync()</text>
+  <text x="574" y="137" class="xs">a pure function, returns a plan:</text>
+  <text x="574" y="155" class="xs">upload · download</text>
+  <text x="574" y="170" class="xs">delete · conflicts</text>
+
+  <path d="M210 120 H 250 V 51 H 299" class="ln" marker-end="url(#g4a)"/>
+  <text x="244" y="90" class="sm end pl">your changes</text>
+  <path d="M210 170 H 250 V 239 H 299" class="ln" marker-end="url(#g4a)"/>
+  <text x="244" y="212" class="sm end pl">their changes</text>
+  <line x1="210" y1="145" x2="559" y2="145" class="ln" marker-end="url(#g4a)"/>
+  <text x="380" y="139" class="xs mid">base</text>
+  <path d="M500 51 H 530 V 120 H 559" class="ln" marker-end="url(#g4a)"/>
+  <path d="M500 239 H 530 V 170 H 559" class="ln" marker-end="url(#g4a)"/>
+</svg>
+</div>
+<figcaption><span class="no">Figure 5.</span>Base versus local gives your changes; base versus remote gives theirs. A file that changed on only one side is safe to copy across. A file that changed on both sides, differently, is a conflict.</figcaption>
+</figure>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Snapshot</th><th>Where it comes from</th><th class="num">Cost</th><th>When it's written</th></tr></thead>
+  <tbody>
+    <tr><td class="k">Remote</td><td>.launcher/manifest.json on Drive</td><td class="num">1 request</td><td>Last, by every successful upload (the commit)</td></tr>
+    <tr><td class="k">Base</td><td>base.json in the app's data folder, one per server</td><td class="num">none</td><td>After every successful download or upload</td></tr>
+    <tr><td class="k">Local</td><td>A scan of the server folder, done fresh each time</td><td class="num">no requests</td><td>Never stored; always computed</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>The manifest, version 2</h3>
+<p>Two changes do most of the work. Files are identified by a <strong>content hash</strong> (MD5) instead of a counter, and each entry remembers the file's <strong>Drive ID</strong>, so a file can be fetched or updated directly without listing folders first. A hash is a short fingerprint of a file's bytes: the same bytes always give the same hash, and different bytes almost always give a different one.</p>
+<pre><code><span class="file">.launcher/manifest.json on Drive</span>{
+  "format": 2,
+  "revision": 43,
+  "parentRevision": 42,
+  "author": { "name": "Alex", "email": "alex@example.com" },
+  "createdAt": "2026-10-14T18:05:12Z",
+  "files": {
+    "server.properties": {
+      "size": 1342, "md5": "9e107d9d372bb6826bd81d3542a419d6", "driveId": "1Ab…"
+    },
+    "world/level.dat": {
+      "size": 4410, "md5": "e4d909c290d0fb1ca068ffaddf22cbd0", "driveId": "1Cd…"
+    },
+    "world/region/r.0.0.mca": {
+      "size": 7340032, "md5": "0cc175b9c0f1b6a831c399e269772661", "driveId": "1Ef…"
+    }
+  }
+}</code></pre>
+<ul>
+  <li><strong>revision / parentRevision.</strong> Each upload says which revision it started from. Before committing, the app checks that the cloud is still at <code>parentRevision</code>; if not, someone uploaded in between and the commit stops instead of overwriting their work.</li>
+  <li><strong>Keys are always forward-slash paths</strong> relative to the server folder, produced by one <code>toPosix()</code> function (F23, F25).</li>
+  <li><strong>md5</strong> matches the <code>md5Checksum</code> field Google stores for every uploaded file, so after an upload the app can compare its own hash with Google's and know the bytes arrived intact.</li>
+  <li><strong>The app's own files live in a <code>.launcher</code> folder</strong> on Drive, away from the server files, so there's nothing to blacklist.</li>
+</ul>
+<p>The base is the same format plus one field per file, <code>mtimeMs</code>: the modified time <em>on this PC</em> right after the last sync. That's what makes the scan fast.</p>
+
+<h3>The scan: hash only what looks different</h3>
+<p>Hashing 10,000 files on every check would be slow. Git solved this long ago: if a file's size and modified time are exactly what they were right after the last sync, assume it's unchanged and reuse the stored hash. Only files that look different get hashed. A Minecraft session touches a few hundred files at most, so a typical check stats 10,000 files and hashes a few hundred, without a single network request.</p>
+<pre><code><span class="file">electron/sync/scanner.ts</span>export async function scanLocal(
+  root: string, base: Snapshot, rules: SyncRules,
+): Promise&lt;Snapshot&gt; {
+  const local: Snapshot = new Map();
+  for await (const file of walk(root)) {         <span class="c">// yields { relPath, size, mtimeMs }</span>
+    const path = toPosix(file.relPath);          <span class="c">// "world/region/r.0.0.mca" on every OS</span>
+    if (rules.isIgnored(path)) continue;
+    const known = base.get(path);
+    const looksSame = known &amp;&amp; known.size === file.size &amp;&amp; known.mtimeMs === file.mtimeMs;
+    local.set(path, {
+      size: file.size,
+      mtimeMs: file.mtimeMs,
+      md5: looksSame ? known.md5 : await md5OfFile(join(root, file.relPath)),
+    });
+  }
+  return local;
+}
+
+async function md5OfFile(file: string): Promise&lt;string&gt; {
+  const hash = createHash('md5');
+  for await (const chunk of createReadStream(file)) hash.update(chunk);  <span class="c">// streamed</span>
+  return hash.digest('hex');
+}</code></pre>
+<p>This also fixes "downloaded files look modified" (F16): after a download the app writes the new base using the <em>local</em> modified time it just observed, so the next scan sees an exact match.</p>
+
+<h3>The planner: a pure function</h3>
+<p>A <strong>pure function</strong> only looks at its arguments and only produces its return value: no disk, no network, no global variables. Give it the same three snapshots and it always returns the same plan. That makes it the easiest code in the app to test, and it's the code you most need to be right.</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Your copy vs base</th><th>Cloud vs base</th><th>Plan</th></tr></thead>
+  <tbody>
+    <tr><td>same</td><td>same</td><td>nothing to do</td></tr>
+    <tr><td>changed or added</td><td>same</td><td><strong>upload</strong> (after your session)</td></tr>
+    <tr><td>deleted</td><td>same</td><td><strong>delete in the cloud</strong></td></tr>
+    <tr><td>same</td><td>changed or added</td><td><strong>download</strong></td></tr>
+    <tr><td>same</td><td>deleted</td><td><strong>delete locally</strong></td></tr>
+    <tr><td>changed</td><td>changed to the same bytes</td><td>nothing to do</td></tr>
+    <tr><td>changed</td><td>changed differently</td><td><strong>conflict</strong></td></tr>
+  </tbody>
+</table>
+</div>
+<pre><code><span class="file">electron/sync/planner.ts</span>export function planSync(base: Snapshot, local: Snapshot, remote: Snapshot): SyncPlan {
+  const plan: SyncPlan = {
+    upload: [], download: [], deleteRemote: [], deleteLocal: [], conflicts: [],
+  };
+  const paths = new Set([...base.keys(), ...local.keys(), ...remote.keys()]);
+
+  for (const path of paths) {
+    <span class="c">// undefined means "no such file on that side"</span>
+    const b = base.get(path)?.md5;
+    const l = local.get(path)?.md5;
+    const r = remote.get(path)?.md5;
+
+    if (l === b &amp;&amp; r === b) continue;              <span class="c">// nobody touched it</span>
+    if (l === r) continue;                         <span class="c">// both made the same change</span>
+    if (l !== b &amp;&amp; r !== b) { plan.conflicts.push(path); continue; }
+
+    if (l !== b) (l === undefined ? plan.deleteRemote : plan.upload).push(path);
+    else         (r === undefined ? plan.deleteLocal : plan.download).push(path);
+  }
+  return plan;
+}</code></pre>
+
+<h3>Conflicts: choose a whole world, never a file</h3>
+<p>When both sides changed, it's tempting to merge file by file. Don't. A Minecraft world is one connected thing: level.dat, the region files, the entities and the player data all have to come from the same moment, or you get items duplicated, chunks rolled back, or a player standing inside a wall. So a conflict becomes one question for the user, <em>"Keep the cloud version or keep yours?"</em>, and before applying the answer the app zips the losing side into the server's backups folder. Nobody loses work silently, and nobody gets a Frankenstein world.</p>
+<div class="callout">
+  <span class="label">The first sync on a new PC</span>
+  <p>A PC that has never synced has no base. If its folder is empty, it simply downloads everything. If it isn't, the app asks once, "Use the cloud version (recommended) or upload this folder?", and backs up whatever it replaces. A brand-new server with no manifest in the cloud yet works the same way in reverse: the first host's folder becomes revision 1.</p>
+</div>
+
+<h3>What the user sees: the sync status card</h3>
+<p>The preflight check runs when you select a server and again right before Start. Its result replaces today's "is not being hosted right now" line with a card that answers the real question: <em>is it safe to start, and what will happen if I do?</em></p>
+<div class="mock-wrap" aria-label="Five example states of the sync status card">
+  <div class="mock">
+    <div class="mock-head"><span class="mock-pill good">In sync</span><span class="mock-title">Up to date</span></div>
+    <p class="mock-sub">Your copy matches revision 42, uploaded by Steve yesterday at 21:40.</p>
+    <div class="mock-btns"><span class="mock-btn primary">Start</span></div>
+  </div>
+  <div class="mock">
+    <div class="mock-head"><span class="mock-pill info">Local changes</span><span class="mock-title">3 changes aren't in the cloud yet</span></div>
+    <p class="mock-sub">server.properties, ops.json and world/data/raids.dat changed after your last sync. They'll be uploaded when your next session ends.</p>
+    <div class="mock-btns"><span class="mock-btn">Show files</span><span class="mock-btn primary">Start</span></div>
+  </div>
+  <div class="mock">
+    <div class="mock-head"><span class="mock-pill info">Cloud is newer</span><span class="mock-title">Alex played after you</span></div>
+    <p class="mock-sub">Revision 43, today at 18:05. 312 files (180 MB) will be downloaded when you start.</p>
+    <div class="mock-btns"><span class="mock-btn">Show files</span><span class="mock-btn primary">Start</span></div>
+  </div>
+  <div class="mock">
+    <div class="mock-head"><span class="mock-pill warn">Both changed</span><span class="mock-title">Your copy and the cloud both changed</span></div>
+    <p class="mock-sub">Alex's session (revision 43) and your edits since revision 42 touch the same world. Pick the version to keep; the other is zipped into backups first.</p>
+    <div class="mock-btns"><span class="mock-btn primary">Keep cloud version</span><span class="mock-btn">Keep my version</span><span class="mock-btn">Show files</span></div>
+  </div>
+  <div class="mock">
+    <div class="mock-head"><span class="mock-pill bad">Unfinished upload</span><span class="mock-title">Steve's last upload didn't finish</span></div>
+    <p class="mock-sub">It stopped halfway today at 17:32, so the cloud is a mix of old and new files. Ask Steve to open Drive Launcher; it will finish the upload on its own.</p>
+    <div class="mock-btns"><span class="mock-btn">Show details</span></div>
+  </div>
+</div>
+
+<h2><span class="sec">07</span>Uploading safely</h2>
+<p>An upload changes many files on Drive one at a time, so there's always a moment when some are new and some are old. The design makes that moment harmless with two ideas. The <strong>commit</strong>: manifest.json is uploaded last, and the new revision only exists once it lands. The <strong>journal</strong>: before starting, the app writes the plan to a file on your PC, so a crash can be finished later instead of forgotten.</p>
+
+<figure>
+<div class="frame">
+<svg class="dg" viewBox="0 0 760 266" role="img" aria-label="The upload in six steps: write the journal on this PC, upload new and changed files with checksum checks, delete removed files, commit by uploading manifest.json revision 43 last, save the base and delete the journal, then release the lock. If the app stops before the commit, Drive has some new files but the old manifest, the lock still says uploading, other members are told to wait, and this PC finishes from the journal at its next start. If it stops after the commit, Drive is complete and this PC only has to save the base and release the lock. The lock is renewed every 15 seconds through all steps.">
+  <defs>
+    <marker id="g5a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+  </defs>
+  <text x="436" y="24" class="b pl mid">commit point</text>
+  <line x1="436" y1="28" x2="436" y2="39" class="ln-plan"/>
+  <rect x="8" y="40" width="112" height="66" rx="5" class="box"/>
+  <text x="18" y="62" class="b">Write journal</text><text x="18" y="80" class="xs">the plan, on this PC</text><text x="18" y="94" class="xs">journal.json</text>
+  <rect x="132" y="40" width="112" height="66" rx="5" class="box"/>
+  <text x="142" y="62" class="b">Upload files</text><text x="142" y="80" class="xs">new and changed</text><text x="142" y="94" class="xs">md5 checked</text>
+  <rect x="256" y="40" width="112" height="66" rx="5" class="box"/>
+  <text x="266" y="62" class="b">Delete</text><text x="266" y="80" class="xs">files removed</text><text x="266" y="94" class="xs">since the base</text>
+  <rect x="380" y="40" width="112" height="66" rx="5" class="box-plan" style="stroke-width:2"/>
+  <text x="390" y="62" class="b">Commit</text><text x="390" y="80" class="xs">manifest.json, rev 43</text><text x="390" y="94" class="xs">uploaded last</text>
+  <rect x="504" y="40" width="112" height="66" rx="5" class="box"/>
+  <text x="514" y="62" class="b">Save base</text><text x="514" y="80" class="xs">base.json = rev 43</text><text x="514" y="94" class="xs">delete the journal</text>
+  <rect x="628" y="40" width="112" height="66" rx="5" class="box"/>
+  <text x="638" y="62" class="b">Release</text><text x="638" y="80" class="xs">lock phase: free</text>
+  <line x1="120" y1="73" x2="131" y2="73" class="ln" marker-end="url(#g5a)"/>
+  <line x1="244" y1="73" x2="255" y2="73" class="ln" marker-end="url(#g5a)"/>
+  <line x1="368" y1="73" x2="379" y2="73" class="ln" marker-end="url(#g5a)"/>
+  <line x1="492" y1="73" x2="503" y2="73" class="ln" marker-end="url(#g5a)"/>
+  <line x1="616" y1="73" x2="627" y2="73" class="ln" marker-end="url(#g5a)"/>
+
+  <rect x="8" y="124" width="360" height="86" rx="5" class="box-soft"/>
+  <text x="20" y="145" class="b red">If the app stops before the commit</text>
+  <text x="20" y="163" class="xs">Drive has some new files but the old manifest (rev 42).</text>
+  <text x="20" y="177" class="xs">The lock keeps saying "uploading" after it expires, so other</text>
+  <text x="20" y="191" class="xs">members are told to wait. This PC finishes the upload from</text>
+  <text x="20" y="205" class="xs">the journal the next time the app starts.</text>
+  <rect x="380" y="124" width="360" height="86" rx="5" class="box-soft"/>
+  <text x="392" y="145" class="b pl">If it stops after the commit</text>
+  <text x="392" y="163" class="xs">Drive is complete and consistent at rev 43.</text>
+  <text x="392" y="177" class="xs">This PC saves the base and releases the lock</text>
+  <text x="392" y="191" class="xs">the next time the app starts.</text>
+
+  <rect x="8" y="226" width="732" height="8" rx="4" class="bar-plan"/>
+  <text x="8" y="254" class="xs pl">lock renewed every 15 s from the first step to the last</text>
+</svg>
+</div>
+<figcaption><span class="no">Figure 6.</span>The upload as six steps with one commit point. A crash before it is recoverable from the journal, and a crash after it only leaves local housekeeping. At no point does the app report success for work that hasn't been confirmed.</figcaption>
+</figure>
+<pre><code><span class="file">electron/sync/SyncEngine.ts (uploadSession, simplified)</span>async uploadSession(serverId: string) {
+  const base = await this.appData.readBase(serverId);
+  <span class="c">// Java has exited by now, so the folder is quiet.</span>
+  const local = await scanLocal(this.root(serverId), base, this.rules);
+  const plan = planUpload(base, local);                  <span class="c">// pure, like planSync</span>
+  if (plan.isEmpty) return;
+
+  await this.appData.writeJournal(serverId, { plan, startedAt: Date.now() });
+  const results = await this.transfers.run(plan.jobs);   <span class="c">// lanes, retries, md5 checks</span>
+  if (results.failed.length)
+    throw new AppError('UPLOAD_INCOMPLETE', `${results.failed.length} files failed.`);
+
+  const remote = await this.drive.readManifest(serverId);
+  if (remote.revision !== base.revision)                 <span class="c">// someone committed meanwhile</span>
+    throw new AppError('CONFLICT', 'The cloud changed during your upload.');
+  const next = buildManifest(base, results, {
+    revision: base.revision + 1,
+    parentRevision: base.revision,
+  });
+  await this.drive.writeManifest(serverId, next);        <span class="ok">// ← the commit</span>
+
+  await this.appData.writeBase(serverId, toBase(next, local));
+  await this.appData.deleteJournal(serverId);
+}</code></pre>
+<p class="muted">An advanced alternative, for later: never overwrite a file on Drive. Upload each new version as a new file, let the manifest point to the new IDs, and delete the old ones after the commit. Then the commit really is all-or-nothing, at the cost of briefly storing two copies of the changed files.</p>
+
+<h2><span class="sec">08</span>The transfer engine</h2>
+<p>Before any code, a word about "threads". Node runs your JavaScript on one thread, and that's fine here: a transfer spends almost all of its time <em>waiting</em> for Google. Running six transfers at once means six requests waiting at the same time, which is pure gain. These are called <strong>lanes</strong> below, because each one carries one file at a time, and Bottleneck is the traffic controller that decides how many lanes are open.</p>
+
+<figure>
+<div class="frame">
+<svg class="dg" viewBox="0 0 760 312" role="img" aria-label="Transfer engine. The sync plan becomes a flat queue of jobs. A Bottleneck limiter runs as many jobs at once as there are lanes, here four with progress bars. Jobs go to Google Drive. Drive's responses feed a LaneController that adds a lane after 20 clean jobs, halves the lanes on a 429 or rate-limit 403, and drops one if the speed stopped rising; it updates the limiter's maxConcurrent. Job events feed a progress reporter that smooths speeds, computes the ETA and sends four snapshots a second to the Transfers panel.">
+  <defs>
+    <marker id="g6a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+    <marker id="g6p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-plan"/></marker>
+  </defs>
+  <rect x="8" y="40" width="128" height="86" rx="5" class="box"/>
+  <text x="20" y="62" class="b">Sync plan</text>
+  <text x="20" y="80" class="xs">upload 300 files</text>
+  <text x="20" y="94" class="xs">delete 4 files</text>
+  <text x="20" y="108" class="xs">as a flat list</text>
+  <line x1="136" y1="83" x2="163" y2="83" class="ln" marker-end="url(#g6a)"/>
+  <rect x="164" y="40" width="110" height="86" rx="5" class="box"/>
+  <text x="176" y="62" class="b">Job queue</text>
+  <rect x="176" y="72" width="86" height="7" rx="3" class="box-soft"/>
+  <rect x="176" y="83" width="86" height="7" rx="3" class="box-soft"/>
+  <rect x="176" y="94" width="86" height="7" rx="3" class="box-soft"/>
+  <rect x="176" y="105" width="86" height="7" rx="3" class="box-soft"/>
+  <text x="176" y="122" class="xs">waiting jobs</text>
+  <line x1="274" y1="83" x2="301" y2="83" class="ln" marker-end="url(#g6a)"/>
+
+  <rect x="302" y="14" width="200" height="140" rx="5" class="box-plan" style="stroke-width:2"/>
+  <text x="314" y="34" class="b">Bottleneck limiter</text>
+  <text x="314" y="50" class="xs">maxConcurrent = lanes</text>
+  <text x="314" y="69" class="xs">1</text><rect x="326" y="61" width="164" height="10" rx="3" class="fill-paper" style="stroke:var(--rule)"/><rect x="326" y="61" width="115" height="10" rx="3" class="bar-plan"/>
+  <text x="314" y="87" class="xs">2</text><rect x="326" y="79" width="164" height="10" rx="3" class="fill-paper" style="stroke:var(--rule)"/><rect x="326" y="79" width="57" height="10" rx="3" class="bar-plan"/>
+  <text x="314" y="105" class="xs">3</text><rect x="326" y="97" width="164" height="10" rx="3" class="fill-paper" style="stroke:var(--rule)"/><rect x="326" y="97" width="148" height="10" rx="3" class="bar-plan"/>
+  <text x="314" y="123" class="xs">4</text><rect x="326" y="115" width="164" height="10" rx="3" class="fill-paper" style="stroke:var(--rule)"/><rect x="326" y="115" width="25" height="10" rx="3" class="bar-plan"/>
+  <text x="314" y="145" class="xs">failed jobs retry after a backoff</text>
+  <line x1="502" y1="83" x2="529" y2="83" class="ln" marker-end="url(#g6a)"/>
+
+  <rect x="530" y="40" width="120" height="86" rx="5" class="box-soft"/>
+  <text x="542" y="62" class="b">Google Drive</text>
+  <text x="542" y="80" class="xs">files.update</text>
+  <text x="542" y="94" class="xs">files.create</text>
+  <text x="542" y="108" class="xs">files.get</text>
+
+  <path d="M590 126 V 233 H 503" class="ln" marker-end="url(#g6a)"/>
+  <text x="598" y="176" class="xs">ok · 429 · 403 · 5xx</text>
+  <text x="598" y="189" class="xs">· network errors</text>
+  <rect x="302" y="196" width="200" height="76" rx="5" class="box"/>
+  <text x="314" y="216" class="b">LaneController</text>
+  <text x="314" y="233" class="xs">+1 lane after 20 clean jobs</text>
+  <text x="314" y="247" class="xs">halve on 429 or rate-limit 403</text>
+  <text x="314" y="261" class="xs">−1 if MB/s stopped rising</text>
+  <line x1="402" y1="196" x2="402" y2="155" class="ln-plan" marker-end="url(#g6p)"/>
+  <text x="410" y="180" class="xs pl">updateSettings()</text>
+
+  <path d="M330 154 V 172 H 200 V 195" class="ln" marker-end="url(#g6a)"/>
+  <text x="208" y="167" class="xs">started · bytes · done</text>
+  <rect x="8" y="196" width="232" height="76" rx="5" class="box"/>
+  <text x="20" y="216" class="b">Progress reporter</text>
+  <text x="20" y="233" class="xs">MB/s and files/s, smoothed</text>
+  <text x="20" y="247" class="xs">ETA from the slower of the two</text>
+  <text x="20" y="261" class="xs">4 snapshots a second</text>
+  <line x1="124" y1="272" x2="124" y2="300" class="ln" marker-end="url(#g6a)"/>
+  <text x="132" y="296" class="xs">'transfer:progress' → Transfers panel</text>
+</svg>
+</div>
+<figcaption><span class="no">Figure 7.</span>The engine. The plan becomes a flat queue, Bottleneck runs as many jobs at once as there are lanes, Google's answers adjust the lane count, and job events become progress snapshots for the UI.</figcaption>
+</figure>
+
+<h3>Folders first, then a flat list of files</h3>
+<p>Part 1's walkers listed every Drive folder on every run (F19) and lost the full path on the way down (F4). The new engine never walks a tree. Every file already has a Drive ID in the manifest, so the only folder work left is creating folders that don't exist yet. That happens first, parents before children, and each new folder's ID is remembered in a <code>Map</code> from path to ID. After that, every file is an independent job, which is exactly what makes parallel lanes possible.</p>
+
+<h3>One request per file where possible</h3>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Job</th><th>Request</th><th class="num">Requests</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td class="k">Download</td><td><code>GET files/{driveId}?alt=media</code></td><td class="num">1</td><td>Streamed to <code>name.part</code>, hash checked, then renamed into place</td></tr>
+    <tr><td class="k">Update, ≤ 5 MB</td><td><code>PATCH upload/files/{driveId}?uploadType=media</code></td><td class="num">1</td><td>Most changed files: playerdata, stats, level.dat</td></tr>
+    <tr><td class="k">New file, ≤ 5 MB</td><td><code>POST upload/files?uploadType=multipart</code></td><td class="num">1</td><td>Name, parent folder and bytes in one request</td></tr>
+    <tr><td class="k">Any file &gt; 5 MB</td><td><code>uploadType=resumable</code>, sent in chunks</td><td class="num">2+</td><td>Large region files; can resume after a dropped connection</td></tr>
+    <tr><td class="k">Delete</td><td><code>DELETE files/{driveId}</code></td><td class="num">1</td><td>Or move to Drive's trash, if you prefer an undo</td></tr>
+  </tbody>
+</table>
+</div>
+<p>Uploads ask Google to return <code>id,md5Checksum,size</code>. If Google's checksum doesn't match the one the app computed, the job fails and retries, so a corrupted transfer can never be committed. The 5 MB line is Google's own guidance: simple and multipart uploads for files of 5 MB or less, resumable uploads above that.</p>
+
+<h3>How many lanes? Add slowly, back off fast</h3>
+<p>There's no single right number. It depends on your upload speed, Google's mood and how many small files there are. So the engine measures and adjusts, using the rule TCP itself uses on the internet, called <strong>AIMD</strong> (additive increase, multiplicative decrease): add one lane at a time while things go well, and cut the lanes in half the moment Google says "too many requests".</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Signal</th><th>Reaction</th></tr></thead>
+  <tbody>
+    <tr><td>20 jobs in a row finished without throttling</td><td>Open one more lane, up to 12</td></tr>
+    <tr><td>Google answered 429, or 403 with reason <code>rateLimitExceeded</code> / <code>userRateLimitExceeded</code></td><td>Halve the lanes (at least 1) and retry that job after a backoff</td></tr>
+    <tr><td>A lane was added, but 10 s later MB/s rose by less than 5%</td><td>Close that lane again and stop adding: your connection is full</td></tr>
+    <tr><td>Network error or a 5xx answer</td><td>Retry that job after a backoff; lanes unchanged</td></tr>
+    <tr><td>The same job failed 5 times</td><td>Mark it failed and keep going with the others</td></tr>
+  </tbody>
+</table>
+</div>
+
+<figure>
+<div class="frame">
+<svg class="dg" viewBox="0 0 760 236" role="img" aria-label="Example chart of lanes over two minutes. The engine starts with 4 lanes and adds one about every 8 seconds up to 9. At 46 seconds Google answers 429 and the lanes drop to 4. It climbs again to 9 by 86 seconds, sees no speed gain, and settles at 8 for the rest of the transfer.">
+  <text x="60" y="12" class="xs">lanes running at once</text>
+  <line x1="60" y1="26" x2="730" y2="26" class="grid"/>
+  <line x1="60" y1="82.6" x2="730" y2="82.6" class="grid"/>
+  <line x1="60" y1="139.3" x2="730" y2="139.3" class="grid"/>
+  <text x="52" y="29.5" class="xs end">12</text>
+  <text x="52" y="86" class="xs end">8</text>
+  <text x="52" y="143" class="xs end">4</text>
+  <text x="52" y="199.5" class="xs end">0</text>
+  <path d="M60 139.3 H104.7 V125.2 H149.3 V111 H194 V96.8 H238.7 V82.6 H283.3 V68.5 H316.8 V139.3 H361.5 V125.2 H406.2 V111 H450.8 V96.8 H495.5 V82.6 H540.2 V68.5 H573.7 V82.6 H730 V196 H60 Z" class="band" style="fill:var(--plan-wash)"/>
+  <path d="M60 139.3 H104.7 V125.2 H149.3 V111 H194 V96.8 H238.7 V82.6 H283.3 V68.5 H316.8 V139.3 H361.5 V125.2 H406.2 V111 H450.8 V96.8 H495.5 V82.6 H540.2 V68.5 H573.7 V82.6 H730" class="ln-plan" style="stroke-width:2"/>
+  <line x1="60" y1="196" x2="730" y2="196" class="axis"/>
+  <circle cx="316.8" cy="68.5" r="4.5" class="bar-red"/>
+  <text x="324" y="58" class="xs red">429 from Google → halve to 4</text>
+  <circle cx="573.7" cy="68.5" r="4.5" class="bar-muted"/>
+  <text x="580" y="58" class="xs">no faster with 9 → back to 8</text>
+  <text x="110" y="74" class="xs pl">+1 lane after every 20 clean jobs</text>
+  <text x="66" y="160" class="xs">start at 4</text>
+  <line x1="60" y1="196" x2="60" y2="201" class="axis"/><text x="60" y="214" class="xs mid">0</text>
+  <line x1="227.5" y1="196" x2="227.5" y2="201" class="axis"/><text x="227.5" y="214" class="xs mid">30 s</text>
+  <line x1="395" y1="196" x2="395" y2="201" class="axis"/><text x="395" y="214" class="xs mid">60 s</text>
+  <line x1="562.5" y1="196" x2="562.5" y2="201" class="axis"/><text x="562.5" y="214" class="xs mid">90 s</text>
+  <line x1="730" y1="196" x2="730" y2="201" class="axis"/><text x="730" y="214" class="xs mid">120 s</text>
+  <text x="395" y="232" class="xs mid">seconds into the transfer</text>
+</svg>
+</div>
+<figcaption><span class="no">Figure 8.</span>An example of the lane count during a two-minute upload: a slow climb, a sharp cut when Google pushes back, and a plateau once the connection is full. The sawtooth shape is what AIMD looks like.</figcaption>
+</figure>
+
+<pre><code><span class="file">electron/transfer/TransferEngine.ts (the core, simplified)</span>import Bottleneck from 'bottleneck';
+
+export class TransferEngine {
+  private limiter = new Bottleneck({ maxConcurrent: 4 });
+  private lanes = new LaneController({ start: 4, min: 1, max: 12 });
+
+  constructor(private drive: DriveClient, private progress: ProgressReporter) {
+    this.lanes.onChange((n) =&gt; this.limiter.updateSettings({ maxConcurrent: n }));
+    this.limiter.on('failed', (error, info) =&gt; {
+      <span class="c">// 429, or 403 with a rate-limit reason</span>
+      if (isRateLimit(error)) this.lanes.onThrottled();
+      <span class="c">// Returning a number means "retry after that many ms".</span>
+      <span class="c">// Returning nothing means "give up": the job's promise rejects.</span>
+      if (isRetryable(error) &amp;&amp; info.retryCount &lt; 5) return backoffMs(info.retryCount);
+    });
+  }
+
+  async run(jobs: TransferJob[]): Promise&lt;TransferResult&gt; {
+    const result: TransferResult = { done: [], failed: [] };
+    await Promise.all(jobs.map((job) =&gt;
+      this.limiter.schedule(() =&gt; this.runJob(job))  <span class="c">// one request, md5 checked</span>
+        .then((moved) =&gt; {
+          this.lanes.onSuccess();
+          this.progress.done(job);
+          result.done.push(moved);
+        })
+        .catch((error) =&gt; {
+          this.progress.failed(job, error);
+          result.failed.push({ job, error });
+        }),
+    ));
+    return result;                <span class="c">// the caller sees every failure, never a hidden one</span>
+  }
+}
+
+<span class="c">// Google's advice: wait 2^n seconds plus up to 1 s of random "jitter", with a cap.</span>
+const backoffMs = (attempt: number) =&gt;
+  Math.min(2 ** attempt * 1000 + Math.random() * 1000, 32_000);</code></pre>
+<pre><code><span class="file">electron/transfer/LaneController.ts</span>export class LaneController {
+  private lanes: number;
+  private ceiling: number;
+  private cleanStreak = 0;
+  private listeners: Array&lt;(lanes: number) =&gt; void&gt; = [];
+
+  constructor(private opts: { start: number; min: number; max: number }) {
+    this.lanes = opts.start;
+    this.ceiling = opts.max;
+  }
+
+  onSuccess() {                                   <span class="c">// additive increase</span>
+    if (++this.cleanStreak &lt; 20 || this.lanes &gt;= this.ceiling) return;
+    this.cleanStreak = 0;
+    this.set(this.lanes + 1);
+  }
+  onThrottled() {                                 <span class="c">// multiplicative decrease</span>
+    this.cleanStreak = 0;
+    this.set(Math.max(this.opts.min, Math.floor(this.lanes / 2)));
+  }
+  onNoSpeedGain() {                               <span class="c">// the connection is full</span>
+    this.ceiling = Math.max(this.opts.min, this.lanes - 1);
+    this.set(this.ceiling);
+  }
+
+  onChange(listener: (lanes: number) =&gt; void) { this.listeners.push(listener); }
+  private set(lanes: number) {
+    if (lanes === this.lanes) return;
+    this.lanes = lanes;
+    for (const listener of this.listeners) listener(lanes);
+  }
+}</code></pre>
+<p><strong>Jitter</strong>, the random part of the backoff, matters more than it looks: without it, six lanes that were throttled at the same moment would all retry at the same moment and get throttled again. <strong>Which errors are retryable</strong> is a short list: network errors, 429, 500, 502, 503, 504, and 403 only when its reason is a rate limit. A 401 means the token expired, so DriveClient refreshes it once and repeats the request. Everything else, such as 404 or a 403 for missing permission, fails the job immediately with a message the user can act on.</p>
+<div class="callout">
+  <span class="label">How much can Google take?</span>
+  <p>Since 1 May 2026 Google measures Drive API usage in quota units: each user may spend 325,000 units per minute in a project, a download costs 200 units, an edit 50 and a list 100. That allows roughly 1,600 downloads a minute per user, far more than one PC's connection can feed, but Google can still answer 429 when its own servers are busy. That's why the engine reacts to answers instead of trusting a fixed number. Bottleneck itself is old but stable (its latest release, 2.19.5, is several years old); if you ever want an actively maintained alternative, <code>p-queue</code> does the same job.</p>
+</div>
+
+<h3>Progress and a time estimate that doesn't jump around</h3>
+<p>The engine records every job event, and a reporter sends a snapshot to the UI four times a second. Raw speed jumps all over the place, so it's smoothed with an <strong>exponentially weighted moving average</strong> (EWMA): each tick, the new speed is 80% the old speed plus 20% what was just measured. Recent measurements count most, but one slow second doesn't wreck the estimate.</p>
+<pre><code><span class="file">electron/transfer/progress.ts (every 250 ms)</span>bytesPerSec = 0.8 * bytesPerSec + 0.2 * (bytesSinceLastTick / 0.25);
+filesPerSec = 0.8 * filesPerSec + 0.2 * (filesSinceLastTick / 0.25);
+
+<span class="c">// Big files are limited by bandwidth, thousands of small files by round trips.</span>
+<span class="c">// Estimate both ways and trust the slower one.</span>
+const etaSec = Math.max(remainingBytes / bytesPerSec, remainingFiles / filesPerSec);</code></pre>
+<div class="mock" aria-label="Example of the Transfers panel">
+  <div class="mock-head"><span class="mock-title">Uploading</span><span class="mock-pill info">6 lanes</span><span class="mock-sub">1,204 of 2,310 files · 412 of 700 MB</span></div>
+  <div class="mock-meter"><i style="width:58%"></i></div>
+  <div class="mock-stats"><span><b>4.1 MB/s</b></span><span>38 files/s</span><span><b>about 1 min 10 s left</b></span><span>2 failed</span><span>1,104 queued</span></div>
+  <div class="lanes">
+    <div class="lane"><span class="ln-name">Lane 1</span><span class="ln-file">world/region/r.-1.0.mca</span><span class="ln-n">3.1 / 7.0 MB</span><span class="ln-bar"><i style="width:44%"></i></span></div>
+    <div class="lane"><span class="ln-name">Lane 2</span><span class="ln-file">world/region/r.0.0.mca</span><span class="ln-n">6.2 / 7.0 MB</span><span class="ln-bar"><i style="width:88%"></i></span></div>
+    <div class="lane"><span class="ln-name">Lane 3</span><span class="ln-file">world/entities/r.0.-1.mca</span><span class="ln-n">0.8 / 1.2 MB</span><span class="ln-bar"><i style="width:66%"></i></span></div>
+    <div class="lane"><span class="ln-name">Lane 4</span><span class="ln-file">world/playerdata/2c5f…e1.dat</span><span class="ln-n">41 KB</span><span class="ln-bar"><i style="width:100%"></i></span></div>
+    <div class="lane"><span class="ln-name">Lane 5</span><span class="ln-file">world/stats/2c5f…e1.json</span><span class="ln-n">starting</span><span class="ln-bar"><i style="width:3%"></i></span></div>
+    <div class="lane idle"><span class="ln-name">Lane 6</span><span class="ln-file">backing off after a 429 · retry in 3 s</span><span class="ln-n"></span><span class="ln-bar"><i style="width:0%"></i></span></div>
+  </div>
+  <div class="mock-fail"><b>2 failed after 5 tries.</b> <span class="path">world/poi/r.0.0.mca</span>: connection reset · <span class="path">world/data/raids.dat</span>: checksum mismatch
+    <div class="mock-btns"><span class="mock-btn">Retry failed</span></div>
+  </div>
+</div>
+<p class="muted">The Transfers panel, as an example. Every number on it comes straight from one progress snapshot; the panel doesn't calculate anything itself.</p>
+
+<figure>
+<div class="frame">
+<svg class="dg" viewBox="0 0 760 154" role="img" aria-label="Bar chart of time spent waiting on request round trips for an upload of 300 changed files in 40 folders. Today: about 160 seconds, 640 requests one at a time. Blueprint: about 14 seconds, about 340 requests, 6 at a time.">
+  <text x="140" y="47" class="b end">Today</text>
+  <text x="140" y="91" class="b end">Blueprint</text>
+  <line x1="150" y1="20" x2="150" y2="112" class="grid"/>
+  <line x1="343.3" y1="20" x2="343.3" y2="112" class="grid"/>
+  <line x1="536.7" y1="20" x2="536.7" y2="112" class="grid"/>
+  <line x1="730" y1="20" x2="730" y2="112" class="grid"/>
+  <rect x="150" y="30" width="515.6" height="24" rx="3" class="box-soft" style="stroke:var(--ink-2)"/>
+  <text x="160" y="47" class="sm">≈ 160 s · 640 requests, one at a time</text>
+  <rect x="150" y="74" width="45" height="24" rx="3" class="bar-plan"/>
+  <text x="203" y="91" class="sm pl h">≈ 14 s · about 340 requests, 6 at a time</text>
+  <line x1="150" y1="112" x2="730" y2="112" class="axis"/>
+  <text x="150" y="128" class="xs mid">0</text>
+  <text x="343.3" y="128" class="xs mid">60 s</text>
+  <text x="536.7" y="128" class="xs mid">120 s</text>
+  <text x="730" y="128" class="xs mid">180 s</text>
+  <text x="440" y="148" class="xs mid">time spent waiting on round trips</text>
+</svg>
+</div>
+<figcaption><span class="no">Figure 9.</span>Back-of-the-envelope comparison for the upload from Part 1, section 9: 300 changed files in 40 folders, about 0.25 s per round trip, 6 lanes. The time to move the bytes themselves depends on your connection and is left out of both bars.</figcaption>
+</figure>
+
+<h2><span class="sec">09</span>Watching the session live</h2>
+<p>The watcher gets a smaller, clearer job: <strong>it powers the live Changes panel and nothing else.</strong> What gets uploaded is decided by a fresh scan after Java exits, so a missed watcher event can never lose data. That one decision removes the hardest problems from Part 1's watcher.</p>
+<ul>
+  <li><strong>It starts when the phase becomes running and stops at stopping.</strong> No manual Start button.</li>
+  <li><strong><code>ignoreInitial: true</code>.</strong> No flood of 10,000 add events at startup (F17); the preflight scan already knows what's there.</li>
+  <li><strong>Events are batched.</strong> Changes are collected for half a second and sent as one message. The renderer keeps them in a Map and groups them by folder.</li>
+</ul>
+<pre><code><span class="file">electron/sync/changeTracker.ts</span>const pending = new Map&lt;string, 'added' | 'changed' | 'removed'&gt;();
+let timer: NodeJS.Timeout | null = null;
+
+function record(absPath: string, kind: 'added' | 'changed' | 'removed') {
+  const path = toPosix(relative(root, absPath));
+  if (rules.isIgnored(path)) return;
+  pending.set(path, kind);          <span class="c">// a newer event for the same file replaces the older</span>
+  timer ??= setTimeout(flush, 500);
+}
+
+function flush() {
+  timer = null;
+  <span class="c">// One message for everything since the last flush, for example</span>
+  <span class="c">// [["world/region/r.0.0.mca", "changed"], ["world/level.dat", "changed"]]</span>
+  emit('changes:batch', [...pending]);
+  pending.clear();
+}
+
+watcher = chokidar
+  .watch(root, { ignoreInitial: true, ignored: (p) =&gt; rules.isIgnoredAbsolute(p) })
+  .on('add', (p) =&gt; record(p, 'added'))
+  .on('change', (p) =&gt; record(p, 'changed'))
+  .on('unlink', (p) =&gt; record(p, 'removed'));</code></pre>
+
+<h3>Shared ignore rules</h3>
+<p>The blacklist becomes <code>.launcher/sync-rules.json</code> on Drive, so every member syncs the same set of files (F24). Patterns use forward slashes and three simple forms: a folder (<code>logs/</code>), an exact file, or an extension (<code>*.tmp</code>). If you want full glob patterns later, the <code>picomatch</code> package does that well. Built-in rules live in code and are always added on top (F22).</p>
+<pre><code><span class="file">.launcher/sync-rules.json on Drive</span>{
+  "format": 1,
+  "ignore": [
+    "logs/",
+    "crash-reports/",
+    "world/session.lock",
+    "*.tmp",
+    "world/data/DistantHorizons.sqlite"
+  ]
+}</code></pre>
+<div class="mock" aria-label="Example of the Changes panel">
+  <div class="mock-head"><span class="mock-title">Changes this session</span><span class="mock-pill info">Live</span><span class="mock-sub">214 files · 96 MB · updated 2 s ago</span></div>
+  <div class="mock-rows">
+    <div class="mock-group"><span class="tw">▸</span><span class="path">world/region/</span><span class="n">88 files</span><span class="n">81 MB</span></div>
+    <div class="mock-group"><span class="tw">▸</span><span class="path">world/entities/</span><span class="n">54 files</span><span class="n">9.6 MB</span></div>
+    <div class="mock-group"><span class="tw">▸</span><span class="path">world/poi/</span><span class="n">21 files</span><span class="n">2.1 MB</span></div>
+    <div class="mock-group"><span class="tw">▸</span><span class="path">world/playerdata/</span><span class="n">6 files</span><span class="n">41 KB</span></div>
+    <div class="mock-group"><span class="tw">▸</span><span class="path">world/stats/, world/advancements/</span><span class="n">12 files</span><span class="n">58 KB</span></div>
+    <div class="mock-group"><span class="tw">▸</span><span class="path">world/level.dat, world/data/</span><span class="n">33 files</span><span class="n">3.3 MB</span></div>
+    <div class="mock-group ign"><span class="tw">▸</span><span class="path">logs/</span><span class="n">2 files</span><span class="mock-tag">ignored</span></div>
+  </div>
+</div>
+<p class="muted">The Changes panel, as an example: grouped by folder so 200 files read as seven lines, with ignored files shown but crossed out, so nobody wonders why their logs didn't upload.</p>
+
+<h2><span class="sec">10</span>The bridge: typed IPC and one error convention</h2>
+<p>Part 1 counted 43 request channels and 12 events, all plain strings (F31). The new bridge has one contract file. Both processes import it, so a wrong channel name or a wrong argument is a compile error, and the list shrinks to about twenty commands because the session now takes intents instead of individual steps.</p>
+<pre><code><span class="file">shared/ipc.ts</span>export type Result&lt;T&gt; =
+  | { ok: true; value: T }
+  | { ok: false; error: AppError };
+
+export interface AppError {
+  code: 'NOT_SIGNED_IN' | 'LOCK_HELD' | 'UNFINISHED_UPLOAD' | 'CONFLICT' | 'BUSY'
+      | 'NETWORK' | 'RATE_LIMITED' | 'NOT_FOUND' | 'UPLOAD_INCOMPLETE' | 'UNKNOWN';
+  message: string;                           <span class="c">// already written for the user</span>
+}
+
+<span class="c">// Every request the renderer can make: name → (arguments) =&gt; result</span>
+export interface Commands {
+  'session:preflight':   (serverId: string) =&gt; SyncReport;
+  'session:start':       (serverId: string) =&gt; void;
+  'session:stop':        () =&gt; void;
+  'session:resolve':     (choice: 'keep-cloud' | 'keep-local') =&gt; void;
+  'session:retryUpload': () =&gt; void;
+  'servers:list':        () =&gt; ServerSummary[];
+  'settings:get':        (serverId: string) =&gt; ServerSettings;
+  <span class="c">// … about twenty in total</span>
+}
+
+<span class="c">// Every event the main process pushes</span>
+export interface Events {
+  'session:state':     SessionState;
+  'transfer:progress': TransferSnapshot;
+  'changes:batch':     Array&lt;[path: string, kind: 'added' | 'changed' | 'removed']&gt;;
+}</code></pre>
+<pre><code><span class="file">electron/ipc/handle.ts: the only place where errors become Results</span>export function handle&lt;C extends keyof Commands&gt;(
+  channel: C,
+  run: (...args: Parameters&lt;Commands[C]&gt;) =&gt; Promise&lt;ReturnType&lt;Commands[C]&gt;&gt;,
+) {
+  ipcMain.handle(channel, async (_event, ...args) =&gt; {
+    try {
+      return { ok: true, value: await run(...(args as Parameters&lt;Commands[C]&gt;)) };
+    } catch (err) {
+      log.error(channel, err);
+      return { ok: false, error: toAppError(err) };
+    }
+  });
+}
+
+<span class="c">// electron/ipc/handlers.ts: one line per channel</span>
+handle('session:preflight', (id) =&gt; session.preflight(id));
+handle('session:start',     (id) =&gt; session.start(id));
+handle('session:stop',      ()   =&gt; session.stop());</code></pre>
+<pre><code><span class="file">electron/preload.ts and src/api.ts</span><span class="c">// preload.ts: generic, never needs editing again</span>
+contextBridge.exposeInMainWorld('api', {
+  invoke: (channel: string, ...args: unknown[]) =&gt; ipcRenderer.invoke(channel, ...args),
+  on: (channel: string, listener: (payload: unknown) =&gt; void) =&gt; {
+    const wrapped = (_e: unknown, payload: unknown) =&gt; listener(payload);
+    ipcRenderer.on(channel, wrapped);
+    return () =&gt; ipcRenderer.off(channel, wrapped);   <span class="c">// its own unsubscribe (F37)</span>
+  },
+});
+
+<span class="c">// api.ts: the typed face of window.api</span>
+export const invoke = &lt;C extends keyof Commands&gt;(
+  channel: C, ...args: Parameters&lt;Commands[C]&gt;
+) =&gt; window.api.invoke(channel, ...args) as Promise&lt;Result&lt;ReturnType&lt;Commands[C]&gt;&gt;&gt;;
+
+export const on = &lt;E extends keyof Events&gt;(
+  event: E, listener: (payload: Events[E]) =&gt; void,
+) =&gt; window.api.on(event, listener as (payload: unknown) =&gt; void);
+
+<span class="c">// in a component</span>
+const res = await invoke('session:start', server.id);  <span class="ok">// a typo here won't compile</span>
+if (!res.ok) showError(res.error.message);</code></pre>
+<p>The renderer's session store becomes a <strong>mirror</strong>: it holds whatever the main process last sent and never changes it on its own. Buttons derive what they allow from the phase, so they can't disagree with the main process.</p>
+<pre><code><span class="file">src/stores/sessionStore.ts</span>export const useSession = create&lt;{ state: SessionState }&gt;(() =&gt; ({
+  state: { phase: 'idle' },
+}));
+on('session:state', (state) =&gt; useSession.setState({ state }));
+
+<span class="c">// in the Power button</span>
+const phase = useSession((s) =&gt; s.state.phase);
+const canStart = phase === 'idle';
+const canStop = phase === 'running';</code></pre>
+
+<h2><span class="sec">11</span>Where every fact lives now</h2>
+<p>This is Part 1's "one fact, many homes" table again, with one home each.</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Fact</th><th>Its one owner</th><th>How everyone else sees it</th></tr></thead>
+  <tbody>
+    <tr><td class="k">Session phase and details</td><td>SessionController</td><td><code>session:state</code> events; the renderer mirrors them</td></tr>
+    <tr><td class="k">Who holds the server</td><td>lock.json, written only by the holder's LockService</td><td><code>inspect()</code>, which never writes</td></tr>
+    <tr><td class="k">What the cloud contains</td><td>.launcher/manifest.json, written only by a commit</td><td>Read once per preflight and before each commit</td></tr>
+    <tr><td class="k">What this PC last synced</td><td>base.json in the app's data folder</td><td>Read by SyncEngine only</td></tr>
+    <tr><td class="k">What's on disk now</td><td>The disk itself</td><td>A fresh scan whenever it matters</td></tr>
+    <tr><td class="k">Changes during this session</td><td>ChangeTracker</td><td><code>changes:batch</code> events</td></tr>
+    <tr><td class="k">Transfer progress</td><td>TransferEngine</td><td><code>transfer:progress</code> snapshots</td></tr>
+    <tr><td class="k">Ignored files</td><td>.launcher/sync-rules.json on Drive</td><td>Loaded at the start of each session</td></tr>
+    <tr><td class="k">Local settings</td><td>Per-server settings.json in the app's data folder</td><td><code>settings:get</code> / <code>settings:set</code></td></tr>
+  </tbody>
+</table>
+</div>
+<p>The app's data folder gets one subfolder per server, so nothing leaks from one server to another (F14), and the server folder itself contains only server files:</p>
+<figure>
+<div class="frame">
+<pre class="tree" aria-label="App data folder layout">%APPDATA%/Drive Launcher/
+  token.json
+  settings.json                app-wide: window, last selected server
+  servers/
+    1x9Kq…/                    one folder per server, named by its Drive folder ID
+      settings.json            local path, RAM, playit.gg
+      base.json                the base snapshot
+      journal.json             exists only while an upload is unfinished
+      backups/                 zips made before resolving a conflict</pre>
+</div>
+<figcaption><span class="no">Figure 10.</span>Local data, one folder per server.</figcaption>
+</figure>
+
+<h2><span class="sec">12</span>Testing the parts that decide</h2>
+<p>You don't need to test everything. Test the code that <em>decides</em>, because a wrong decision there loses worlds, and that code is pure, so tests are short. Good candidates: <code>planSync</code>, <code>toPosix</code> and the ignore rules, <code>LaneController</code>, the ETA maths, and LockService's free/mine/held/stale rules. Vitest fits a Vite project with no extra setup.</p>
+<pre><code><span class="file">electron/sync/planner.test.ts</span>import { test, expect } from 'vitest';
+import { planSync } from './planner';
+
+<span class="c">// Builds a snapshot from { path: md5 }</span>
+const snap = (files: Record&lt;string, string&gt;) =&gt;
+  new Map(Object.entries(files).map(([path, md5]) =&gt; [path, { md5, size: 0, mtimeMs: 0 }]));
+
+test('a file changed only in the cloud is downloaded', () =&gt; {
+  const base = snap({ 'level.dat': 'a' });
+  const plan = planSync(base, snap({ 'level.dat': 'a' }), snap({ 'level.dat': 'b' }));
+  expect(plan.download).toEqual(['level.dat']);
+});
+
+test('a file changed on both sides is a conflict', () =&gt; {
+  const base = snap({ 'ops.json': 'a' });
+  const plan = planSync(base, snap({ 'ops.json': 'b' }), snap({ 'ops.json': 'c' }));
+  expect(plan.conflicts).toEqual(['ops.json']);
+});
+
+test('a file deleted locally is deleted in the cloud', () =&gt; {
+  const base = snap({ 'old.txt': 'a' });
+  const plan = planSync(base, snap({}), snap({ 'old.txt': 'a' }));
+  expect(plan.deleteRemote).toEqual(['old.txt']);
+});</code></pre>
+<p>(Note the <code>Object.entries</code> here: it's called on a plain object, which is what it's for. Part 1's F1 called it on a Map.)</p>
+<p>For code that talks to Drive, the trick is <strong>dependency injection</strong>, which only means passing a dependency in instead of creating it inside. TransferEngine receives a DriveClient in its constructor, so a test can hand it a fake that keeps files in a Map and fails on request: "the third upload answers 429". Then you can check that the lanes halve and the job is retried, without touching the internet.</p>
+<p>Finally, add two scripts to package.json, <code>"typecheck": "tsc --noEmit"</code> and <code>"test": "vitest run"</code>, and run both before every commit. That habit alone would have caught F1 and F20.</p>
+
+<h2><span class="sec">13</span>Questions you might have</h2>
+<h4>Why not compare every file with Drive at the end, like the first version did?</h4>
+<p>Because asking Drive about 10,000 files is 10,000 requests. With the manifest, learning the cloud's whole state costs one request, and learning your own costs zero, since it's a local scan. That's the idea you had; it just needed the base to be complete.</p>
+<h4>Why hashes, when modified times seemed to work?</h4>
+<p>Modified times differ between machines and change when a file is downloaded, so they can't be compared across PCs. Hashes describe content, which is what you care about. Modified times are still used, but only on one PC, as a shortcut to avoid re-hashing.</p>
+<h4>Why not real threads for the transfers?</h4>
+<p>The work is waiting for the network, not computing. Concurrent requests on one thread handle that perfectly. Worker threads would add message passing and shared-state problems for no speed gain.</p>
+<h4>Isn't it a problem that Drive can't do atomic writes?</h4>
+<p>It's why the design has several layers instead of one: claim-then-verify narrows races, renewals re-check ownership, the commit makes revisions all-or-nothing from a reader's point of view, checksums catch damaged or half-updated files, and the journal lets an interrupted upload finish. None is perfect alone; together they're more than a group of friends will ever need.</p>
+<h4>Do I have to rewrite everything at once?</h4>
+<p>No, and you shouldn't. The next section is ordered so the app keeps working after every step.</p>
+
+<h2><span class="sec">14</span>Getting there from here</h2>
+<p>Each step leaves a working app, and you can pause after any of them. The first step alone stops the data loss.</p>
+<ol class="steps">
+  <li><h4>Make it build, then stop the data loss</h4><p>Finish the rename, run <code>npm install chokidar</code> so package.json records it, and add the typecheck script. Then the smallest fixes that protect worlds: iterate the Map properly (F1), key entries by full path (F4), upload manifest.json after the files (F2), wait for Java to exit before uploading (F5), keep the heartbeat running through transfers (F6), allow Start only when the lock is offline or expired (F7), guard the stop sequence with a flag (F9), and hide manual Download and Upload while anyone holds the lock (F10). <em>Check:</em> host a session, build something, stop, and confirm on drive.google.com that the region files have new modified times.</p></li>
+  <li><h4>Add the contract and one Drive client</h4><p>Create shared/ipc.ts, <code>handle()</code> and src/api.ts, then move channels over one feature at a time; old string channels keep working meanwhile. Create DriveClient with one OAuth client, a single in-flight token refresh, and retries with backoff. Fixes F26, F28, F31, F36. <em>Check:</em> rename a channel in the contract and watch both processes fail to compile.</p></li>
+  <li><h4>Manifest v2, the scanner and the planner</h4><p>Write planner.ts with its tests first, then scanner.ts, then the preflight and the sync status card. There's nothing worth migrating from the old manifest: treat the first v2 upload as a fresh start, made by whoever has the newest world. Fixes F3, F13, F14, F15, F16, F25.</p></li>
+  <li><h4>The transfer engine</h4><p>Add Bottleneck with <code>npm install bottleneck</code>, build TransferEngine and LaneController, switch to flat job lists with Drive IDs, streaming downloads to .part files, one-request uploads for small files, and checksum checks. Then build the Transfers panel. Fixes F12, F18, F19, F35.</p></li>
+  <li><h4>SessionController and the new lock</h4><p>Move hosting out of main.ts into the state machine. Build LockService with session IDs, claim-then-verify, the renewal chain and read-only inspection, plus the upload journal and resume. Fixes F5, F6, F7, F8, F9, F11, F21, F27, F30 and F34 properly.</p></li>
+  <li><h4>Live changes and shared rules</h4><p>The ChangeTracker with batching, the Changes panel, and sync-rules.json on Drive with an editor that replaces the Blacklist modal. Fixes F17, F22, F23, F24, F39.</p></li>
+</ol>
+
+<h2><span class="sec">G</span>Glossary</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Term</th><th>Meaning in this document</th></tr></thead>
+  <tbody>
+    <tr><td class="k">AIMD</td><td>Additive increase, multiplicative decrease: add one lane at a time, halve on throttling.</td></tr>
+    <tr><td class="k">Backoff, jitter</td><td>Waiting longer after each failure (backoff), plus a random extra (jitter) so retries don't all collide.</td></tr>
+    <tr><td class="k">Base</td><td>The snapshot this PC and the cloud last agreed on. Git calls the same idea the merge base.</td></tr>
+    <tr><td class="k">Commit</td><td>The single write that makes a new revision real: uploading manifest.json, last.</td></tr>
+    <tr><td class="k">EWMA</td><td>Exponentially weighted moving average: a smoothed value where recent samples count most.</td></tr>
+    <tr><td class="k">Hash, checksum</td><td>A short fingerprint of a file's bytes; same bytes, same hash. Drive stores an MD5 for every file.</td></tr>
+    <tr><td class="k">Idempotent</td><td>Doing it twice has the same effect as doing it once, like <code>stop()</code> here.</td></tr>
+    <tr><td class="k">Journal</td><td>A note written before a risky job, describing it, so an interrupted job can be finished later.</td></tr>
+    <tr><td class="k">Lane</td><td>One transfer slot. Six lanes means up to six files moving at once.</td></tr>
+    <tr><td class="k">Lease</td><td>A lock with a timer that the holder must keep renewing.</td></tr>
+    <tr><td class="k">Pure function</td><td>Uses only its arguments and only returns a value: no disk, network or globals.</td></tr>
+    <tr><td class="k">Race condition</td><td>A bug that depends on which of two things happens first.</td></tr>
+    <tr><td class="k">Result type</td><td>Returning <code>{ ok, value }</code> or <code>{ ok: false, error }</code> instead of throwing across a boundary.</td></tr>
+    <tr><td class="k">State machine</td><td>Something that's always in exactly one named state and only moves along allowed transitions.</td></tr>
+    <tr><td class="k">Streaming</td><td>Processing a file in chunks as it flows, instead of loading all of it into memory.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<hr class="end">
+<p class="endnote">Sources for the Google Drive details: Drive API usage limits (developers.google.com/workspace/drive/api/guides/limits), upload types (…/guides/manage-uploads) and the File resource's checksum fields (…/reference/rest/v3/files). Bottleneck's retry and settings API is from its README.</p>
+
+</main>
+</body>
+</html>

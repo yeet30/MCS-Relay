@@ -1,0 +1,1566 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Drive Launcher As-Built</title>
+<style>
+/* Drive Launcher architecture review: shared stylesheet.
+   Layout: one reading column (46rem of text) inside a 52rem page; figures, tables and code may use the full width.
+   Visual language: an engineering drawing set. Part 1 marks problems in redline red, Part 2 draws the plan in blueprint blue. */
+:root {
+  --paper: #f3f5f3;
+  --sheet: #fbfcfb;
+  --ink: #16201d;
+  --ink-2: #46524e;
+  --muted: #6f7c78;
+  --rule: #d3dad7;
+  --wash: #e7ecea;
+  --accent: #0c666b;
+  --accent-wash: #dfeeed;
+  --plan: #1d5ca6;
+  --plan-wash: #e2ecf8;
+  --redline: #c22e2d;
+  --redline-wash: #f6e0df;
+  --crit: #d03b3b;
+  --high: #ec835a;
+  --med: #e9a710;
+  --low: #94a19d;
+  --good: #128a12;
+  --good-wash: #e0f0e0;
+  --code-bg: #e8edeb;
+  --font-display: "Bahnschrift", "DIN Alternate", "Arial Nova", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Sitka Text", "Sitka", "Iowan Old Style", "Palatino Linotype", Cambria, Georgia, serif;
+  --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e1312;
+    --sheet: #141a19;
+    --ink: #e2e9e6;
+    --ink-2: #b0bcb8;
+    --muted: #84918d;
+    --rule: #2a3431;
+    --wash: #1b2321;
+    --accent: #5ab2b4;
+    --accent-wash: #15302f;
+    --plan: #6ea5ea;
+    --plan-wash: #162538;
+    --redline: #ef6a66;
+    --redline-wash: #3b1d1c;
+    --crit: #e05a5a;
+    --high: #ec835a;
+    --med: #f2b531;
+    --low: #6c7975;
+    --good: #3cc23c;
+    --good-wash: #16301a;
+    --code-bg: #1a2220;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e1312;
+  --sheet: #141a19;
+  --ink: #e2e9e6;
+  --ink-2: #b0bcb8;
+  --muted: #84918d;
+  --rule: #2a3431;
+  --wash: #1b2321;
+  --accent: #5ab2b4;
+  --accent-wash: #15302f;
+  --plan: #6ea5ea;
+  --plan-wash: #162538;
+  --redline: #ef6a66;
+  --redline-wash: #3b1d1c;
+  --crit: #e05a5a;
+  --high: #ec835a;
+  --med: #f2b531;
+  --low: #6c7975;
+  --good: #3cc23c;
+  --good-wash: #16301a;
+  --code-bg: #1a2220;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.62;
+  font-variant-numeric: lining-nums;
+  text-rendering: optimizeLegibility;
+}
+.page { max-width: 52rem; margin: 0 auto; padding-inline: clamp(16px, 4vw, 44px); padding-block: 40px 96px; }
+.page > * { min-width: 0; }
+p, li { max-width: 46rem; }
+p { margin: .75rem 0; }
+a { color: var(--accent); }
+strong { font-weight: 700; }
+em { font-style: italic; }
+
+/* ---------- Masthead and title block ---------- */
+.masthead { padding-bottom: .5rem; margin-bottom: 1rem; }
+.kicker {
+  font-family: var(--font-display); font-size: .76rem; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--muted); display: flex; flex-wrap: wrap; gap: .4rem 1rem;
+}
+.kicker .part { color: var(--ink); font-weight: 600; }
+.masthead h1 {
+  font-family: var(--font-display); font-weight: 600; font-stretch: 87.5%;
+  font-size: clamp(2.4rem, 6.2vw, 3.5rem); line-height: 1; letter-spacing: -0.015em;
+  margin: .55rem 0 .9rem; text-wrap: balance;
+}
+.dek { font-size: 1.13rem; line-height: 1.5; color: var(--ink-2); max-width: 41rem; margin: 0 0 1.4rem; }
+.titleblock {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1.5px solid var(--ink); background: var(--sheet); margin: 0;
+}
+.titleblock div { padding: .5rem .75rem .55rem; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); min-width: 0; }
+.titleblock dt {
+  font-family: var(--font-display); font-size: .64rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+}
+.titleblock dd { margin: .12rem 0 0; font-family: var(--font-display); font-size: .86rem; line-height: 1.35; overflow-wrap: anywhere; }
+
+/* ---------- Headings ---------- */
+h2 {
+  font-family: var(--font-display); font-weight: 600; font-size: 1.68rem; line-height: 1.15;
+  margin: 3.4rem 0 1rem; padding-top: .75rem; border-top: 1px solid var(--ink);
+  display: flex; gap: .8rem; align-items: baseline; text-wrap: balance;
+}
+h2 .sec { font-size: .8rem; letter-spacing: .1em; color: var(--muted); font-weight: 500; flex: none; }
+h3 { font-family: var(--font-display); font-weight: 600; font-size: 1.2rem; line-height: 1.25; margin: 2.2rem 0 .55rem; text-wrap: balance; }
+h4 { font-family: var(--font-display); font-weight: 600; font-size: 1rem; margin: 1.4rem 0 .35rem; }
+.lead { font-size: 1.06rem; color: var(--ink-2); }
+
+ul, ol { padding-left: 1.3rem; margin: .7rem 0; }
+li { margin: .35rem 0; }
+li::marker { color: var(--muted); }
+
+/* ---------- Code ---------- */
+code {
+  font-family: var(--font-mono); font-size: .84em; background: var(--code-bg);
+  border-radius: 3px; padding: .05em .32em; overflow-wrap: anywhere;
+}
+pre {
+  font-family: var(--font-mono); font-size: .78rem; line-height: 1.55; color: var(--ink);
+  background: var(--sheet); border: 1px solid var(--rule); border-left: 3px solid var(--ink-2);
+  border-radius: 4px; padding: .85rem 1rem; overflow-x: auto; margin: 1.2rem 0; tab-size: 2;
+}
+pre code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+pre .c { color: var(--muted); }
+pre .hl { color: var(--redline); font-weight: 600; }
+pre .ok { color: var(--plan); font-weight: 600; }
+pre .file {
+  display: block; font-family: var(--font-display); font-size: .7rem; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: .45rem;
+}
+.ref { font-family: var(--font-mono); font-size: .76rem; color: var(--muted); }
+
+/* ---------- Figures ---------- */
+figure { margin: 2.1rem 0; break-inside: avoid; }
+.frame { background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; padding: 14px; overflow-x: auto; }
+.frame svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.frame pre.tree { line-height: 1.34; }
+.frame pre { margin: 0; border: 0; padding: 0; background: none; font-size: .76rem; line-height: 1.6; }
+figcaption {
+  font-family: var(--font-display); font-size: .86rem; line-height: 1.45; color: var(--ink-2);
+  margin-top: .6rem; max-width: 46rem;
+}
+figcaption .no { font-weight: 600; color: var(--ink); margin-right: .3rem; }
+
+/* ---------- Tables ---------- */
+.table-wrap { overflow-x: auto; margin: 1.4rem 0; }
+table { border-collapse: collapse; width: 100%; font-size: .88rem; line-height: 1.45; }
+caption {
+  caption-side: top; text-align: left; font-family: var(--font-display); font-weight: 600;
+  font-size: .92rem; padding-bottom: .5rem; color: var(--ink);
+}
+th {
+  font-family: var(--font-display); font-weight: 600; font-size: .7rem; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--muted); text-align: left; padding: .45rem .65rem;
+  border-bottom: 2px solid var(--ink); vertical-align: bottom;
+}
+td { padding: .5rem .65rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td code { font-size: .8em; white-space: nowrap; overflow-wrap: normal; }
+@media (max-width: 560px) { .titleblock { grid-template-columns: minmax(0, 1fr); } }
+tr { break-inside: avoid; }
+td.k { font-family: var(--font-display); font-weight: 600; white-space: nowrap; }
+
+/* ---------- Callouts ---------- */
+.callout {
+  border: 1px solid var(--rule); border-left: 4px solid var(--ink-2); background: var(--sheet);
+  border-radius: 4px; padding: .8rem 1.05rem; margin: 1.4rem 0; break-inside: avoid;
+}
+.callout.good { border-left-color: var(--good); }
+.callout.red { border-left-color: var(--redline); }
+.callout.plan { border-left-color: var(--plan); }
+.callout .label {
+  display: block; font-family: var(--font-display); font-size: .7rem; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: .2rem;
+}
+.callout p { margin: .3rem 0; }
+.callout > :last-child { margin-bottom: 0; }
+
+/* ---------- Severity chips, tally, findings ---------- */
+.sev {
+  --c: var(--low);
+  display: inline-flex; align-items: center; gap: .38rem; white-space: nowrap;
+  font-family: var(--font-display); font-weight: 600; font-size: .64rem; letter-spacing: .1em;
+  text-transform: uppercase; line-height: 1; color: var(--ink);
+  padding: .3rem .5rem .26rem; border-radius: 3px;
+  background: color-mix(in srgb, var(--c) 15%, var(--sheet));
+  border: 1px solid color-mix(in srgb, var(--c) 60%, var(--sheet));
+}
+.sev::before { content: ""; width: .55rem; height: .55rem; border-radius: 2px; background: var(--c); flex: none; }
+.sev.crit { --c: var(--crit); }
+.sev.high { --c: var(--high); }
+.sev.med { --c: var(--med); }
+.sev.low { --c: var(--low); }
+.tally { display: flex; flex-wrap: wrap; gap: .55rem; margin: 1.1rem 0 .4rem; }
+.tally .sev { font-size: .74rem; padding: .48rem .7rem .44rem; }
+.tally .sev b { font-size: 1rem; letter-spacing: 0; margin-right: .15rem; font-variant-numeric: tabular-nums; }
+
+.fref {
+  font-family: var(--font-display); font-weight: 600; font-size: .8em; color: var(--redline);
+  white-space: nowrap;
+}
+.findings { margin: .8rem 0 2rem; border-top: 1px solid var(--rule); }
+.finding {
+  --c: var(--low);
+  display: grid; grid-template-columns: 3.1rem minmax(0, 1fr); column-gap: .85rem;
+  padding: .8rem .2rem .85rem .85rem; border-left: 4px solid var(--c); border-bottom: 1px solid var(--rule);
+  break-inside: avoid;
+}
+.finding.crit { --c: var(--crit); }
+.finding.high { --c: var(--high); }
+.finding.med { --c: var(--med); }
+.finding.low { --c: var(--low); }
+.finding .fid { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; line-height: 1.3; }
+.finding .fbody { min-width: 0; }
+.finding h4 { margin: 0; font-size: 1.01rem; line-height: 1.3; }
+.finding .ref { display: block; margin-top: .2rem; }
+.finding p { margin: .35rem 0 0; font-size: .92rem; line-height: 1.5; }
+.finding p.lesson { color: var(--ink-2); }
+.finding p.lesson b {
+  font-family: var(--font-display); font-weight: 600; font-size: .68rem; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted); margin-right: .35rem;
+}
+
+/* ---------- Habit / principle grid ---------- */
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); gap: .9rem 1.4rem; margin: 1.2rem 0; }
+.habit { border-top: 2px solid var(--ink); padding-top: .55rem; break-inside: avoid; min-width: 0; }
+.habit h4 { margin: 0 0 .25rem; font-size: 1rem; }
+.habit p { margin: .2rem 0; font-size: .92rem; line-height: 1.5; }
+.habit .refs { font-family: var(--font-display); font-size: .78rem; color: var(--redline); }
+.habit.plan { border-top-color: var(--plan); }
+
+/* ---------- Diagrams (inline SVG) ---------- */
+.dg text { font-family: var(--font-display); font-size: 12px; fill: var(--ink); }
+.dg .b { font-weight: 600; }
+.dg .sm { font-size: 10.5px; fill: var(--ink-2); }
+.dg .xs { font-size: 9.6px; fill: var(--muted); }
+.dg .cap { font-size: 9.6px; letter-spacing: .12em; fill: var(--muted); }
+.dg .mono { font-family: var(--font-mono); font-size: 10px; }
+.dg .red { fill: var(--redline); }
+.dg .pl { fill: var(--plan); }
+.dg .gd { fill: var(--good); }
+.dg .mid { text-anchor: middle; }
+.dg .end { text-anchor: end; }
+.dg .it { font-style: italic; }
+.dg .box { fill: var(--sheet); stroke: var(--ink-2); stroke-width: 1.1; }
+.dg .box-strong { fill: var(--sheet); stroke: var(--ink); stroke-width: 1.8; }
+.dg .box-soft { fill: var(--wash); stroke: var(--rule); stroke-width: 1; }
+.dg .zone { fill: none; stroke: var(--muted); stroke-width: 1; stroke-dasharray: 5 4; }
+.dg .box-accent { fill: var(--accent-wash); stroke: var(--accent); stroke-width: 1.2; }
+.dg .box-plan { fill: var(--plan-wash); stroke: var(--plan); stroke-width: 1.3; }
+.dg .box-red { fill: var(--redline-wash); stroke: var(--redline); stroke-width: 1.2; }
+.dg .box-good { fill: var(--good-wash); stroke: var(--good); stroke-width: 1.2; }
+.dg .ln { stroke: var(--ink-2); stroke-width: 1.25; fill: none; }
+.dg .ln-faint { stroke: var(--rule); stroke-width: 1; fill: none; }
+.dg .ln-life { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 4; fill: none; }
+.dg .ln-red { stroke: var(--redline); stroke-width: 1.4; fill: none; }
+.dg .ln-plan { stroke: var(--plan); stroke-width: 1.5; fill: none; }
+.dg .ln-good { stroke: var(--good); stroke-width: 1.5; fill: none; }
+.dg .dash { stroke-dasharray: 5 4; }
+.dg .ah { fill: var(--ink-2); }
+.dg .ah-red { fill: var(--redline); }
+.dg .ah-plan { fill: var(--plan); }
+.dg .ah-good { fill: var(--good); }
+.dg .h { paint-order: stroke; stroke: var(--sheet); stroke-width: 4px; stroke-linejoin: round; }
+.dg .svc { font-size: 11.5px; font-weight: 600; }
+.dg .rl circle, .dg .rl rect { fill: var(--redline); }
+.dg .rl text { fill: var(--sheet); font-size: 8.6px; font-weight: 700; text-anchor: middle; }
+.dg .pn circle, .dg .pn rect { fill: var(--plan); }
+.dg .pn text { fill: var(--sheet); font-size: 9px; font-weight: 700; text-anchor: middle; }
+.dg .num circle { fill: var(--ink); }
+.dg .num text { fill: var(--sheet); font-size: 9.5px; font-weight: 700; text-anchor: middle; }
+.dg .on-bar { fill: var(--sheet); }
+.dg .bar-work { fill: var(--accent); }
+.dg .bar-good { fill: var(--good); }
+.dg .bar-red { fill: var(--redline); }
+.dg .bar-red-soft { fill: var(--redline-wash); stroke: var(--redline); stroke-width: 1; }
+.dg .bar-muted { fill: var(--low); }
+.dg .bar-plan { fill: var(--plan); }
+.dg .grid { stroke: var(--rule); stroke-width: 1; }
+.dg .axis { stroke: var(--ink-2); stroke-width: 1; }
+.dg .fill-paper { fill: var(--sheet); }
+.dg .band { fill: var(--wash); }
+
+/* ---------- UI mockups (Part 2) ---------- */
+.mock {
+  font-family: var(--font-display); font-size: .86rem; line-height: 1.35; color: var(--ink);
+  background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; padding: 1rem 1.1rem;
+  max-width: 34rem; break-inside: avoid;
+}
+.mock + .mock { margin-top: .8rem; }
+.mock-head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.mock-title { font-weight: 600; font-size: 1rem; }
+.mock-sub { color: var(--ink-2); font-size: .82rem; }
+.mock-pill {
+  --c: var(--low);
+  display: inline-flex; align-items: center; gap: .35rem; font-size: .7rem; font-weight: 600;
+  letter-spacing: .08em; text-transform: uppercase; padding: .22rem .5rem .2rem; border-radius: 99px;
+  background: color-mix(in srgb, var(--c) 16%, var(--sheet)); border: 1px solid color-mix(in srgb, var(--c) 55%, var(--sheet));
+}
+.mock-pill::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: var(--c); }
+.mock-pill.good { --c: var(--good); }
+.mock-pill.warn { --c: var(--med); }
+.mock-pill.bad { --c: var(--crit); }
+.mock-pill.info { --c: var(--plan); }
+.mock-btns { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+.mock-btn {
+  font: inherit; font-size: .8rem; font-weight: 600; padding: .38rem .75rem; border-radius: 5px;
+  border: 1px solid var(--ink-2); background: var(--sheet); color: var(--ink);
+}
+.mock-btn.primary { background: var(--plan); border-color: var(--plan); color: var(--sheet); }
+.mock-rows { margin-top: .7rem; border-top: 1px solid var(--rule); }
+.mock-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: .9rem; align-items: center;
+  padding: .38rem 0; border-bottom: 1px solid var(--rule); font-size: .8rem;
+}
+.mock-row .path { font-family: var(--font-mono); font-size: .74rem; overflow-wrap: anywhere; min-width: 0; }
+.mock-row .n { color: var(--ink-2); font-variant-numeric: tabular-nums; text-align: right; }
+.mock-meter { height: 8px; border-radius: 4px; background: var(--wash); overflow: hidden; margin-top: .55rem; }
+.mock-meter i { display: block; height: 100%; background: var(--plan); border-radius: 4px; }
+.mock-stats { display: flex; flex-wrap: wrap; gap: .3rem 1.1rem; margin-top: .5rem; font-size: .8rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.mock-stats b { color: var(--ink); }
+.lanes { margin-top: .8rem; display: grid; gap: .45rem; }
+.lane { display: grid; grid-template-columns: 3.2rem minmax(0, 1fr) 4.6rem; gap: .6rem; align-items: center; font-size: .76rem; }
+.lane .ln-name { color: var(--muted); font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; }
+.lane .ln-file { font-family: var(--font-mono); font-size: .72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.lane .ln-bar { grid-column: 2; height: 5px; border-radius: 3px; background: var(--wash); overflow: hidden; margin-top: -.2rem; }
+.lane .ln-bar i { display: block; height: 100%; background: var(--plan); }
+.lane .ln-n { text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.lane.idle .ln-file { color: var(--muted); font-family: var(--font-display); }
+.mock-fail { margin-top: .7rem; padding: .5rem .65rem; border: 1px solid color-mix(in srgb, var(--crit) 55%, var(--sheet)); border-radius: 5px; background: color-mix(in srgb, var(--crit) 8%, var(--sheet)); font-size: .78rem; }
+.mock-fail .path { font-family: var(--font-mono); font-size: .72rem; }
+.mock-group { display: grid; grid-template-columns: 1rem minmax(0, 1fr) auto auto; gap: .6rem; align-items: center; padding: .36rem 0; border-bottom: 1px solid var(--rule); font-size: .8rem; }
+.mock-group .tw { color: var(--muted); }
+.mock-group .path { font-family: var(--font-mono); font-size: .74rem; min-width: 0; overflow-wrap: anywhere; }
+.mock-group .n { color: var(--ink-2); font-variant-numeric: tabular-nums; text-align: right; }
+.mock-group.ign { color: var(--muted); }
+.mock-group.ign .path { text-decoration: line-through; text-decoration-color: var(--muted); }
+.mock-tag { font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--rule); border-radius: 3px; padding: .1rem .3rem; }
+.mock-wrap { display: grid; gap: .9rem; margin: 1.2rem 0; }
+
+/* ---------- Roadmap ---------- */
+.steps { list-style: none; padding: 0; margin: 1.2rem 0; counter-reset: step; }
+.steps li { counter-increment: step; display: grid; grid-template-columns: 2.6rem minmax(0, 1fr); gap: .2rem .9rem; padding: .75rem 0; border-top: 1px solid var(--rule); max-width: none; break-inside: avoid; }
+.steps li::before {
+  content: counter(step); font-family: var(--font-display); font-weight: 600; font-size: 1.5rem; line-height: 1;
+  color: var(--plan); grid-row: span 2; padding-top: .1rem;
+}
+.steps h4 { margin: 0; }
+.steps p { margin: .15rem 0 0; font-size: .93rem; }
+
+.tight li { margin: .2rem 0; }
+.muted { color: var(--muted); }
+.nowrap { white-space: nowrap; }
+hr.end { border: 0; border-top: 3px solid var(--ink); margin: 3rem 0 1rem; }
+.endnote { font-family: var(--font-display); font-size: .84rem; color: var(--ink-2); }
+
+@page { size: A4; margin: 16mm 17mm 17mm; }
+@media print {
+  html { font-size: 13.4px; }
+  body { background: #fff; font-size: 13.4px; }
+  .page { max-width: none; padding: 0; }
+  .frame svg { min-width: 0; }
+  h2 { break-after: avoid; margin-top: 2.4rem; }
+  h3, h4 { break-after: avoid; }
+  figure, table, pre, .callout, .finding, .habit, .mock, .titleblock { break-inside: avoid; }
+  a { color: inherit; text-decoration: none; }
+  .break { break-before: page; }
+  .masthead h1 { font-size: 3.1rem; }
+  pre { font-size: .76rem; }
+}
+
+@page {
+  @bottom-left { content: "Drive Launcher As-Built · Part 1 of 2"; font-family: Bahnschrift, "Segoe UI", sans-serif; font-size: 8pt; color: #6f7c78; }
+  @bottom-right { content: counter(page) " / " counter(pages); font-family: Bahnschrift, "Segoe UI", sans-serif; font-size: 8pt; color: #6f7c78; }
+}
+</style>
+</head>
+<body>
+<main class="page">
+
+<header class="masthead">
+  <div class="kicker"><span class="part">Part 1 of 2</span><span>Architecture review</span><span>Drive Launcher</span></div>
+  <h1>Drive Launcher As-Built</h1>
+  <p class="dek">How the app works today, traced through the code: the hosting session, the lock, the file watcher, the manifest and the file transfers. Problems are marked in red on the diagrams and listed at the end with their file and line.</p>
+  <dl class="titleblock">
+    <div><dt>Drawing</dt><dd>Session, sync and UI</dd></div>
+    <div><dt>Status</dt><dd>As built: what the code does now</dd></div>
+    <div><dt>Revision</dt><dd>rewritten-manifest @ 6d97a0a + uncommitted changes in 3 files</dd></div>
+    <div><dt>Date</dt><dd>14 October 2026</dd></div>
+    <div><dt>Scope</dt><dd>electron/ (main.ts + 7 services), src/ (24 components, 4 stores)</dd></div>
+    <div><dt>Companion</dt><dd>Part 2 · Drive Launcher Blueprint</dd></div>
+  </dl>
+</header>
+
+<h2><span class="sec">01</span>The short version</h2>
+<p>The idea holds up. Google Drive as the one shared copy of the world, a lock file that says who is hosting, and a single button that downloads, starts, stops and uploads is a sound design for a group of friends who share a server. The screens are sensible too. What's fragile is the structure underneath: no single piece of code owns "the session", the app's state is spread over 18 module-level variables, and the new manifest code is wired in halfway.</p>
+<p>Five things matter most:</p>
+<ul>
+  <li><strong>The new transfer code can't move any files yet.</strong> The list of files to transfer always comes out empty <span class="fref">F1</span>, manifest.json is never uploaded <span class="fref">F2</span>, per-file versions never change <span class="fref">F3</span>, and results are saved under the wrong keys <span class="fref">F4</span>. A session that ends with an upload reports success while nothing reaches Drive.</li>
+  <li><strong>The lock stops protecting the world when it matters most.</strong> Its lease runs out during long downloads and uploads <span class="fref">F6</span>, and Start only refuses when the status is "online" <span class="fref">F7</span>. A second member can start hosting while the first is still uploading.</li>
+  <li><strong>Stopping doesn't wait for Minecraft.</strong> The upload begins while the server is still saving <span class="fref">F5</span>, and the stop sequence runs twice <span class="fref">F9</span>.</li>
+  <li><strong>Nothing owns the session.</strong> main.ts, serverService, childrenProcesses and the renderer each keep their own answer to "is a server running?" (section 10).</li>
+  <li><strong>The build is broken right now.</strong> A rename was finished in the services but not in main.ts or the Manifest modal, and chokidar is missing from package.json <span class="fref">F20</span>.</li>
+</ul>
+<div class="tally" aria-label="41 findings: 8 critical, 12 high, 15 medium, 6 low">
+  <span class="sev crit"><b>8</b> Critical</span>
+  <span class="sev high"><b>12</b> High</span>
+  <span class="sev med"><b>15</b> Medium</span>
+  <span class="sev low"><b>6</b> Low</span>
+</div>
+<div class="callout">
+  <span class="label">How to read this</span>
+  <p>Sections follow the life of a hosting session. A red tag like <span class="fref">F6</span> points to a finding in the appendix. References like <span class="ref">serverService.ts:24</span> point to a line in your current working tree, uncommitted changes included. Part 2 shows the structure that fixes these at the root.</p>
+</div>
+
+<h2><span class="sec">02</span>What already works well</h2>
+<p>Start with what to keep. These are good decisions, and several of them are ones experienced developers often get wrong.</p>
+<ul>
+  <li><strong>One button for the whole session.</strong> Hiding download → launch → stop → upload behind Power/Stop is the right product call. The rest of this review is about making that button trustworthy.</li>
+  <li><strong>A lock file with an expiry and a heartbeat</strong> <span class="ref">serverService.ts:150</span>. Drive has no real locking, and a lease that has to be renewed is the right basic shape for "who is hosting". It needs an owner ID and continuous renewal, not a different idea.</li>
+  <li><strong>Atomic manifest writes.</strong> Writing manifest.tmp and renaming it over manifest.json <span class="ref">watcher-manifest.ts:155</span> means a crash can never leave a half-written manifest.</li>
+  <li><strong>Detecting offline changes</strong> by comparing a fresh scan with the last manifest <span class="ref">watcher-manifest.ts:105</span>. This is the core of a correct sync design, and Part 2 builds on it.</li>
+  <li><strong>Paging through folder listings</strong> with <code>nextPageToken</code> <span class="ref">fileTransferService.ts:79</span> instead of assuming one page is everything.</li>
+  <li><strong><code>Promise.allSettled</code> for deletions</strong> <span class="ref">fileTransferService.ts:98</span>, so one failed delete doesn't hide the others.</li>
+  <li><strong>Shared types</strong> in src/lib/types.ts used by both processes, a promise-based confirm hook (<code>useConfirm</code>), progress messages with major and minor importance, and a careful tray and quit flow.</li>
+</ul>
+
+<h2><span class="sec">03</span>The big picture</h2>
+<p>Electron runs your code in two processes. The <strong>renderer</strong> is a Chromium page running React. The <strong>main process</strong> runs Node.js and is the only part that can touch the disk, start Java or hold the Google token. They talk over IPC: the renderer invokes a named channel and awaits the answer, and the main process can push events back.</p>
+<p>Here, preload.ts hands the renderer <code>ipcRenderer</code> itself, so components call <code>window.ipcRenderer.invoke('start-server', …)</code> with plain strings. There are 43 request channels and 12 push events, and every one of them is registered in main.ts, which also creates the window and tray, runs the quit flow, orchestrates hosting, runs the heartbeat and parses the player list.</p>
+
+<figure>
+<div class="frame">
+<svg class="dg" viewBox="0 0 760 470" role="img" aria-label="Diagram: the renderer (24 components, 4 zustand stores, a global listener) talks through preload.ts to main.ts over 41 string-named request channels and 12 push events. main.ts imports all seven services. serverService calls fileTransferService, and fileTransferService and watcher-manifest import each other. The services reach Google Drive over fetch, the disk through fs and chokidar, and the Java and playit.gg processes through spawn and stdin.">
+  <defs>
+    <marker id="f1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+    <marker id="f1r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-red"/></marker>
+  </defs>
+  <text x="12" y="16" class="cap">RENDERER · REACT</text>
+  <text x="276" y="16" class="cap">MAIN PROCESS · NODE.JS</text>
+
+  <rect x="8" y="24" width="192" height="320" rx="8" class="zone"/>
+  <rect x="20" y="40" width="168" height="50" rx="5" class="box"/>
+  <text x="32" y="60" class="b">Pages + 24 components</text>
+  <text x="32" y="78" class="sm">2 pages, 7 modal setups</text>
+  <rect x="20" y="104" width="168" height="50" rx="5" class="box"/>
+  <text x="32" y="124" class="b">4 zustand stores</text>
+  <text x="32" y="142" class="sm">server · user · local · watcher</text>
+  <rect x="20" y="168" width="168" height="50" rx="5" class="box"/>
+  <text x="32" y="188" class="b">watcherListener.ts</text>
+  <text x="32" y="206" class="sm">global IPC listener</text>
+  <text x="20" y="246" class="sm">Every component calls</text>
+  <text x="20" y="263" class="mono">window.ipcRenderer</text>
+  <text x="20" y="277" class="mono">  .invoke('start-server', …)</text>
+  <text x="20" y="300" class="xs">channel names are plain strings,</text>
+  <text x="20" y="313" class="xs">payloads are untyped</text>
+  <g class="rl"><rect x="126" y="303" width="24" height="14" rx="7"/><text x="138" y="313">F31</text></g>
+
+  <line x1="188" y1="56" x2="287" y2="56" class="ln" marker-end="url(#f1a)"/>
+  <text x="236" y="50" class="xs mid">41 channels</text>
+  <line x1="287" y1="76" x2="189" y2="76" class="ln" marker-end="url(#f1a)"/>
+  <text x="236" y="90" class="xs mid">12 push events</text>
+  <rect x="214" y="104" width="44" height="240" rx="6" class="box-soft"/>
+  <text transform="translate(240 224) rotate(-90)" class="sm mid">preload.ts · exposes raw ipcRenderer</text>
+
+  <rect x="272" y="24" width="480" height="320" rx="8" class="zone"/>
+  <rect x="288" y="40" width="448" height="62" rx="5" class="box-strong"/>
+  <text x="300" y="61" class="b">main.ts · 547 lines</text>
+  <text x="300" y="78" class="sm">window · tray · quit flow · 43 ipcMain.handle(…) registrations</text>
+  <text x="300" y="93" class="sm">hosting orchestration · heartbeat · player-list parsing</text>
+  <g class="rl"><rect x="700" y="49" width="24" height="14" rx="7"/><text x="712" y="59">F30</text></g>
+
+  <line x1="512" y1="102" x2="512" y2="124" class="ln"/>
+  <line x1="352" y1="124" x2="672" y2="124" class="ln"/>
+  <line x1="352" y1="124" x2="352" y2="147" class="ln" marker-end="url(#f1a)"/>
+  <line x1="512" y1="124" x2="512" y2="147" class="ln" marker-end="url(#f1a)"/>
+  <line x1="672" y1="124" x2="672" y2="147" class="ln" marker-end="url(#f1a)"/>
+  <text x="520" y="117" class="xs">imports and calls all 7 services</text>
+
+  <rect x="288" y="148" width="128" height="50" rx="5" class="box"/>
+  <text x="300" y="168" class="svc">serverService</text>
+  <text x="300" y="185" class="sm">lock · start · stop</text>
+  <rect x="448" y="148" width="128" height="50" rx="5" class="box"/>
+  <text x="458" y="168" class="svc">fileTransferService</text>
+  <text x="458" y="185" class="sm">download · upload</text>
+  <rect x="608" y="148" width="128" height="50" rx="5" class="box"/>
+  <text x="620" y="168" class="svc">watcher-manifest</text>
+  <text x="620" y="185" class="sm">chokidar · manifest</text>
+
+  <line x1="416" y1="173" x2="447" y2="173" class="ln" marker-end="url(#f1a)"/>
+  <line x1="576" y1="165" x2="607" y2="165" class="ln-red" marker-end="url(#f1r)"/>
+  <line x1="607" y1="182" x2="577" y2="182" class="ln-red" marker-end="url(#f1r)"/>
+  <g class="rl"><rect x="580" y="204" width="24" height="14" rx="7"/><text x="592" y="214">F29</text></g>
+  <text x="610" y="215" class="xs red">import each other</text>
+
+  <rect x="288" y="226" width="128" height="50" rx="5" class="box"/>
+  <text x="300" y="246" class="svc">googleAuthService</text>
+  <text x="300" y="263" class="sm">OAuth · token.json</text>
+  <rect x="448" y="226" width="128" height="50" rx="5" class="box"/>
+  <text x="458" y="246" class="svc">googleDriveService</text>
+  <text x="458" y="263" class="sm">folders · sharing</text>
+  <rect x="608" y="226" width="128" height="50" rx="5" class="box"/>
+  <text x="620" y="246" class="svc">childrenProcesses</text>
+  <text x="620" y="263" class="sm">java · playit.gg</text>
+
+  <rect x="288" y="290" width="128" height="40" rx="5" class="box"/>
+  <text x="300" y="308" class="svc">localServerStore</text>
+  <text x="300" y="323" class="sm">settings JSON</text>
+  <text x="448" y="306" class="sm">18 module-level variables hold the</text>
+  <text x="448" y="321" class="sm">main process's state (section 10)</text>
+
+  <line x1="348" y1="344" x2="348" y2="371" class="ln" marker-end="url(#f1a)"/>
+  <text x="356" y="362" class="xs">fetch()</text>
+  <line x1="512" y1="344" x2="512" y2="371" class="ln" marker-end="url(#f1a)"/>
+  <text x="520" y="362" class="xs">fs · chokidar</text>
+  <line x1="676" y1="344" x2="676" y2="371" class="ln" marker-end="url(#f1a)"/>
+  <text x="684" y="362" class="xs">spawn · stdin</text>
+
+  <rect x="272" y="372" width="152" height="86" rx="5" class="box-soft"/>
+  <text x="284" y="393" class="b">Google Drive</text>
+  <text x="284" y="411" class="sm">lock.json · manifest.json</text>
+  <text x="284" y="427" class="sm">server files</text>
+  <rect x="436" y="372" width="152" height="86" rx="5" class="box-soft"/>
+  <text x="448" y="393" class="b">This PC</text>
+  <text x="448" y="411" class="sm">server folder (watched)</text>
+  <text x="448" y="427" class="sm">token.json · settings</text>
+  <rect x="600" y="372" width="152" height="86" rx="5" class="box-soft"/>
+  <text x="612" y="393" class="b">Child processes</text>
+  <text x="612" y="411" class="sm">java -jar server.jar</text>
+  <text x="612" y="427" class="sm">playit.gg agent</text>
+
+  <g class="rl"><rect x="12" y="380" width="24" height="14" rx="7"/><text x="24" y="390">F6</text></g>
+  <text x="44" y="391" class="sm">finding in the appendix</text>
+  <line x1="12" y1="414" x2="36" y2="414" class="ln-red" marker-end="url(#f1r)"/>
+  <text x="44" y="418" class="sm">problem path</text>
+</svg>
+</div>
+<figcaption><span class="no">Figure 1.</span>Process and module layout today. main.ts is the hub of every feature, the seven services call each other freely, and two of them import each other <span class="fref">F29</span>. The renderer reaches the main process through string-named channels <span class="fref">F31</span>.</figcaption>
+</figure>
+
+<div class="table-wrap">
+<table>
+  <caption>The 43 request channels, by purpose</caption>
+  <thead><tr><th>Area</th><th class="num">Count</th><th>Channels</th></tr></thead>
+  <tbody>
+    <tr><td class="k">Sign-in and scopes</td><td class="num">6</td><td><code>google-login</code> <code>google-get-user</code> <code>google-is-logged-in</code> <code>google-logout</code> <code>is-request-allowed</code> <code>request-drive-scope</code></td></tr>
+    <tr><td class="k">Servers and sharing</td><td class="num">8</td><td><code>drive-create-server</code> <code>drive-delete-server</code> <code>drive-get-root</code> <code>rename-server</code> <code>drive-invite-user</code> <code>drive-remove-permission</code> <code>join-by-id</code> <code>get-joined-folders</code></td></tr>
+    <tr><td class="k">Hosting session</td><td class="num">8</td><td><code>start-server</code> <code>stop-server</code> <code>send-server-command</code> <code>is-server-running</code> <code>get-current-players</code> <code>get-max-players</code> <code>get-server-lock</code> <code>confirm-quit-response</code></td></tr>
+    <tr><td class="k">File transfer</td><td class="num">4</td><td><code>sync-server</code> <code>upload-server-folder</code> <code>get-files-to-download</code> <code>get-files-to-upload</code> (the last two are marked temporary)</td></tr>
+    <tr><td class="k">Watcher and manifest</td><td class="num">10</td><td><code>start-watcher</code> <code>stop-watcher</code> <code>is-watcher-running</code> <code>get-watcher-updates</code> <code>get-tracked-files</code> <code>mutate-tracked-files</code> <code>get-blacklist</code> <code>set-blacklist</code> <code>write-manifest</code> <code>open-manifest</code></td></tr>
+    <tr><td class="k">Settings and OS</td><td class="num">7</td><td><code>get-local-variable</code> <code>set-local-variable</code> <code>get-server-path</code> <code>set-server-path</code> <code>choose-file-directory</code> <code>open-folder</code> <code>open-external-link</code></td></tr>
+  </tbody>
+</table>
+</div>
+<p>Three of these connections are dead: <code>get-server-path</code> and <code>open-external-link</code> are handled but never called, and the <code>playitgg-link</code> event is sent but nothing listens to it (the address is read from lock.json instead). <code>write-manifest</code> is still called by the Manifest modal but points at a function that no longer exists <span class="fref">F20</span>.</p>
+
+<h2><span class="sec">04</span>The UI, screen by screen</h2>
+<p>The window is a fixed 800 × 600, split into three columns: a 15% members panel, a 70% main area and a 15% menu. Minimizing or closing sends the app to the tray. Quitting asks for confirmation and, if you're hosting, stops the server and uploads before exiting.</p>
+
+<figure>
+<div class="frame">
+<svg class="dg" viewBox="0 0 760 430" role="img" aria-label="Wireframe of the main window: a members panel on the left with players and uptime, the Power button, folder cog, server picker, progress lines and playit.gg address in the middle, the Java console one screen further down, and the profile picture with the burger menu on the right. A legend on the right explains the eight numbered parts.">
+  <rect x="10" y="10" width="520" height="410" rx="6" class="box"/>
+  <rect x="10" y="10" width="520" height="22" rx="6" class="box-soft"/>
+  <text x="22" y="25" class="xs">Drive Launcher</text>
+  <text x="514" y="25" class="xs end">–     ✕</text>
+  <line x1="88" y1="32" x2="88" y2="420" class="ln-faint"/>
+  <line x1="452" y1="32" x2="452" y2="420" class="ln-faint"/>
+
+  <circle cx="30" cy="50" r="10" class="box"/>
+  <path d="M25 47 a6 6 0 1 0 6 -3" class="ln"/>
+  <rect x="16" y="68" width="66" height="96" rx="4" class="box"/>
+  <text x="22" y="83" class="xs">Online</text>
+  <text x="22" y="98" class="b">2/20</text>
+  <text x="22" y="115" class="sm">Steve</text>
+  <text x="22" y="129" class="sm">Alex</text>
+  <text x="22" y="146" class="xs">Uptime</text>
+  <text x="22" y="158" class="mono">01:12:09</text>
+
+  <text x="270" y="64" class="b mid" style="font-size:15px">Welcome, Steve!</text>
+  <circle cx="220" cy="130" r="40" class="box-strong"/>
+  <path d="M207 117 a18 18 0 1 0 26 0" class="ln" style="stroke-width:2.2"/>
+  <line x1="220" y1="106" x2="220" y2="127" class="ln" style="stroke-width:2.2"/>
+  <rect x="276" y="98" width="30" height="24" rx="4" class="box"/>
+  <path d="M283 106 h6 l2 3 h8 v9 h-16 z" class="ln"/>
+
+  <rect x="130" y="186" width="96" height="24" rx="4" class="box"/>
+  <text x="140" y="202" class="sm">Server-1</text>
+  <path d="M212 194 l6 4 l-6 4 z" class="ah"/>
+  <text x="234" y="202" class="sm">is currently hosted by you at:</text>
+  <text x="130" y="232" class="sm">✓ Process successfully finished.</text>
+  <rect x="130" y="240" width="140" height="18" rx="3" class="box-soft"/>
+  <text x="200" y="253" class="xs mid">Show detailed progress</text>
+  <text x="130" y="274" class="xs">✓ Received the ip from playitgg client.</text>
+  <rect x="130" y="284" width="180" height="22" rx="3" class="box-soft"/>
+  <text x="138" y="299" class="mono">abc-def.joinmc.link</text>
+  <rect x="316" y="286" width="18" height="18" rx="3" class="box"/>
+  <rect x="321" y="290" width="7" height="9" rx="1" class="ln"/>
+  <line x1="96" y1="322" x2="444" y2="322" class="ln-life"/>
+  <text x="270" y="317" class="xs mid">end of the first screen · scroll down for the console</text>
+  <rect x="104" y="332" width="332" height="80" rx="4" class="box"/>
+  <text x="114" y="348" class="sm b">Java Console</text>
+  <text x="190" y="348" class="xs gd">● Running</text>
+  <text x="114" y="364" class="mono" style="font-size:9px">[Server thread/INFO]: Done (4.213s)! For help, type "help"</text>
+  <text x="114" y="377" class="mono" style="font-size:9px">[Server thread/INFO]: Steve joined the game</text>
+  <line x1="104" y1="388" x2="436" y2="388" class="ln-faint"/>
+  <text x="114" y="403" class="xs">&gt; Enter command...</text>
+  <circle cx="508" cy="404" r="9" class="box"/>
+  <path d="M504 406 l4 -4 l4 4" class="ln"/>
+
+  <circle cx="474" cy="50" r="12" class="box-soft"/>
+  <line x1="494" y1="44" x2="512" y2="44" class="ln"/>
+  <line x1="494" y1="50" x2="512" y2="50" class="ln"/>
+  <line x1="494" y1="56" x2="512" y2="56" class="ln"/>
+
+  <g class="num"><circle cx="82" cy="68" r="8"/><text x="82" y="71.3">1</text></g>
+  <g class="num"><circle cx="176" cy="94" r="8"/><text x="176" y="97.3">2</text></g>
+  <g class="num"><circle cx="318" cy="92" r="8"/><text x="318" y="95.3">3</text></g>
+  <g class="num"><circle cx="118" cy="198" r="8"/><text x="118" y="201.3">4</text></g>
+  <g class="num"><circle cx="118" cy="228" r="8"/><text x="118" y="231.3">5</text></g>
+  <g class="num"><circle cx="118" cy="295" r="8"/><text x="118" y="298.3">6</text></g>
+  <g class="num"><circle cx="104" cy="332" r="8"/><text x="104" y="335.3">7</text></g>
+  <g class="num"><circle cx="492" cy="76" r="8"/><text x="492" y="79.3">8</text></g>
+
+  <g class="num"><circle cx="560" cy="40" r="8"/><text x="560" y="43.3">1</text></g>
+  <text x="576" y="44" class="b">Members</text>
+  <text x="576" y="59" class="xs">players online, max, uptime</text>
+  <g class="num"><circle cx="560" cy="88" r="8"/><text x="560" y="91.3">2</text></g>
+  <text x="576" y="92" class="b">Power / Stop</text>
+  <text x="576" y="107" class="xs">the whole session in one button</text>
+  <g class="num"><circle cx="560" cy="136" r="8"/><text x="560" y="139.3">3</text></g>
+  <text x="576" y="140" class="b">Folder cog</text>
+  <text x="576" y="155" class="xs">watcher, blacklist, manifest, folder</text>
+  <g class="num"><circle cx="560" cy="184" r="8"/><text x="560" y="187.3">4</text></g>
+  <text x="576" y="188" class="b">Server picker</text>
+  <text x="576" y="203" class="xs">owned + joined, who is hosting</text>
+  <g class="num"><circle cx="560" cy="232" r="8"/><text x="560" y="235.3">5</text></g>
+  <text x="576" y="236" class="b">Progress</text>
+  <text x="576" y="251" class="xs">latest major and minor step</text>
+  <g class="num"><circle cx="560" cy="280" r="8"/><text x="560" y="283.3">6</text></g>
+  <text x="576" y="284" class="b">playit.gg address</text>
+  <text x="576" y="299" class="xs">read from lock.json, with copy</text>
+  <g class="num"><circle cx="560" cy="328" r="8"/><text x="560" y="331.3">7</text></g>
+  <text x="576" y="332" class="b">Java console</text>
+  <text x="576" y="347" class="xs">output and commands</text>
+  <g class="num"><circle cx="560" cy="376" r="8"/><text x="560" y="379.3">8</text></g>
+  <text x="576" y="380" class="b">Menu</text>
+  <text x="576" y="395" class="xs">Scripts · Drive Folders · Log out</text>
+</svg>
+</div>
+<figcaption><span class="no">Figure 2.</span>The main window. The Java console sits one screen below the Power button; a scroll-to-top button appears once you scroll down.</figcaption>
+</figure>
+
+<figure>
+<div class="frame">
+<pre class="tree" aria-label="Component tree">App  (HashRouter: "/" and "/main")
+├─ LoginPage ................................ google-login, google-is-logged-in
+└─ MainPage ................................. user, scopes, settings, servers; quit dialog
+   ├─ MembersSection ........................ get-current-players, get-max-players
+   ├─ GreetingSection ....................... show-progress, hide-progress
+   │  ├─ AppCockpit ......................... start-server, stop-server, drive-create-server
+   │  │  └─ DirectoryMenu (folder cog)
+   │  │     ├─ Modal: File Watcher | Blacklist ... start-/stop-watcher, get-/set-blacklist
+   │  │     ├─ Modal: Upsert | Remove ............ get-watcher-updates, write-manifest
+   │  │     └─ Directory ......................... open-folder
+   │  ├─ SelectServer ....................... get-server-lock, set-local-variable
+   │  ├─ StartupProgress .................... startup-progress
+   │  │  └─ Modal: ProgressModal ............ get-files-to-download / -upload (test)
+   │  ├─ PlayitggLink ....................... reads lockStatus.publicIp
+   │  └─ ServerConsole ...................... server-output, send-server-command
+   └─ BurgerMenu ............................ google-logout
+      ├─ Modal: Script Options .............. get-/set-local-variable, choose-file-directory
+      └─ Modal: Your Folders | Joined Folders
+         ├─ ServerSlot (per server) ......... rename-server, sync-server, upload-server-folder,
+         │  │                                  drive-delete-server, set-server-path
+         │  └─ PermissionsList ................ drive-remove-permission
+         │     └─ Modal: InvitationInterface .. drive-invite-user
+         └─ JoinServer ...................... join-by-id</pre>
+</div>
+<figcaption><span class="no">Figure 3.</span>Component tree with the channels each part uses. Modals open from three places: the folder cog, the burger menu and the progress panel.</figcaption>
+</figure>
+
+<h3>What the sync looks like to a user today</h3>
+<p>The sync is visible in only two places, and both are developer tools rather than user features. The folder cog's File Watcher and Manifest tabs show internal lists (Upsert, Remove) and need manual Start and Write buttons. The Download and Upload buttons in Drive Folders run a full transfer with no lock check <span class="fref">F10</span>. Neither answers the questions a player has before pressing Power: <em>what changed, what will be transferred, and is it safe to start?</em> Part 2 proposes three panels for exactly that.</p>
+<p>Errors surface as <code>alert()</code> boxes. When a step fails halfway, spinners can keep spinning: a failed or hung playit.gg wait leaves the Power button loading <span class="fref">F21</span>, and a failed start leaves the progress panel open <span class="fref">F38</span>.</p>
+
+<h2><span class="sec">05</span>A hosting session, step by step</h2>
+<p>This is the path that matters most: everything between pressing Power and the world being safely back on Drive.</p>
+
+<figure>
+<div class="frame">
+<svg class="dg" viewBox="0 0 760 996" role="img" aria-label="Sequence diagram of one hosting session across six lanes: the UI, main.ts, serverService, the transfer and manifest services, Google Drive and the Java and playit.gg processes. Start: read the lock, write starting with a 60 second lease, launch playit.gg, download, write online, spawn Java, then a heartbeat every 20 seconds. Stop: write stop to Java's input and continue immediately, clear the heartbeat, write stopping with a 30 second lease, upload while Java is still saving, and Java's close event starts a second stop run. The lease runs out during both the download and the upload.">
+  <defs>
+    <marker id="f4a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+    <marker id="f4r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-red"/></marker>
+  </defs>
+  <rect x="10" y="8" width="100" height="38" rx="5" class="box"/>
+  <text x="60" y="24" class="b mid h">You</text><text x="60" y="38" class="xs mid h">renderer UI</text>
+  <rect x="130" y="8" width="100" height="38" rx="5" class="box"/>
+  <text x="180" y="24" class="b mid h">main.ts</text><text x="180" y="38" class="xs mid h">IPC + hosting</text>
+  <rect x="250" y="8" width="100" height="38" rx="5" class="box"/>
+  <text x="300" y="24" class="b mid h">serverService</text><text x="300" y="38" class="xs mid h">lock · start · stop</text>
+  <rect x="366" y="8" width="128" height="38" rx="5" class="box"/>
+  <text x="430" y="24" class="svc mid h">fileTransferService</text><text x="430" y="38" class="xs mid h">+ watcher-manifest</text>
+  <rect x="520" y="8" width="100" height="38" rx="5" class="box"/>
+  <text x="570" y="24" class="b mid h">Google Drive</text><text x="570" y="38" class="xs mid h">lock.json · files</text>
+  <rect x="646" y="8" width="100" height="38" rx="5" class="box"/>
+  <text x="696" y="24" class="b mid h">Processes</text><text x="696" y="38" class="xs mid h">java · playit.gg</text>
+
+  <line x1="60" y1="46" x2="60" y2="986" class="ln-life"/>
+  <line x1="180" y1="46" x2="180" y2="986" class="ln-life"/>
+  <line x1="300" y1="46" x2="300" y2="986" class="ln-life"/>
+  <line x1="430" y1="46" x2="430" y2="986" class="ln-life"/>
+  <line x1="570" y1="46" x2="570" y2="986" class="ln-life"/>
+  <line x1="696" y1="46" x2="696" y2="986" class="ln-life"/>
+
+  <!-- START -->
+  <line x1="4" y1="58" x2="756" y2="58" class="ln-faint"/>
+  <text x="6" y="72" class="cap h">START</text>
+
+  <line x1="60" y1="86" x2="179" y2="86" class="ln" marker-end="url(#f4a)"/>
+  <text x="120" y="81" class="sm mid h">start-server(options)</text>
+  <line x1="180" y1="112" x2="299" y2="112" class="ln" marker-end="url(#f4a)"/>
+  <text x="240" y="107" class="sm mid h">startServer()</text>
+  <line x1="300" y1="140" x2="569" y2="140" class="ln" marker-end="url(#f4a)"/>
+  <text x="432" y="135" class="sm mid h">read lock.json</text>
+  <g class="rl"><rect x="480" y="128" width="24" height="14" rx="7"/><text x="492" y="138">F7</text></g>
+  <g class="rl"><rect x="508" y="128" width="24" height="14" rx="7"/><text x="520" y="138">F11</text></g>
+  <line x1="570" y1="164" x2="301" y2="164" class="ln dash" marker-end="url(#f4a)"/>
+  <text x="435" y="159" class="sm mid h">status: "offline"</text>
+  <line x1="300" y1="192" x2="565" y2="192" class="ln" marker-end="url(#f4a)"/>
+  <text x="432" y="187" class="sm mid h">write "starting" · expires in 60 s</text>
+  <line x1="300" y1="220" x2="695" y2="220" class="ln" marker-end="url(#f4a)"/>
+  <text x="498" y="215" class="sm mid h">spawn playit.gg</text>
+  <line x1="300" y1="248" x2="429" y2="248" class="ln" marker-end="url(#f4a)"/>
+  <text x="365" y="243" class="sm mid h">downloadServerFolder()</text>
+  <rect x="424" y="256" width="12" height="96" class="box"/>
+  <line x1="436" y1="274" x2="565" y2="274" class="ln" marker-end="url(#f4a)"/>
+  <text x="503" y="269" class="sm mid h">read manifest.json</text>
+  <g class="rl"><rect x="588" y="267" width="24" height="14" rx="7"/><text x="600" y="277">F2</text></g>
+  <line x1="436" y1="298" x2="565" y2="298" class="ln" marker-end="url(#f4a)"/>
+  <text x="503" y="293" class="sm mid h">list + GET each file</text>
+  <text x="503" y="311" class="xs mid h">one at a time</text>
+  <g class="rl"><rect x="588" y="291" width="24" height="14" rx="7"/><text x="600" y="301">F1</text></g>
+  <g class="rl"><rect x="616" y="291" width="24" height="14" rx="7"/><text x="628" y="301">F3</text></g>
+  <line x1="696" y1="332" x2="301" y2="332" class="ln dash" marker-end="url(#f4a)"/>
+  <text x="362" y="327" class="sm mid h">playit.gg address</text>
+  <text x="584" y="327" class="xs red h">no timeout</text>
+  <g class="rl"><rect x="640" y="320" width="24" height="14" rx="7"/><text x="652" y="330">F21</text></g>
+  <line x1="430" y1="360" x2="301" y2="360" class="ln dash" marker-end="url(#f4a)"/>
+  <text x="365" y="355" class="sm mid h">{ success: true }</text>
+  <line x1="300" y1="386" x2="565" y2="386" class="ln" marker-end="url(#f4a)"/>
+  <text x="432" y="381" class="sm mid h">write "online"</text>
+  <rect x="566" y="192" width="8" height="44" class="bar-good"/>
+  <rect x="566" y="236" width="8" height="150" class="bar-red"/>
+  <text x="580" y="206" class="xs gd h">lease 60 s</text>
+  <text x="580" y="248" class="xs red h">lease expired</text>
+  <text x="580" y="260" class="xs red h">mid-download</text>
+  <g class="rl"><rect x="652" y="245" width="24" height="14" rx="7"/><text x="664" y="255">F6</text></g>
+  <line x1="300" y1="414" x2="181" y2="414" class="ln dash" marker-end="url(#f4a)"/>
+  <text x="240" y="409" class="sm mid h">result</text>
+  <line x1="180" y1="440" x2="695" y2="440" class="ln" marker-end="url(#f4a)"/>
+  <text x="438" y="435" class="sm mid h">spawn java -jar server.jar nogui</text>
+  <line x1="180" y1="466" x2="61" y2="466" class="ln dash" marker-end="url(#f4a)"/>
+  <text x="120" y="461" class="sm mid h">server-started</text>
+
+  <rect x="150" y="480" width="560" height="58" rx="4" class="zone"/>
+  <text x="158" y="493" class="xs h">loop · every 20 s</text>
+  <line x1="180" y1="506" x2="569" y2="506" class="ln" marker-end="url(#f4a)"/>
+  <text x="375" y="501" class="sm mid h">write "online" + players · lease 30 s</text>
+  <line x1="180" y1="528" x2="695" y2="528" class="ln" marker-end="url(#f4a)"/>
+  <text x="438" y="523" class="sm mid h">stdin: list</text>
+
+  <!-- PLAYING -->
+  <line x1="4" y1="552" x2="756" y2="552" class="ln-faint"/>
+  <text x="6" y="566" class="cap h">PLAYING</text>
+  <text x="400" y="580" class="sm mid it h">Players join and leave; Minecraft saves the world now and then; the heartbeat keeps the lock alive.</text>
+  <text x="400" y="598" class="xs mid red h">If a heartbeat fails for 30 s, the next app that reads the lock rewrites it as "offline".</text>
+  <g class="rl"><rect x="626" y="588" width="24" height="14" rx="7"/><text x="638" y="598">F11</text></g>
+  <g class="rl"><rect x="654" y="588" width="24" height="14" rx="7"/><text x="666" y="598">F27</text></g>
+
+  <!-- STOP -->
+  <line x1="4" y1="614" x2="756" y2="614" class="ln-faint"/>
+  <text x="6" y="628" class="cap h">STOP</text>
+  <line x1="60" y1="640" x2="179" y2="640" class="ln" marker-end="url(#f4a)"/>
+  <text x="120" y="635" class="sm mid h">stop-server</text>
+  <line x1="180" y1="666" x2="689" y2="666" class="ln" marker-end="url(#f4a)"/>
+  <text x="438" y="661" class="sm mid h">stdin: stop  (returns at once)</text>
+  <g class="rl"><rect x="524" y="654" width="24" height="14" rx="7"/><text x="536" y="664">F5</text></g>
+  <rect x="690" y="672" width="12" height="150" class="box-red"/>
+  <text x="708" y="700" class="xs red h">still</text>
+  <text x="708" y="712" class="xs red h">saving</text>
+  <text x="708" y="724" class="xs red h">the world</text>
+  <line x1="184" y1="690" x2="196" y2="690" class="ln"/>
+  <text x="200" y="694" class="xs h">clears the heartbeat</text>
+  <g class="rl"><rect x="286" y="683" width="24" height="14" rx="7"/><text x="298" y="693">F6</text></g>
+  <line x1="180" y1="714" x2="299" y2="714" class="ln" marker-end="url(#f4a)"/>
+  <text x="240" y="709" class="sm mid h">stopServer()</text>
+  <line x1="300" y1="740" x2="565" y2="740" class="ln" marker-end="url(#f4a)"/>
+  <text x="430" y="735" class="sm mid h">read lock · write "stopping" · lease 30 s</text>
+  <g class="rl"><rect x="544" y="722" width="24" height="14" rx="7"/><text x="556" y="732">F8</text></g>
+  <line x1="300" y1="766" x2="429" y2="766" class="ln" marker-end="url(#f4a)"/>
+  <text x="365" y="761" class="sm mid h">uploadServerFolder()</text>
+  <rect x="424" y="774" width="12" height="110" class="box"/>
+  <line x1="436" y1="794" x2="565" y2="794" class="ln" marker-end="url(#f4a)"/>
+  <text x="503" y="789" class="sm mid h">list + upload each file</text>
+  <text x="503" y="807" class="xs mid h">2 requests per file</text>
+  <g class="rl"><rect x="588" y="787" width="24" height="14" rx="7"/><text x="600" y="797">F1</text></g>
+  <g class="rl"><rect x="616" y="787" width="24" height="14" rx="7"/><text x="628" y="797">F19</text></g>
+  <line x1="690" y1="846" x2="181" y2="846" class="ln-red" marker-end="url(#f4r)"/>
+  <text x="300" y="841" class="sm mid red h">"close" → handleServerStop() runs again</text>
+  <g class="rl"><rect x="628" y="829" width="24" height="14" rx="7"/><text x="640" y="839">F9</text></g>
+  <text x="418" y="878" class="xs end h">applyManifestChanges(), not awaited</text>
+  <g class="rl"><rect x="218" y="867" width="24" height="14" rx="7"/><text x="230" y="877">F12</text></g>
+  <line x1="430" y1="904" x2="301" y2="904" class="ln dash" marker-end="url(#f4a)"/>
+  <text x="365" y="899" class="sm mid red h">success, 0 files moved</text>
+  <line x1="300" y1="930" x2="565" y2="930" class="ln" marker-end="url(#f4a)"/>
+  <text x="432" y="925" class="sm mid h">write "offline"</text>
+  <rect x="566" y="740" width="8" height="30" class="bar-good"/>
+  <rect x="566" y="770" width="8" height="160" class="bar-red"/>
+  <text x="580" y="756" class="xs gd h">lease 30 s</text>
+  <text x="580" y="872" class="xs red h">lease expired</text>
+  <text x="580" y="884" class="xs red h">mid-upload</text>
+  <g class="rl"><rect x="652" y="869" width="24" height="14" rx="7"/><text x="664" y="879">F6</text></g>
+  <line x1="300" y1="954" x2="181" y2="954" class="ln dash" marker-end="url(#f4a)"/>
+  <text x="240" y="949" class="sm mid h">result</text>
+  <line x1="180" y1="978" x2="61" y2="978" class="ln dash" marker-end="url(#f4a)"/>
+  <text x="120" y="973" class="sm mid h">server-stopped</text>
+</svg>
+</div>
+<figcaption><span class="no">Figure 4.</span>One complete session as the code runs it today. Time flows downward and dashed arrows are replies. The green and red bars on the Google Drive lifeline show when the lock protects the world and when it no longer does.</figcaption>
+</figure>
+
+<h3>Starting</h3>
+<p><code>startServer()</code> reads lock.json and refuses only when the status is "online" <span class="fref">F7</span>. It then writes "starting" with a 60-second expiry and launches playit.gg. The download and the wait for the playit.gg address run side by side in a <code>Promise.all</code>. The wait has no timeout, and if it fails the error escapes without resetting the button or the lock <span class="fref">F21</span>. When both are done the lock becomes "online" and main.ts spawns <code>java -jar … nogui</code>.</p>
+<p>The read at the start can also write: if lock.json is missing or expired, <code>getServerLock()</code> rewrites it as "offline" with the reader's name as the host <span class="fref">F11</span>.</p>
+<h3>Playing</h3>
+<p>Every 20 seconds the heartbeat rewrites lock.json as "online" with a fresh 30-second expiry and the player list, and sends <code>list</code> to the server so the next heartbeat has fresh names. The heartbeat is the only thing keeping the lock alive. If it fails for 30 seconds (a Wi-Fi drop, a laptop going to sleep), the next member whose app reads the lock marks it "offline" <span class="fref">F11</span>, and the failure itself becomes an unhandled promise rejection that nobody sees <span class="fref">F27</span>.</p>
+<h3>Stopping</h3>
+<p><code>killServer()</code> writes <code>stop</code> to Java's input and returns at once. Nothing waits for Java to exit, so the upload starts while Minecraft is still saving chunks <span class="fref">F5</span>. The heartbeat is cleared before the upload <span class="fref">F6</span>, so the 30-second "stopping" lease is never renewed. If the lock lapsed at any point during the session, <code>stopServer()</code> answers "This server is not being hosted" and skips the upload entirely <span class="fref">F8</span>. When Java finally exits, its <code>close</code> handler calls <code>handleServerStop()</code> a second time <span class="fref">F9</span>; that run clears the hosting flag and tells the UI the server has stopped while the first upload may still be running.</p>
+
+<h2><span class="sec">06</span>The lock</h2>
+<p>lock.json is written by <code>updateLockFile()</code> and looks like this:</p>
+<pre><code>{
+  "hostName": "Steve",
+  "hostEmail": "steve@example.com",
+  "startedAt": "2026-10-14T17:02:11.000Z",
+  "expiresAt": "2026-10-14T17:31:40.000Z",
+  "publicIp": "abc-def.joinmc.link",
+  "status": "online",
+  "onlinePlayers": ["Steve", "Alex"]
+}</code></pre>
+
+<figure>
+<div class="frame">
+<svg class="dg" viewBox="0 52 760 232" role="img" aria-label="State diagram of lock.json: offline, starting (60 second lease), online (30 second lease renewed by the heartbeat) and stopping (30 second lease, not renewed). Start goes from offline to starting, a finished download to online, Stop to stopping, and a finished upload back to offline. A failed download returns to offline. In red: whenever a lease expires, the next app that reads the lock rewrites it as offline, from any state.">
+  <defs>
+    <marker id="f5a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+    <marker id="f5r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-red"/></marker>
+  </defs>
+  <path d="M279 118 V 96 H 78 V 117" class="ln" marker-end="url(#f5a)"/>
+  <text x="178" y="90" class="sm mid">download failed</text>
+  <path d="M462 118 C 462 80, 498 80, 498 117" class="ln" marker-end="url(#f5a)"/>
+  <text x="480" y="72" class="sm mid">heartbeat every 20 s</text>
+
+  <rect x="20" y="118" width="116" height="46" rx="23" class="box"/>
+  <text x="78" y="138" class="b mid">offline</text>
+  <text x="78" y="154" class="xs mid">nobody hosting</text>
+  <rect x="221" y="118" width="116" height="46" rx="23" class="box"/>
+  <text x="279" y="138" class="b mid">starting</text>
+  <text x="279" y="154" class="xs mid">lease 60 s</text>
+  <rect x="422" y="118" width="116" height="46" rx="23" class="box"/>
+  <text x="480" y="138" class="b mid">online</text>
+  <text x="480" y="154" class="xs mid">30 s, renewed</text>
+  <rect x="623" y="118" width="116" height="46" rx="23" class="box"/>
+  <text x="681" y="138" class="b mid">stopping</text>
+  <text x="681" y="154" class="xs mid">30 s, not renewed</text>
+
+  <line x1="136" y1="141" x2="220" y2="141" class="ln" marker-end="url(#f5a)"/>
+  <text x="178" y="134" class="sm mid">Start</text>
+  <text x="178" y="159" class="xs mid red">only "online"</text>
+  <text x="178" y="170" class="xs mid red">blocks it</text>
+  <g class="rl"><rect x="166" y="175" width="24" height="14" rx="7"/><text x="178" y="185">F7</text></g>
+  <line x1="337" y1="141" x2="421" y2="141" class="ln" marker-end="url(#f5a)"/>
+  <text x="379" y="134" class="sm mid">downloaded</text>
+  <line x1="538" y1="141" x2="622" y2="141" class="ln" marker-end="url(#f5a)"/>
+  <text x="580" y="134" class="sm mid">Stop</text>
+
+  <path d="M660 164 V 206 H 100 V 165" class="ln" marker-end="url(#f5a)"/>
+  <text x="380" y="200" class="sm mid">upload done</text>
+
+  <path d="M258 164 V 248" class="ln-red dash"/>
+  <path d="M460 164 V 248" class="ln-red dash"/>
+  <path d="M702 164 V 248 H 54 V 165" class="ln-red dash" marker-end="url(#f5r)"/>
+  <text x="380" y="268" class="sm mid red">lease expired → the next app to read the lock writes "offline"</text>
+  <g class="rl"><rect x="576" y="257" width="24" height="14" rx="7"/><text x="588" y="267">F11</text></g>
+  <g class="rl"><rect x="604" y="257" width="24" height="14" rx="7"/><text x="616" y="267">F34</text></g>
+</svg>
+</div>
+<figcaption><span class="no">Figure 5.</span>The lock's life cycle as implemented. Black arrows are the intended path. The red dashed path is the one nobody designed: whenever a lease runs out, the next app that reads the lock rewrites it as "offline", whatever was happening.</figcaption>
+</figure>
+
+<figure>
+<div class="frame">
+<svg class="dg" viewBox="0 0 760 214" role="img" aria-label="Timeline chart over five minutes after pressing Stop. Your PC uploads for about four minutes. The lock is valid for only the first 30 seconds, then looks expired. At about 95 seconds another member presses Start, is allowed, and begins downloading a half-uploaded world.">
+  <line x1="168" y1="30" x2="168" y2="166" class="grid"/>
+  <line x1="224" y1="30" x2="224" y2="166" class="grid"/>
+  <line x1="280" y1="30" x2="280" y2="166" class="grid"/>
+  <line x1="392" y1="30" x2="392" y2="166" class="grid"/>
+  <line x1="504" y1="30" x2="504" y2="166" class="grid"/>
+  <line x1="616" y1="30" x2="616" y2="166" class="grid"/>
+  <line x1="728" y1="30" x2="728" y2="166" class="grid"/>
+
+  <text x="156" y="51" class="b end">Your PC</text>
+  <text x="156" y="64" class="xs end">after pressing Stop</text>
+  <rect x="168" y="40" width="448" height="22" rx="3" class="bar-work"/>
+  <text x="178" y="55" class="sm on-bar">uploading 300 changed files · about 4 min</text>
+  <g class="rl"><rect x="212" y="66" width="24" height="14" rx="7"/><text x="224" y="76">F6</text></g>
+  <text x="242" y="77" class="xs red">heartbeat already stopped, lease never renewed</text>
+
+  <text x="156" y="97" class="b end">lock.json</text>
+  <text x="156" y="110" class="xs end">what other members see</text>
+  <rect x="168" y="86" width="56" height="22" rx="3" class="bar-good"/>
+  <text x="196" y="101" class="xs mid on-bar">valid</text>
+  <rect x="224" y="86" width="392" height="22" rx="3" class="bar-red-soft"/>
+  <text x="234" y="101" class="sm red">looks expired → anyone may start</text>
+  <rect x="616" y="94" width="112" height="6" rx="3" class="bar-muted"/>
+
+  <text x="156" y="143" class="b end">Another member</text>
+  <text x="156" y="156" class="xs end">opens the app</text>
+  <text x="345" y="125" class="xs mid red">presses Start: allowed</text>
+  <g class="rl"><rect x="400" y="114" width="24" height="14" rx="7"/><text x="412" y="124">F7</text></g>
+  <circle cx="345" cy="141" r="5" class="bar-red"/>
+  <rect x="355" y="130" width="373" height="22" rx="3" class="bar-red"/>
+  <text x="365" y="145" class="sm on-bar">downloads a half-uploaded world</text>
+
+  <line x1="168" y1="166" x2="728" y2="166" class="axis"/>
+  <line x1="168" y1="166" x2="168" y2="171" class="axis"/><text x="168" y="184" class="xs mid">0</text>
+  <line x1="224" y1="166" x2="224" y2="171" class="axis"/><text x="224" y="184" class="xs mid">30 s</text>
+  <line x1="280" y1="166" x2="280" y2="171" class="axis"/><text x="280" y="184" class="xs mid">1 min</text>
+  <line x1="392" y1="166" x2="392" y2="171" class="axis"/><text x="392" y="184" class="xs mid">2 min</text>
+  <line x1="504" y1="166" x2="504" y2="171" class="axis"/><text x="504" y="184" class="xs mid">3 min</text>
+  <line x1="616" y1="166" x2="616" y2="171" class="axis"/><text x="616" y="184" class="xs mid">4 min</text>
+  <line x1="728" y1="166" x2="728" y2="171" class="axis"/><text x="728" y="184" class="xs mid">5 min</text>
+  <text x="448" y="204" class="xs mid">time after pressing Stop</text>
+</svg>
+</div>
+<figcaption><span class="no">Figure 6.</span>Example timing after pressing Stop with 300 changed files to upload. The 30-second "stopping" lease is written once and never renewed, because the heartbeat was stopped first. The same gap exists at the start: a download longer than 60 seconds outlives the "starting" lease.</figcaption>
+</figure>
+
+<h3>What's structurally wrong with it</h3>
+<ul>
+  <li><strong>Reading writes.</strong> <code>getServerLock()</code> creates the lock when it's missing and overwrites it when it has expired, using the reader's own name as <code>hostName</code> <span class="fref">F11</span>. Every member's app, including ones that are only looking, can write the lock. A function named get… should only read.</li>
+  <li><strong>The lease is shorter than the work it protects</strong>, and the renewal stops right before the longest step <span class="fref">F6</span>. A lease has to be renewed for as long as you rely on it.</li>
+  <li><strong>Ownership can't be checked.</strong> There's no session ID, so the app can't tell "my lock" from "a lock with my email left over from a crash". Nothing re-reads the lock after writing it, so two people who press Start in the same second can both win. And expiry is judged by each PC's own clock <span class="fref">F34</span>.</li>
+</ul>
+
+<h2><span class="sec">07</span>The file watcher</h2>
+<p>chokidar watches the server folder. The first scan reports every existing file as an <code>add</code> event (<code>ignoreInitial: false</code>). When the scan finishes it emits <code>ready</code>, and from then on each change is reported once the file has been quiet for 3 seconds (<code>awaitWriteFinish</code>). Every event updates three collections and sends one IPC message to the renderer.</p>
+
+<figure>
+<div class="frame">
+<svg class="dg" viewBox="0 0 760 446" role="img" aria-label="Data flow of the file watcher. In the main process, chokidar reports add, change and unlink events from the server folder to manifestUpsert and manifestRemove, which update trackedFiles, the watcherUpdates maps and an event emitter. On ready, detectLocalChanges compares the scan with manifest.json, and localChanges is the same Map objects as watcherUpdates. Each event becomes one IPC message to the renderer, where watcherListener copies the whole tracked set into a zustand store for the Watcher and Manifest modals. The Manifest modal asks for the updates again after every event, which re-stats every changed file.">
+  <defs>
+    <marker id="f7a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+  </defs>
+  <text x="12" y="16" class="cap">MAIN PROCESS</text>
+  <text x="408" y="16" class="cap">RENDERER</text>
+  <line x1="392" y1="26" x2="392" y2="440" class="ln-life"/>
+
+  <rect x="12" y="26" width="180" height="46" rx="5" class="box-soft"/>
+  <text x="24" y="45" class="b">Server folder</text>
+  <text x="24" y="61" class="xs">10,000+ files on disk</text>
+  <line x1="102" y1="72" x2="102" y2="101" class="ln" marker-end="url(#f7a)"/>
+  <text x="110" y="90" class="xs">add · change · unlink</text>
+
+  <rect x="12" y="102" width="180" height="62" rx="5" class="box"/>
+  <text x="24" y="122" class="b">chokidar.watch()</text>
+  <text x="24" y="139" class="xs">ignoreInitial: false</text>
+  <text x="24" y="153" class="xs">awaitWriteFinish: 3 s</text>
+  <g class="rl"><rect x="164" y="110" width="24" height="14" rx="7"/><text x="176" y="120">F22</text></g>
+  <g class="rl"><rect x="164" y="128" width="24" height="14" rx="7"/><text x="176" y="138">F23</text></g>
+
+  <line x1="192" y1="133" x2="215" y2="133" class="ln" marker-end="url(#f7a)"/>
+  <rect x="216" y="102" width="164" height="62" rx="5" class="box"/>
+  <text x="228" y="118" class="xs">on 'ready'</text>
+  <text x="228" y="135" class="svc">detectLocalChanges()</text>
+  <text x="228" y="151" class="xs">compares with manifest.json</text>
+  <g class="rl"><rect x="350" y="106" width="24" height="14" rx="7"/><text x="362" y="116">F16</text></g>
+  <line x1="298" y1="164" x2="298" y2="179" class="ln" marker-end="url(#f7a)"/>
+  <rect x="216" y="180" width="164" height="42" rx="5" class="box"/>
+  <text x="228" y="197" class="b">localChanges</text>
+  <text x="228" y="213" class="xs red">= the same two Maps (alias)</text>
+
+  <line x1="102" y1="164" x2="102" y2="193" class="ln" marker-end="url(#f7a)"/>
+  <text x="110" y="182" class="xs">every event</text>
+  <rect x="12" y="194" width="180" height="50" rx="5" class="box"/>
+  <text x="24" y="214" class="svc">manifestUpsert()</text>
+  <text x="24" y="232" class="svc">manifestRemove()</text>
+
+  <line x1="102" y1="244" x2="102" y2="266" class="ln"/>
+  <line x1="68" y1="266" x2="324" y2="266" class="ln"/>
+  <line x1="68" y1="266" x2="68" y2="289" class="ln" marker-end="url(#f7a)"/>
+  <line x1="196" y1="266" x2="196" y2="289" class="ln" marker-end="url(#f7a)"/>
+  <line x1="324" y1="266" x2="324" y2="289" class="ln" marker-end="url(#f7a)"/>
+  <line x1="240" y1="222" x2="240" y2="289" class="ln-red dash"/>
+  <text x="246" y="254" class="xs red">same objects</text>
+
+  <rect x="12" y="290" width="112" height="60" rx="5" class="box"/>
+  <text x="22" y="312" class="b">trackedFiles</text>
+  <text x="22" y="328" class="xs">Set: every path seen</text>
+  <rect x="134" y="290" width="124" height="60" rx="5" class="box"/>
+  <text x="144" y="312" class="b">watcherUpdates</text>
+  <text x="144" y="328" class="xs">changedFiles,</text>
+  <text x="144" y="341" class="xs">removedFiles (Maps)</text>
+  <rect x="268" y="290" width="112" height="60" rx="5" class="box"/>
+  <text x="278" y="312" class="b">manifestEvents</text>
+  <text x="278" y="328" class="xs">emit('change')</text>
+
+  <line x1="380" y1="320" x2="411" y2="320" class="ln" marker-end="url(#f7a)"/>
+  <g class="rl"><rect x="384" y="275" width="24" height="14" rx="7"/><text x="396" y="285">F17</text></g>
+  <text x="396" y="368" class="xs mid h">one message</text>
+  <text x="396" y="380" class="xs mid h">per file</text>
+
+  <rect x="412" y="290" width="150" height="60" rx="5" class="box"/>
+  <text x="424" y="312" class="svc">watcherListener.ts</text>
+  <text x="424" y="328" class="xs">on 'manifest:change'</text>
+  <line x1="562" y1="320" x2="587" y2="320" class="ln" marker-end="url(#f7a)"/>
+  <rect x="588" y="290" width="160" height="60" rx="5" class="box"/>
+  <text x="600" y="312" class="svc">useWatcherManifest</text>
+  <text x="600" y="328" class="xs">copies the whole Set</text>
+  <text x="600" y="341" class="xs">on every event</text>
+  <line x1="668" y1="350" x2="668" y2="395" class="ln" marker-end="url(#f7a)"/>
+
+  <rect x="412" y="396" width="336" height="44" rx="5" class="box"/>
+  <text x="424" y="414" class="sm">WatcherModal: tracked-file list</text>
+  <text x="424" y="431" class="sm">ManifestModal: Upsert / Remove tabs, Write button</text>
+
+  <path d="M412 418 H 196 V 351" class="ln" marker-end="url(#f7a)"/>
+  <text x="204" y="412" class="xs">get-watcher-updates</text>
+  <text x="204" y="433" class="xs">re-stats all changes, every event</text>
+  <g class="rl"><rect x="360" y="424" width="24" height="14" rx="7"/><text x="372" y="434">F35</text></g>
+</svg>
+</div>
+<figcaption><span class="no">Figure 7.</span>Watcher data flow. One file event fans out into three main-process collections and one IPC message, and the renderer keeps its own copy of the list.</figcaption>
+</figure>
+
+<h3>The good idea</h3>
+<p><code>detectLocalChanges()</code> runs after the first scan. It walks the manifest and compares each entry's modified time with what's on disk: the same time means unchanged, a different time means the file changed while the app was closed, and an entry with no file on disk means it was deleted. Comparing a fresh scan against a saved snapshot is how real sync tools find offline changes, and it's the foundation of Part 2.</p>
+<h3>What gets in the way</h3>
+<ul>
+  <li><strong>The watcher only runs when started by hand</strong> from the File Watcher modal; the hosting session never starts it. At the end of a normal session <code>watcherUpdates</code> is usually empty.</li>
+  <li><strong>The first scan floods the app</strong> <span class="fref">F17</span>. 10,000 files produce 10,000 IPC messages; the renderer copies its whole Set for each one (about 50 million element copies for 10,000 files), and an open Manifest modal re-requests the list, re-statting every changed file, after every event.</li>
+  <li><strong>Downloaded files will look changed</strong> <span class="fref">F16</span>. A download gives the file a new modified time while the manifest keeps the uploader's time, so the next comparison flags every downloaded file. If the watcher runs during a download, its events arrive 3 seconds late, after the list was cleared.</li>
+  <li><strong>The ignore rules are fragile.</strong> manifest.json and lock.json aren't ignored on a fresh install <span class="fref">F22</span>, nested files picked with Browse never match <span class="fref">F23</span>, and the list is shared by every server yet private to each PC <span class="fref">F24</span>.</li>
+  <li><strong>Three collections with overlapping meanings.</strong> <code>trackedFiles</code> is everything seen, <code>watcherUpdates</code> is changes since the last write, and <code>localChanges</code> isn't a third collection at all: it holds the same two Map objects as <code>watcherUpdates</code>. Overlapping names like these are a sign the model isn't settled yet.</li>
+</ul>
+
+<h2><span class="sec">08</span>The manifest</h2>
+<p>manifest.json is meant to describe the synced state of the folder: one global version number plus an entry for each file. In the current code, a file gets an entry only after it has been transferred successfully. If <span class="fref">F1</span> were fixed, an upload would record this:</p>
+<pre><code>{
+    "version": 4,
+    "updatedAt": 1760461500000,
+    "authorName": "Steve",
+    "authorEmail": "steve@example.com",
+    "files": {
+        "level.dat":  { "version": 0, "size": 4410,    "modifiedAt": 1760461180000 },
+        "r.0.0.mca":  { "version": 0, "size": 6291456, "modifiedAt": 1760461172000 },
+        "r.-1.0.mca": { "version": 0, "size": 5242880, "modifiedAt": 1760461170000 }
+    }
+}</code></pre>
+<div class="callout red">
+  <span class="label">Two problems in three lines</span>
+  <p>The keys are bare file names <span class="fref">F4</span>. A modern world has an <code>r.0.0.mca</code> in world/region, world/entities and world/poi, plus more in the Nether and End folders, and they would all share one entry. And every per-file version is 0 <span class="fref">F3</span>: <code>manifestUpsert()</code> writes 0, and the step that used to increase it (<code>writeLocalManifest</code>) was removed in the refactor.</p>
+</div>
+
+<h3>How the two manifests are compared</h3>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Situation</th><th>When downloading</th><th>When uploading</th></tr></thead>
+  <tbody>
+    <tr><td class="k">No manifest.json on Drive</td><td>Error: "could not be found"</td><td>Upload every file in the local manifest</td></tr>
+    <tr><td class="k">Local version is higher</td><td>Warn: Drive may be out of date</td><td>No check</td></tr>
+    <tr><td class="k">Drive version is higher</td><td>No check</td><td>Warn: your copy may be out of date</td></tr>
+    <tr><td class="k">Otherwise</td><td>Files with a higher per-file version, or missing locally</td><td>Watcher changes, plus files missing on Drive</td></tr>
+  </tbody>
+</table>
+</div>
+<p>Because manifest.json is never uploaded <span class="fref">F2</span>, the first row is the one that runs today: every download fails, and every upload tries to send everything.</p>
+
+<figure>
+<div class="frame">
+<svg class="dg" viewBox="0 0 760 200" role="img" aria-label="Timeline of two copies. Monday: the cloud and your PC are both at version 5. Tuesday: you edit server.properties without hosting, and your PC is still version 5. Wednesday: Alice hosts and uploads version 6, which also changes server.properties. Thursday: you press Start; the check asks whether 5 is greater than 6, it isn't, so the download overwrites your edit without a warning.">
+  <defs>
+    <marker id="f8a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+  </defs>
+  <text x="170" y="20" class="cap mid">MONDAY</text>
+  <text x="330" y="20" class="cap mid">TUESDAY</text>
+  <text x="490" y="20" class="cap mid">WEDNESDAY</text>
+  <text x="655" y="20" class="cap mid">THURSDAY</text>
+  <text x="8" y="76" class="b">Cloud</text>
+  <text x="8" y="90" class="xs">manifest.json on Drive</text>
+  <text x="8" y="162" class="b">Your PC</text>
+  <text x="8" y="176" class="xs">manifest.json locally</text>
+  <line x1="126" y1="80" x2="748" y2="80" class="ln-faint" style="stroke-width:2"/>
+  <line x1="126" y1="166" x2="748" y2="166" class="ln-faint" style="stroke-width:2"/>
+
+  <rect x="140" y="66" width="60" height="28" rx="14" class="box"/>
+  <text x="170" y="85" class="b mid">v5</text>
+  <rect x="140" y="152" width="60" height="28" rx="14" class="box"/>
+  <text x="170" y="171" class="b mid">v5</text>
+  <text x="170" y="124" class="xs mid">in sync</text>
+
+  <rect x="250" y="144" width="160" height="44" rx="8" class="box"/>
+  <text x="330" y="162" class="b mid">still v5</text>
+  <text x="330" y="178" class="xs mid">you edit server.properties</text>
+
+  <rect x="405" y="58" width="170" height="44" rx="8" class="box"/>
+  <text x="490" y="76" class="b mid">v6</text>
+  <text x="490" y="92" class="xs mid">Alice changes server.properties</text>
+
+  <line x1="540" y1="102" x2="606" y2="139" class="ln" marker-end="url(#f8a)"/>
+  <text x="584" y="114" class="xs">download</text>
+
+  <rect x="560" y="140" width="190" height="52" rx="8" class="box-red"/>
+  <text x="655" y="159" class="svc mid">5 &gt; 6? No → download</text>
+  <text x="655" y="174" class="xs mid red">your edit is overwritten,</text>
+  <text x="655" y="186" class="xs mid red">and nothing warns you</text>
+</svg>
+</div>
+<figcaption><span class="no">Figure 8.</span>One number per side can't describe two people changing the world from the same starting point. Uploads are protected by the version check and downloads aren't. Changes made while the app was closed are found by <code>detectLocalChanges()</code> but never consulted <span class="fref">F15</span>.</figcaption>
+</figure>
+<p>A single counter can say which side is newer only while history is a straight line. As soon as two copies change from the same starting point, you need that starting point, the <strong>base</strong>, to tell "I changed this" from "they changed this". Part 2 keeps three snapshots (base, local and remote) and compares them file by file using content hashes instead of counters.</p>
+
+<h2><span class="sec">09</span>The transfer path</h2>
+<p>Both directions share one shape: decide what to move, turn the list of paths into a folder tree, walk the tree on Drive one folder at a time, move each file, record the result and save the manifest.</p>
+
+<figure>
+<div class="frame">
+<svg class="dg" viewBox="0 0 760 500" role="img" aria-label="Two columns, download and upload, through six stages: decide what must move, build a folder tree from the paths, walk Drive folder by folder, move each file, record the result in the manifest, and save manifest.json. Problems are marked at each stage: the tree is always empty because Object.entries is used on a Map, folders are listed on every run, whole files are buffered with synchronous reads and writes, manifest keys are bare file names, the manifest save isn't awaited, and the manifest is never uploaded.">
+  <defs>
+    <marker id="f9a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+  </defs>
+  <text x="300" y="20" class="cap mid">DOWNLOAD · AT START</text>
+  <text x="604" y="20" class="cap mid">UPLOAD · AFTER STOP</text>
+
+  <text x="8" y="62" class="b">Decide</text><text x="8" y="77" class="xs">what must move</text>
+  <text x="8" y="140" class="b">Build a tree</text><text x="8" y="155" class="xs">paths → folders</text>
+  <text x="8" y="218" class="b">Walk Drive</text><text x="8" y="233" class="xs">folder by folder</text>
+  <text x="8" y="296" class="b">Move bytes</text><text x="8" y="311" class="xs">one file at a time</text>
+  <text x="8" y="374" class="b">Record</text><text x="8" y="389" class="xs">the result</text>
+  <text x="8" y="452" class="b">Save</text><text x="8" y="467" class="xs">manifest.json</text>
+
+  <rect x="156" y="34" width="288" height="64" rx="5" class="box"/>
+  <text x="168" y="56" class="b">getFilesToDownload()</text>
+  <text x="168" y="73" class="sm">newer per-file version, or missing here</text>
+  <text x="168" y="88" class="sm">then deletes local files</text>
+  <g class="rl"><rect x="384" y="77" width="24" height="14" rx="7"/><text x="396" y="87">F2</text></g>
+  <g class="rl"><rect x="412" y="77" width="24" height="14" rx="7"/><text x="424" y="87">F3</text></g>
+  <rect x="156" y="112" width="288" height="64" rx="5" class="box-red"/>
+  <text x="168" y="134" class="b">buildTransferMap(map)</text>
+  <text x="168" y="151" class="sm">Object.entries(map) returns []</text>
+  <text x="168" y="166" class="sm red">so the tree is always empty</text>
+  <g class="rl"><rect x="412" y="155" width="24" height="14" rx="7"/><text x="424" y="165">F1</text></g>
+  <rect x="156" y="190" width="288" height="64" rx="5" class="box"/>
+  <text x="168" y="212" class="b">downloadFolderRecursive()</text>
+  <text x="168" y="229" class="sm">lists each Drive folder again</text>
+  <text x="168" y="244" class="sm">then handles items one at a time</text>
+  <g class="rl"><rect x="412" y="233" width="24" height="14" rx="7"/><text x="424" y="243">F19</text></g>
+  <rect x="156" y="268" width="288" height="64" rx="5" class="box"/>
+  <text x="168" y="290" class="b">downloadFile()</text>
+  <text x="168" y="307" class="sm">buffers the whole file in memory</text>
+  <text x="168" y="322" class="sm">writeFileSync on the main thread</text>
+  <g class="rl"><rect x="412" y="311" width="24" height="14" rx="7"/><text x="424" y="321">F18</text></g>
+  <rect x="156" y="346" width="288" height="64" rx="5" class="box"/>
+  <text x="168" y="368" class="b">localManifest.files[fileName]</text>
+  <text x="168" y="385" class="sm">key "r.0.0.mca", not</text>
+  <text x="168" y="400" class="sm">"world/region/r.0.0.mca"</text>
+  <g class="rl"><rect x="412" y="389" width="24" height="14" rx="7"/><text x="424" y="399">F4</text></g>
+  <rect x="156" y="424" width="288" height="64" rx="5" class="box"/>
+  <text x="168" y="446" class="b">applyManifestChanges()</text>
+  <text x="168" y="463" class="sm">not awaited; version = Drive's</text>
+  <text x="168" y="478" class="sm">deleted files stay listed</text>
+  <g class="rl"><rect x="412" y="467" width="24" height="14" rx="7"/><text x="424" y="477">F12</text></g>
+
+  <rect x="460" y="34" width="288" height="64" rx="5" class="box"/>
+  <text x="472" y="56" class="b">getFilesToUpload()</text>
+  <text x="472" y="73" class="sm">watcher changes + manifest diff</text>
+  <text x="472" y="88" class="sm">result.success never checked</text>
+  <g class="rl"><rect x="716" y="77" width="24" height="14" rx="7"/><text x="728" y="87">F13</text></g>
+  <rect x="460" y="112" width="288" height="64" rx="5" class="box-red"/>
+  <text x="472" y="134" class="b">buildTransferMap(map)</text>
+  <text x="472" y="151" class="sm">the same empty tree</text>
+  <text x="472" y="166" class="sm">deleted files are never sent</text>
+  <g class="rl"><rect x="688" y="155" width="24" height="14" rx="7"/><text x="700" y="165">F1</text></g>
+  <g class="rl"><rect x="716" y="155" width="24" height="14" rx="7"/><text x="728" y="165">F13</text></g>
+  <rect x="460" y="190" width="288" height="64" rx="5" class="box"/>
+  <text x="472" y="212" class="b">uploadFolderRecursive()</text>
+  <text x="472" y="229" class="sm">lists each Drive folder again</text>
+  <text x="472" y="244" class="sm">creates missing folders</text>
+  <g class="rl"><rect x="716" y="233" width="24" height="14" rx="7"/><text x="728" y="243">F19</text></g>
+  <rect x="460" y="268" width="288" height="64" rx="5" class="box"/>
+  <text x="472" y="290" class="b">uploadFile()</text>
+  <text x="472" y="307" class="sm">readFileSync, resumable session</text>
+  <text x="472" y="322" class="sm">2 requests per file, any size</text>
+  <g class="rl"><rect x="688" y="311" width="24" height="14" rx="7"/><text x="700" y="321">F18</text></g>
+  <g class="rl"><rect x="716" y="311" width="24" height="14" rx="7"/><text x="728" y="321">F19</text></g>
+  <rect x="460" y="346" width="288" height="64" rx="5" class="box"/>
+  <text x="472" y="368" class="b">localManifest.files[fileName]</text>
+  <text x="472" y="385" class="sm">the same bare-name key</text>
+  <text x="472" y="400" class="sm">per-file version stays 0</text>
+  <g class="rl"><rect x="688" y="389" width="24" height="14" rx="7"/><text x="700" y="399">F4</text></g>
+  <g class="rl"><rect x="716" y="389" width="24" height="14" rx="7"/><text x="728" y="399">F3</text></g>
+  <rect x="460" y="424" width="288" height="64" rx="5" class="box"/>
+  <text x="472" y="446" class="b">version++, then save</text>
+  <text x="472" y="463" class="sm">applyManifestChanges(), not awaited</text>
+  <text x="472" y="478" class="sm">the manifest stays on this PC</text>
+  <g class="rl"><rect x="688" y="467" width="24" height="14" rx="7"/><text x="700" y="477">F12</text></g>
+  <g class="rl"><rect x="716" y="467" width="24" height="14" rx="7"/><text x="728" y="477">F2</text></g>
+
+  <line x1="300" y1="98" x2="300" y2="111" class="ln" marker-end="url(#f9a)"/>
+  <line x1="300" y1="176" x2="300" y2="189" class="ln" marker-end="url(#f9a)"/>
+  <line x1="300" y1="254" x2="300" y2="267" class="ln" marker-end="url(#f9a)"/>
+  <line x1="300" y1="332" x2="300" y2="345" class="ln" marker-end="url(#f9a)"/>
+  <line x1="300" y1="410" x2="300" y2="423" class="ln" marker-end="url(#f9a)"/>
+  <line x1="604" y1="98" x2="604" y2="111" class="ln" marker-end="url(#f9a)"/>
+  <line x1="604" y1="176" x2="604" y2="189" class="ln" marker-end="url(#f9a)"/>
+  <line x1="604" y1="254" x2="604" y2="267" class="ln" marker-end="url(#f9a)"/>
+  <line x1="604" y1="332" x2="604" y2="345" class="ln" marker-end="url(#f9a)"/>
+  <line x1="604" y1="410" x2="604" y2="423" class="ln" marker-end="url(#f9a)"/>
+</svg>
+</div>
+<figcaption><span class="no">Figure 9.</span>The download and upload pipelines side by side. Each stage makes sense on its own; together, the first two guarantee that nothing moves <span class="fref">F1</span>.</figcaption>
+</figure>
+
+<h3>What happens if you host today</h3>
+<p>Tracing one real run by hand is the fastest way to check a refactor. Here is the current working tree with default settings, setting the three compile errors aside.</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Step</th><th>What the code does</th><th>Result</th></tr></thead>
+  <tbody>
+    <tr><td colspan="3" class="k">Case A · Download on (the default)</td></tr>
+    <tr><td class="num">1</td><td>Power → <code>startServer()</code></td><td>Lock read, "starting" written, playit.gg launched</td></tr>
+    <tr><td class="num">2</td><td><code>downloadServerFolder()</code> → <code>getFilesToDownload()</code></td><td><code>readDriveManifest()</code> finds no manifest.json on Drive and returns an error</td></tr>
+    <tr><td class="num">3</td><td><code>startServer()</code> handles the failure</td><td>Lock set back to "offline", playit.gg killed, error shown in an alert; the progress panel stays open <span class="fref">F38</span></td></tr>
+    <tr><td class="num">=</td><td><strong>Outcome</strong></td><td><strong>You can't host while Download is checked</strong>, unless someone placed a manifest.json on Drive by hand.</td></tr>
+    <tr><td colspan="3" class="k">Case B · Download off, Upload on</td></tr>
+    <tr><td class="num">1</td><td>Session runs; you press Stop</td><td>The upload begins while Java is still saving <span class="fref">F5</span></td></tr>
+    <tr><td class="num">2</td><td><code>getFilesToUpload()</code></td><td>No Drive manifest, so "upload every file in the local manifest"</td></tr>
+    <tr><td class="num">3</td><td><code>buildTransferMap(map)</code></td><td><code>Object.entries(map)</code> is <code>[]</code>, so the tree is empty <span class="fref">F1</span></td></tr>
+    <tr><td class="num">4</td><td><code>uploadFolderRecursive()</code></td><td>Lists the server folder once, finds nothing to do, reports no failures</td></tr>
+    <tr><td class="num">5</td><td>Afterwards</td><td>Version increased, manifest.json saved locally, lock set to "offline", UI says the server stopped</td></tr>
+    <tr><td class="num">=</td><td><strong>Outcome</strong></td><td><strong>The session's changes never reach Drive, and nothing tells you.</strong> The next host plays an older world.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>What a typical upload would cost</h3>
+<p>Suppose a session changed 300 files spread over 40 folders (region, entities, poi, playerdata, stats, advancements and so on). With F1 fixed, the current design would need:</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Item</th><th class="num">Today</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td class="k">Folder listings</td><td class="num">40+</td><td>One <code>files.list</code> per folder visited, more for folders with over 1,000 items</td></tr>
+    <tr><td class="k">Requests per file</td><td class="num">2</td><td>A resumable session plus the upload, even for a 200-byte JSON file</td></tr>
+    <tr><td class="k">Total requests</td><td class="num">≈ 640</td><td>40 + 300 × 2</td></tr>
+    <tr><td class="k">Running at once</td><td class="num">1</td><td>Every request waits for the previous one</td></tr>
+    <tr><td class="k">Memory per file</td><td class="num">whole file</td><td><code>readFileSync</code> loads the file completely before sending</td></tr>
+    <tr><td class="k">App while it runs</td><td class="num">stutters</td><td>Synchronous reads and writes run on Electron's main thread</td></tr>
+  </tbody>
+</table>
+</div>
+<p>At roughly a quarter of a second per request, that's about two and a half minutes spent waiting on round trips before counting the bytes themselves. Part 2 roughly halves the number of requests and runs several at a time.</p>
+
+<h2><span class="sec">10</span>Where the state lives</h2>
+<p>The main process keeps its state in 18 module-level <code>let</code> variables across five files, not counting the window and tray. Each one is visible to everything in its file, isn't tied to a particular server or session, and is never reset as a group. The renderer then keeps copies of some of them in its stores.</p>
+<div class="table-wrap">
+<table>
+  <caption>One fact, many homes</caption>
+  <thead><tr><th>Fact</th><th>Where it's stored</th><th class="num">Copies</th></tr></thead>
+  <tbody>
+    <tr><td class="k">Is a session running?</td><td><code>currentHostingServerId</code> and <code>heartbeatInterval</code> (main.ts), <code>serverProcess</code> (childrenProcesses.ts), <code>serverRunning</code> and <code>lockStatus.status</code> (renderer), <code>status</code> in lock.json</td><td class="num">6</td></tr>
+    <tr><td class="k">Which files changed?</td><td><code>watcherUpdates</code> and <code>localChanges</code> (the same Maps), <code>trackedFiles</code> (main), <code>trackedFiles</code> (renderer)</td><td class="num">4</td></tr>
+    <tr><td class="k">What the manifest says</td><td><code>localManifest</code> in memory (one for all servers), manifest.json in the server folder; the Drive copy is never written</td><td class="num">2</td></tr>
+    <tr><td class="k">Hosting details</td><td><code>publicIp</code> and <code>serverStartedAt</code> (serverService.ts), lock.json, <code>lockStatus</code> (renderer)</td><td class="num">4</td></tr>
+    <tr><td class="k">Ignored files</td><td><code>ignoredNames</code> and <code>ignoredPatterns</code> (watcher-manifest.ts), <code>watcherBlacklist</code> in localStore.json, the Blacklist modal's own state</td><td class="num">4</td></tr>
+  </tbody>
+</table>
+</div>
+<p>When one fact lives in several places, every change has to update all of them in the right order, and each bug is a place where one copy was missed: a Stop button for a server that's gone, the second stop run clearing <code>currentHostingServerId</code> mid-upload <span class="fref">F9</span>, the next server inheriting the previous server's manifest <span class="fref">F14</span>. The fix is a rule, not a library: <strong>each fact gets one owner, and everyone else asks the owner or listens to it.</strong></p>
+
+<h2><span class="sec">11</span>Ten habits that would have prevented most of this</h2>
+<p>The 41 findings come from a handful of patterns. Each of these habits is small; together they remove most of the list.</p>
+<div class="grid2">
+  <div class="habit"><h4>Trace one real run by hand</h4><p>Before trusting a refactor, follow one session through the code with real values, as in section 9. The empty transfer list, the missing Drive manifest and the version that never changes all show up within ten minutes.</p><p class="refs">F1 · F2 · F3 · F4</p></div>
+  <div class="habit"><h4>Let the compiler guard the edges</h4><p>Run <code>tsc --noEmit</code> before every commit, avoid <code>any</code>, and type the IPC channels so a rename breaks the build instead of the app. <code>Object.entries(map)</code> compiled because its fallback overload returns <code>any</code>.</p><p class="refs">F1 · F20 · F31 · F36</p></div>
+  <div class="habit"><h4>Give every fact one owner</h4><p>Decide which module owns each piece of state; everyone else asks or subscribes. Module-level variables shared between features are where state goes to drift apart.</p><p class="refs">F14 · F17 · F32</p></div>
+  <div class="habit"><h4>Model the session as a state machine</h4><p>Name the phases (checking, downloading, running, stopping, uploading), allow each action only in the right phase, and give every action one entry point. A second Stop then does nothing instead of starting a second upload.</p><p class="refs">F5 · F9 · F21 · F30</p></div>
+  <div class="habit"><h4>Renew a lease for as long as you rely on it</h4><p>A lock that expires must be renewed until the protected work is finished, must carry an owner ID, and must be re-checked after you claim it.</p><p class="refs">F6 · F7 · F8 · F34</p></div>
+  <div class="habit"><h4>Functions that read shouldn't write</h4><p><code>getServerLock()</code> repairing the lock as a side effect means that looking at a server changes it. Keep queries and commands apart.</p><p class="refs">F11</p></div>
+  <div class="habit"><h4>Await everything, and decide what failure means</h4><p>An async call without <code>await</code> is a promise nobody is waiting for: its errors vanish and its timing is random. Every <code>await</code> needs an answer to "and if it fails?"</p><p class="refs">F12 · F21 · F27</p></div>
+  <div class="habit"><h4>Keep decisions pure</h4><p>"Which files should move?" should be a function that takes snapshots and returns a plan, without reading globals or touching the network. Pure functions are easy to test, and tests would have caught most of the transfer bugs.</p><p class="refs">F3 · F13 · F14 · F15</p></div>
+  <div class="habit"><h4>Keep Electron's main thread free</h4><p>The main process also drives the window. Synchronous reads and writes of multi-megabyte files freeze the app; stream them instead.</p><p class="refs">F18</p></div>
+  <div class="habit"><h4>Report errors one way</h4><p>Pick one convention (Part 2 uses a Result type at the IPC boundary) and use it everywhere, so a caller always knows whether to check <code>.ok</code> or to catch.</p><p class="refs">F13 · F26</p></div>
+</div>
+
+<h2 class="break"><span class="sec">A</span>Appendix: every finding</h2>
+<p>Sorted by severity. <strong>Critical</strong> means data loss, a corrupted world or two hosts at once in normal use, or a core feature that can't work. <strong>High</strong> means wrong behavior in common situations. <strong>Medium</strong> means edge cases or structure that actively breeds bugs. <strong>Low</strong> means small fixes.</p>
+
+<h3>Critical</h3>
+<div class="findings">
+  <div class="finding crit"><div class="fid">F1</div><div class="fbody">
+    <h4>The transfer list is always empty</h4><span class="ref">electron/services/fileTransferService.ts:44</span>
+    <p><code>buildTransferMap()</code> loops over <code>Object.entries(filesToBeTransfered)</code>, but the argument is a Map. <code>Object.entries</code> only sees an object's own properties, and a Map keeps its entries elsewhere, so the loop runs zero times. (Checked in Node: <code>Object.entries(new Map([['a', 1]]))</code> is <code>[]</code>.) Nothing moves in either direction, the version is still increased and the app reports success.</p>
+    <p class="lesson"><b>Lesson</b>TypeScript allowed it because the fallback overload of <code>Object.entries</code> accepts any object and returns <code>any</code>. Iterate a Map with <code>for (const [path, entry] of map)</code>.</p>
+  </div></div>
+  <div class="finding crit"><div class="fid">F2</div><div class="fbody">
+    <h4>manifest.json never reaches Drive</h4><span class="ref">watcher-manifest.ts:10 · fileTransferService.ts:144, :286</span>
+    <p>manifest.json is in <code>PROTECTED_DIRECTORIES</code>, so both recursive walkers skip it, and no other code uploads it. <code>readDriveManifest()</code> therefore always returns null: every download stops with "Manifest.json could not be found in the Drive folder", and every upload treats Drive as empty.</p>
+    <p class="lesson"><b>Lesson</b>The manifest is the commit record of a sync. Uploading it last is part of the protocol, not an afterthought (Part 2, section 7).</p>
+  </div></div>
+  <div class="finding crit"><div class="fid">F3</div><div class="fbody">
+    <h4>Changed files are never downloaded</h4><span class="ref">watcher-manifest.ts:133, :214</span>
+    <p>Every entry gets <code>version: 0</code> from <code>manifestUpsert()</code>, and nothing increases it since <code>writeLocalManifest()</code> was removed. <code>getManifestDifference()</code> selects files whose version is higher, so it only finds files that are missing on one side. Edited files (region files, playerdata, level.dat) are never downloaded.</p>
+    <p class="lesson"><b>Lesson</b>A per-file counter needs one writer that bumps it reliably. A content hash needs nobody: it changes when the content does.</p>
+  </div></div>
+  <div class="finding crit"><div class="fid">F4</div><div class="fbody">
+    <h4>Manifest entries use the bare file name</h4><span class="ref">fileTransferService.ts:188–189, :332–333</span>
+    <p>After each transfer the result is stored as <code>localManifest.files[fileName]</code>, where <code>fileName</code> is the last path segment. world/region/r.0.0.mca, world/entities/r.0.0.mca and world/poi/r.0.0.mca all write to <code>"r.0.0.mca"</code>, and the full-path entries are never updated.</p>
+    <p class="lesson"><b>Lesson</b>Pass the full relative path down the recursion, or better, don't recurse at all: work from a flat list of paths (Part 2).</p>
+  </div></div>
+  <div class="finding crit"><div class="fid">F5</div><div class="fbody">
+    <h4>The upload starts while Minecraft is still saving</h4><span class="ref">main.ts:388–390, :224–230 · childrenProcesses.ts:60–62</span>
+    <p><code>killServer()</code> writes <code>stop</code> to the server's input and returns immediately. stop-server, <code>doCleanup()</code> and google-logout all go straight on to <code>stopServer()</code> and the upload. Minecraft takes a few seconds to save its chunks, so region files can be read while they're half written.</p>
+    <p class="lesson"><b>Lesson</b>"I asked it to stop" isn't "it stopped". Wait for the process's exit event before touching its files.</p>
+  </div></div>
+  <div class="finding crit"><div class="fid">F6</div><div class="fbody">
+    <h4>The lock's lease runs out during transfers</h4><span class="ref">serverService.ts:170, :176–180 · main.ts:200</span>
+    <p>"starting" lasts 60 s and isn't renewed while the download runs. "stopping" lasts 30 s, and <code>handleServerStop()</code> clears the heartbeat before calling <code>stopServer()</code>, so it's never renewed during the upload. After that, any member's app sees an expired lock, rewrites it as "offline" and can start hosting a half-transferred world.</p>
+    <p class="lesson"><b>Lesson</b>A lease must be renewed for as long as the work it protects is running.</p>
+  </div></div>
+  <div class="finding crit"><div class="fid">F7</div><div class="fbody">
+    <h4>Start only refuses "online"</h4><span class="ref">serverService.ts:24</span>
+    <p><code>startServer()</code> aborts only when <code>lockData.status === "online"</code>. A lock that says "starting" (someone is downloading) or "stopping" (someone is uploading) is treated as free, even while it's valid.</p>
+    <p class="lesson"><b>Lesson</b>Write the rule positively: you may start only when the lock is "offline" or expired.</p>
+  </div></div>
+  <div class="finding crit"><div class="fid">F8</div><div class="fbody">
+    <h4>A lapsed lock makes the host skip the upload</h4><span class="ref">serverService.ts:277–283</span>
+    <p><code>stopServer()</code> reads the lock first and returns "This server is not being hosted" when it says "offline" or "stopping". If the heartbeat failed for 30 s at any point (a Wi-Fi drop, a laptop going to sleep), another member's app has already rewritten the lock as "offline", and the host's whole session is never uploaded. The only sign is that confusing message.</p>
+    <p class="lesson"><b>Lesson</b>The host's own session state, not a shared file anyone can overwrite, should decide whether there's something to upload.</p>
+  </div></div>
+</div>
+
+<h3>High</h3>
+<div class="findings">
+  <div class="finding high"><div class="fid">F9</div><div class="fbody">
+    <h4>The stop sequence runs twice</h4><span class="ref">main.ts:347–350, :383–396, :215–248</span>
+    <p>Pressing Stop calls <code>handleServerStop()</code>, and Java's <code>close</code> event calls it again a few seconds later. Both pass the <code>currentHostingServerId</code> check, because it's only cleared after the upload. The second run usually fails with "not being hosted", then clears <code>currentHostingServerId</code> and sends hide-progress and server-stopped while the first upload is still running; if Java exits quickly, both runs upload. The same race exists in <code>doCleanup()</code> and google-logout.</p>
+    <p class="lesson"><b>Lesson</b>One entry point per action, guarded by the current phase, makes repeats harmless.</p>
+  </div></div>
+  <div class="finding high"><div class="fid">F10</div><div class="fbody">
+    <h4>Manual Download and Upload ignore the lock</h4><span class="ref">server-slot/index.tsx:61, :81 · main.ts:453–459</span>
+    <p>The buttons in Drive Folders call sync-server and upload-server-folder directly. Any member can overwrite Drive while someone else is hosting, or download a world that's mid-upload.</p>
+    <p class="lesson"><b>Lesson</b>Every path that writes shared data needs the same guard, or the guard protects nothing.</p>
+  </div></div>
+  <div class="finding high"><div class="fid">F11</div><div class="fbody">
+    <h4>Reading the lock writes it</h4><span class="ref">serverService.ts:197–257</span>
+    <p><code>getServerLock()</code> creates lock.json when it's missing and overwrites an expired one with "offline", using the reader's name as the host. Every app that merely displays the status can write it. When two calls overlap, the <code>lockInitializing</code> guard returns an object without <code>lockData</code>, and callers such as <code>startServer()</code> crash on <code>lockRes.lockData.status</code>.</p>
+    <p class="lesson"><b>Lesson</b>Queries return data; commands change it. A get… function shouldn't do both.</p>
+  </div></div>
+  <div class="finding high"><div class="fid">F12</div><div class="fbody">
+    <h4>Async steps that nobody awaits</h4><span class="ref">fileTransferService.ts:221, :358</span>
+    <p><code>applyManifestChanges()</code> is async (it fetches the user's name) but is called without <code>await</code> after both transfers. The transfer reports success before the manifest is written, and if writing fails the error becomes an unhandled rejection.</p>
+    <p class="lesson"><b>Lesson</b>Every promise needs an owner: await it, or hand it on deliberately to something that handles its errors.</p>
+  </div></div>
+  <div class="finding high"><div class="fid">F13</div><div class="fbody">
+    <h4>The upload ignores its own safety check</h4><span class="ref">fileTransferService.ts:351–353 · watcher-manifest.ts:277–287, :301</span>
+    <p><code>getFilesToUpload()</code> returns a clear warning when Drive is newer, but <code>uploadServerFolder()</code> never checks <code>.success</code>: it passes <code>undefined</code> to <code>buildTransferMap()</code>, and the user sees "Cannot convert undefined or null to object" instead. The deleted-files list comes back as <code>filesremovedFiles</code> and is never used, so files deleted locally are never deleted on Drive.</p>
+    <p class="lesson"><b>Lesson</b>When a function returns <code>{ success, … }</code>, the caller's first line should handle the failure branch.</p>
+  </div></div>
+  <div class="finding high"><div class="fid">F14</div><div class="fbody">
+    <h4>One in-memory manifest for every server</h4><span class="ref">watcher-manifest.ts:25–31, :41–44, :235, :268</span>
+    <p><code>localManifest</code> is a single module-level object. <code>readLocalManifest()</code> replaces it only when the file exists, so switching to a server without a manifest.json keeps the previous server's files and version. The checks meant for that case (<code>!localManifest.files</code>) can never be true, because <code>{}</code> is truthy.</p>
+    <p class="lesson"><b>Lesson</b>Load the state for the thing you're working on and pass it in as a parameter, instead of keeping a global "current" copy.</p>
+  </div></div>
+  <div class="finding high"><div class="fid">F15</div><div class="fbody">
+    <h4>Downloads overwrite local edits without warning</h4><span class="ref">watcher-manifest.ts:125, :227–261</span>
+    <p><code>detectLocalChanges()</code> finds files changed while the app was closed, but <code>getLocalChanges()</code> is never called and <code>getFilesToDownload()</code> never looks at local changes. Files changed on both sides are overwritten, and files deleted on Drive are deleted locally even if you edited them.</p>
+    <p class="lesson"><b>Lesson</b>Before overwriting local data, compare against the last synced state (the base), not just against the other side.</p>
+  </div></div>
+  <div class="finding high"><div class="fid">F16</div><div class="fbody">
+    <h4>Downloaded files will look modified</h4><span class="ref">fileTransferService.ts:128–129 · watcher-manifest.ts:79–82, :110</span>
+    <p>Writing a downloaded file gives it the current time as its modified time, while the manifest keeps the uploader's time, so <code>detectLocalChanges()</code> flags every downloaded file as changed. If the watcher is running, its events for downloaded files arrive 3 s late, after <code>applyManifestChanges()</code> cleared the list, and land in it again.</p>
+    <p class="lesson"><b>Lesson</b>After a sync, record what is actually on your disk (size, modified time, hash), not what the other machine had.</p>
+  </div></div>
+  <div class="finding high"><div class="fid">F17</div><div class="fbody">
+    <h4>Starting the watcher floods the app</h4><span class="ref">watcher-manifest.ts:76, :130 · store.ts:190–194 · manifest-modal/index.tsx:72</span>
+    <p>With <code>ignoreInitial: false</code>, a 10,000-file server produces 10,000 add events, 10,000 IPC messages and 10,000 renderer updates, each copying the whole Set (about 50 million element copies). An open Manifest modal re-fetches and re-stats the list after every event.</p>
+    <p class="lesson"><b>Lesson</b>Batch events (collect for 300–500 ms, send one message) and never copy a growing collection inside a loop.</p>
+  </div></div>
+  <div class="finding high"><div class="fid">F18</div><div class="fbody">
+    <h4>Big files are read and written synchronously on the main thread</h4><span class="ref">fileTransferService.ts:128–129, :257</span>
+    <p><code>downloadFile()</code> buffers the whole response and calls <code>writeFileSync()</code>; <code>uploadFile()</code> calls <code>readFileSync()</code> on the whole file. Region files are often several megabytes. Electron's main process also drives the window, so these calls freeze the app, and every file is held fully in memory.</p>
+    <p class="lesson"><b>Lesson</b>Stream files (<code>createReadStream</code>, <code>pipeline</code>) and use the async fs API in the main process.</p>
+  </div></div>
+  <div class="finding high"><div class="fid">F19</div><div class="fbody">
+    <h4>Transfers are sequential and use extra requests</h4><span class="ref">fileTransferService.ts:233–274, :74–95, :137, :279</span>
+    <p>Every file waits for the previous one. Every upload opens a resumable session (2 requests) even for tiny files, and every folder is listed again on every transfer. For a few hundred files that's minutes of waiting on round trips.</p>
+    <p class="lesson"><b>Lesson</b>Store Drive file IDs in the manifest so files can be addressed directly, use one-request uploads for small files, and run several transfers at once.</p>
+  </div></div>
+  <div class="finding high"><div class="fid">F20</div><div class="fbody">
+    <h4>The project doesn't build</h4><span class="ref">main.ts:27 · manifest-modal/index.tsx:82, :122 · package.json</span>
+    <p><code>tsc --noEmit</code> reports three errors: main.ts imports <code>writeLocalManifest</code>, which was renamed, and the Manifest modal reads <code>toAdd</code>/<code>toRemove</code>, which are now <code>changedFiles</code>/<code>removedFiles</code>. chokidar 5 is installed but missing from package.json and package-lock.json (npm marks it "extraneous"), so a fresh clone won't have it. It also declares Node 20.19 or newer, while Electron 30.5.1 ships Node 20.16.</p>
+    <p class="lesson"><b>Lesson</b>Add <code>"typecheck": "tsc --noEmit"</code> to package.json and run it before every commit; install packages with <code>npm install &lt;name&gt;</code> so they're recorded.</p>
+  </div></div>
+</div>
+
+<h3>Medium</h3>
+<div class="findings">
+  <div class="finding med"><div class="fid">F21</div><div class="fbody">
+    <h4>Waiting for playit.gg can hang or escape</h4><span class="ref">serverService.ts:48–56 · childrenProcesses.ts:70–83 · app-cockpit/index.tsx:78–79</span>
+    <p><code>Promise.all</code> waits for both the download and the playit.gg address. <code>waitForPlayitLink()</code> has no timeout, so an agent that never prints an address hangs the start forever. If it rejects, the exception leaves <code>startServer()</code> unhandled: the lock stays "starting", the download may keep running, and the Power button keeps spinning because <code>handleStart()</code> has no try/catch.</p>
+    <p class="lesson"><b>Lesson</b>Give every wait a timeout, and put cleanup in <code>finally</code>.</p>
+  </div></div>
+  <div class="finding med"><div class="fid">F22</div><div class="fbody">
+    <h4>Built-in files aren't ignored on a fresh install</h4><span class="ref">watcher-manifest.ts:72, :155</span>
+    <p><code>startWatcher()</code> builds <code>ignoredNames</code> from the saved blacklist only, without adding <code>PROTECTED_DIRECTORIES</code>. On a fresh install manifest.json is tracked as a change until the Blacklist tab has been opened once, and manifest.tmp is never ignored.</p>
+    <p class="lesson"><b>Lesson</b>Built-in rules live in code and are added to the user's rules, never replaced by them.</p>
+  </div></div>
+  <div class="finding med"><div class="fid">F23</div><div class="fbody">
+    <h4>Blacklisting a nested file with Browse never matches</h4><span class="ref">blacklist-modal/index.tsx:49 · watcher-manifest.ts:50–63</span>
+    <p>Browse produces a Windows path such as <code>world\data\DistantHorizons.sqlite</code>. <code>makeSpecificDirRule()</code> escapes the backslashes into the regex, but <code>isIgnored()</code> tests paths that use forward slashes, so the rule never matches. Only top-level names, or paths typed with <code>/</code>, work.</p>
+    <p class="lesson"><b>Lesson</b>Normalize every path to one format (forward slashes, relative to the server folder) the moment it enters the program.</p>
+  </div></div>
+  <div class="finding med"><div class="fid">F24</div><div class="fbody">
+    <h4>The blacklist is global and private</h4><span class="ref">localServerStore.ts:18 · watcher-manifest.ts:164–170</span>
+    <p>One <code>watcherBlacklist</code> is stored in this PC's localStore.json and applied to every server. Other members have their own lists, so one member skips DistantHorizons.sqlite and the next host uploads it.</p>
+    <p class="lesson"><b>Lesson</b>Rules that decide what's shared must be shared themselves: store them with the server on Drive.</p>
+  </div></div>
+  <div class="finding med"><div class="fid">F25</div><div class="fbody">
+    <h4>Manifest paths use the OS separator</h4><span class="ref">watcher-manifest.ts:128</span>
+    <p><code>path.relative()</code> returns <code>world\region\r.0.0.mca</code> on Windows. A member on macOS or Linux would produce <code>world/region/r.0.0.mca</code>, and every entry would look new to the other side.</p>
+    <p class="lesson"><b>Lesson</b>Same as F23: one canonical path format in all stored data.</p>
+  </div></div>
+  <div class="finding med"><div class="fid">F26</div><div class="fbody">
+    <h4>Errors are reported three different ways</h4><span class="ref">googleAuthService.ts:114–117 · googleDriveService.ts:233–234, :317–318 · server-slot/index.tsx:41–43</span>
+    <p>Some functions throw (<code>authorizedFetch</code>, <code>inviteUserToServer</code>, <code>renameServerFolder</code>), some return <code>{ success: false, error }</code>, and the folder walkers log with <code>console.warn</code> and carry on. IPC turns a thrown error into a rejected <code>invoke()</code>, which most components don't catch; ServerSlot's rename checks <code>res.success</code> on a function that throws instead.</p>
+    <p class="lesson"><b>Lesson</b>Choose one convention. Part 2 throws inside the main process and converts to a Result at the IPC boundary, in exactly one place.</p>
+  </div></div>
+  <div class="finding med"><div class="fid">F27</div><div class="fbody">
+    <h4>The heartbeat can overlap and fail silently</h4><span class="ref">main.ts:367–372</span>
+    <p><code>setInterval(async …)</code> starts a heartbeat every 20 s whether or not the previous one finished. Each run makes three requests; on a slow network they overlap, and an error becomes an unhandled rejection with no retry and no warning to the host.</p>
+    <p class="lesson"><b>Lesson</b>Schedule the next run when the previous one ends (a <code>setTimeout</code> chain), and treat a failed renewal as an event the session must react to.</p>
+  </div></div>
+  <div class="finding med"><div class="fid">F28</div><div class="fbody">
+    <h4>A new OAuth client for every call</h4><span class="ref">googleAuthService.ts:18–46</span>
+    <p><code>getOAuthClient()</code> reads client_secret.json and token.json from disk and builds a new client each time; each client refreshes the token on its own and rewrites token.json. With parallel transfers, several refreshes would run at once and race on that file.</p>
+    <p class="lesson"><b>Lesson</b>Create one authenticated client per app run and share it; refresh behind a single in-flight promise.</p>
+  </div></div>
+  <div class="finding med"><div class="fid">F29</div><div class="fbody">
+    <h4>Two services import each other</h4><span class="ref">fileTransferService.ts:8 · watcher-manifest.ts:7, :25</span>
+    <p>fileTransferService imports from watcher-manifest, which imports <code>readDriveManifest</code> back. It works because of how ES modules bind names, but it's fragile, and fileTransferService changes watcher-manifest's exported <code>localManifest</code> directly (<code>.files[…]</code>, <code>.version</code>).</p>
+    <p class="lesson"><b>Lesson</b>Dependencies should point one way. If two modules need each other, the shared part belongs in a third module.</p>
+  </div></div>
+  <div class="finding med"><div class="fid">F30</div><div class="fbody">
+    <h4>main.ts does everything</h4><span class="ref">main.ts:188–248, :262–298</span>
+    <p>547 lines combine window and tray setup, the quit flow, 43 IPC handlers, session orchestration, the heartbeat and player-list parsing. The shutdown sequence (kill playit.gg, stop the server, upload, clear the heartbeat) is written three times, in <code>handleServerStop()</code>, <code>doCleanup()</code> and google-logout, and the copies have already drifted apart.</p>
+    <p class="lesson"><b>Lesson</b>When you copy a sequence a second time, make it a function; a third time, give it a module that owns it.</p>
+  </div></div>
+  <div class="finding med"><div class="fid">F31</div><div class="fbody">
+    <h4>IPC channels are plain strings</h4><span class="ref">preload.ts:4–23 · watcherListener.ts:5</span>
+    <p>43 request channels and 12 events are typed as strings on both sides, with untyped payloads. That's how the <code>toAdd</code> → <code>changedFiles</code> rename reached the UI unnoticed, how the <code>opertion</code> typo became part of the protocol, and how three dead connections went unnoticed.</p>
+    <p class="lesson"><b>Lesson</b>Declare channels and payload types once, in a file both processes import.</p>
+  </div></div>
+  <div class="finding med"><div class="fid">F32</div><div class="fbody">
+    <h4>The same fact is stored in several places</h4><span class="ref">see section 10</span>
+    <p>Whether a session is running is stored in six places, the changed-file list in four, the ignore rules in four. Each copy is updated by different code at different times.</p>
+    <p class="lesson"><b>Lesson</b>One owner per fact; others ask the owner or subscribe to it.</p>
+  </div></div>
+  <div class="finding med"><div class="fid">F33</div><div class="fbody">
+    <h4>The cockpit's ownership check is always true</h4><span class="ref">app-cockpit/index.tsx:20, :195</span>
+    <p><code>isOwner = lockStatus.hostEmail === userEmail || !loadingServers</code> is true for everyone once servers have loaded, and <code>&lt;DirectoryMenu isOwner/&gt;</code> passes the literal <code>true</code> rather than the variable. Members see a Stop button for someone else's session; the main process refuses it, but the UI shouldn't offer it.</p>
+    <p class="lesson"><b>Lesson</b>In JSX, a bare <code>isOwner</code> means <code>isOwner={true}</code>; write <code>isOwner={isOwner}</code>.</p>
+  </div></div>
+  <div class="finding med"><div class="fid">F34</div><div class="fbody">
+    <h4>Lock expiry depends on every PC's clock</h4><span class="ref">serverService.ts:170, :235–238</span>
+    <p>The writer computes <code>expiresAt</code> from its own clock and every reader compares it with theirs. A PC whose clock is a minute off sees live locks as expired, or dead ones as live.</p>
+    <p class="lesson"><b>Lesson</b>Judge time with one clock. Drive's <code>modifiedTime</code> and the <code>Date</code> header of the same response both come from Google.</p>
+  </div></div>
+  <div class="finding med"><div class="fid">F35</div><div class="fbody">
+    <h4>One vanished file fails the whole step</h4><span class="ref">watcher-manifest.ts:191–197</span>
+    <p><code>formatWatcherUpdates()</code> calls <code>fs.statSync()</code> on every changed path without a try/catch. If any file disappeared after its event (temporary files, logs the server rotates), the call throws: the upload stops, or the Manifest modal's request fails.</p>
+    <p class="lesson"><b>Lesson</b>Files can change between any two lines of your code. Handle "file not found" wherever you touch the disk.</p>
+  </div></div>
+</div>
+
+<h3>Low</h3>
+<div class="findings">
+  <div class="finding low"><div class="fid">F36</div><div class="fbody">
+    <h4>Typos that became part of the API</h4><span class="ref">watcherListener.ts:5 · watcher-manifest.ts:130 · googleAuthService.ts:188 · store.ts:53</span>
+    <p><code>opertion</code> (the event payload), <code>filesremovedFiles</code>, <code>succesfulDownloads</code>, <code>WatcherManifet</code>. One changes behavior: <code>logoutGoogle()</code> checks <code>tokens.acces_token</code>, which never exists, so the token is never revoked at Google on logout.</p>
+    <p class="lesson"><b>Lesson</b>A spell-checker extension for your editor catches identifier typos; types catch the rest.</p>
+  </div></div>
+  <div class="finding low"><div class="fid">F37</div><div class="fbody">
+    <h4>Effects that leak</h4><span class="ref">manifest-modal/index.tsx:58–70 · greeting-section/index.tsx:28–35 · main-page/index.tsx:54–58 · server-console/index.tsx:57–58</span>
+    <p>The Manifest modal's interval is created inside a <code>setTimeout</code> callback, so the cleanup it returns is ignored and the interval runs forever. Several <code>useEffect</code> calls add IPC listeners and never remove them.</p>
+    <p class="lesson"><b>Lesson</b>Every effect that subscribes returns a function that unsubscribes.</p>
+  </div></div>
+  <div class="finding low"><div class="fid">F38</div><div class="fbody">
+    <h4>A failed start leaves the progress panel open</h4><span class="ref">main.ts:314–316</span>
+    <p>start-server returns early on failure without sending hide-progress.</p>
+    <p class="lesson"><b>Lesson</b>Put UI cleanup in <code>finally</code>.</p>
+  </div></div>
+  <div class="finding low"><div class="fid">F39</div><div class="fbody">
+    <h4>eula.txt is rewritten on every launch</h4><span class="ref">childrenProcesses.ts:44</span>
+    <p><code>launchServer()</code> writes eula.txt every time, so it always shows up as a changed file.</p>
+    <p class="lesson"><b>Lesson</b>A write that changes nothing still counts as a change to a watcher. Write only when the content differs.</p>
+  </div></div>
+  <div class="finding low"><div class="fid">F40</div><div class="fbody">
+    <h4>Leftovers and repeated work</h4><span class="ref">README.md · src/pages/default-page.tsx · progress-modal/index.tsx:40–44 · googleDriveService.ts:155–168</span>
+    <p>The README is still the Vite template, default-page.tsx is unused, ProgressModal renders a Map directly (React would throw), and <code>getJoinedServers()</code> fetches each folder's permissions twice and calls the userinfo endpoint once per server.</p>
+    <p class="lesson"><b>Lesson</b>Delete scaffolding as soon as it stops being useful; it costs attention every time you read the code.</p>
+  </div></div>
+  <div class="finding low"><div class="fid">F41</div><div class="fbody">
+    <h4>The playit.gg check can block a start</h4><span class="ref">serverService.ts:38</span>
+    <p><code>if (playitggPath &amp;&amp; !playitggProcess)</code> fails the start when a path is saved but playit.gg is turned off. The Scripts screen clears the path when you turn it off, which is why it rarely shows.</p>
+    <p class="lesson"><b>Lesson</b>Check the same condition you used to decide whether to launch.</p>
+  </div></div>
+</div>
+
+<hr class="end">
+<p class="endnote">Continue with Part 2, Drive Launcher Blueprint: the same app with a structure that removes most of these findings at the root, explained step by step.</p>
+
+</main>
+</body>
+</html>
