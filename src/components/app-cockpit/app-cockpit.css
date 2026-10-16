@@ -67,3 +67,55 @@
         transform: rotate(360deg);
     }
 }
+.cockpit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+.power-reason {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.power-message {
+    width: 26rem;
+    max-width: 90%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--bad);
+    text-align: left;
+    font-size: 0.85rem;
+
+    &.upload-pending {
+        border-left-color: var(--warn);
+    }
+
+    .power-message-title {
+        margin: 0;
+        font-weight: 600;
+    }
+
+    .power-message-text {
+        margin: 0;
+        color: rgb(210, 210, 210);
+        user-select: text;
+    }
+
+    .power-message-buttons {
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .spinner {
+        animation: spin 1s linear infinite;
+    }
+}

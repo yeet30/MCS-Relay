@@ -1,96 +1,66 @@
-import './members-section.css'
-import { useServerStore } from '../../store/store'
-import { useEffect, useState } from 'react'
-import { RotateCcw } from 'lucide-react'
+import './members-section.css';
+import { useEffect, useState } from 'react';
+import { RotateCcw } from 'lucide-react';
+import { invoke } from '../../api';
+import { formatUptime } from '../../lib/format';
+import { isSessionBusy, livePresence } from '../../lib/sync';
+import { useServersStore } from '../../stores/serversStore';
+import { lockFor, useSessionStore } from '../../stores/sessionStore';
 
-export default function MembersSection(){
-
-    const { selectedServer, lockStatus } = useServerStore()
-    const [maxPlayers, setMaxPlayers] = useState<number | null>(null)
-    const [players, setPlayers] = useState<string[]>([]);
-    const [uptime, setUptime] = useState<number>(0); // seconds
-
+/** Players and uptime of the selected server, whoever hosts it, plus a refresh button. */
+export default function MembersSection() {
+    const selectedId = useServersStore((s) => s.selectedId);
+    const session = useSessionStore((s) => s.state);
+    const lock = useSessionStore((s) => lockFor(s, selectedId));
+    const presence = livePresence(session, selectedId, lock);
+    const [maxPlayers, setMaxPlayers] = useState<number | null>(null);
+    const [now, setNow] = useState(() => Date.now());
     const [spinning, setSpinning] = useState(false);
-
-    function handleClick(){
-        setSpinning(true);
-        setTimeout(() => {
-            window.location.reload();
-        }, 400);
-    };
-
-    function formatUptime(seconds: number): string {
-        const h = Math.floor(seconds / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        const s = seconds % 60;
-
-        const mm = String(m).padStart(2, "0");
-        const ss = String(s).padStart(2, "0");
-
-        if (h > 0)
-            return `${h}:${mm}:${ss}`;
-        return `${mm}:${ss}`;
-    }
-
-    async function getMaxPlayers(){
-        if(!selectedServer) return
-        const res = await window.ipcRenderer.invoke("get-max-players", selectedServer.path)
-        setMaxPlayers(res)
-    }
-
-    async function getCurrentPlayers(){
-        const players = await window.ipcRenderer.invoke("get-current-players")
-        setPlayers(players)
-    }
-
-    useEffect(()=>{
-        if(lockStatus.status !== "online") {
-            setMaxPlayers(null)
-            return
-        }
-        getCurrentPlayers();
-        getMaxPlayers();
-    },[lockStatus])
+    const online = presence !== null;
 
     useEffect(() => {
-        if (!lockStatus?.startedAt || lockStatus.status === "offline") {
-            setUptime(0);
-            return;
+        if (!online || !selectedId) {
+            setMaxPlayers(null);
+            return undefined;
         }
+        let cancelled = false;
+        void invoke('servers:info', selectedId).then((res) => {
+            if (!cancelled) setMaxPlayers(res.ok ? res.value.maxPlayers : null);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [online, selectedId]);
 
-        const startedAt = new Date(lockStatus.startedAt).getTime();
-        
-        // Set initial value
-        setUptime(Math.floor((Date.now() - startedAt) / 1000));
+    useEffect(() => {
+        if (!presence?.startedAt) return undefined;
+        const timer = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(timer);
+    }, [presence?.startedAt]);
 
-        // Tick every second
-        const interval = setInterval(() => {
-            setUptime(Math.floor((Date.now() - startedAt) / 1000));
-        }, 1000);
+    async function handleRefresh() {
+        setSpinning(true);
+        await useSessionStore.getState().resync();
+        const busy = isSessionBusy(useSessionStore.getState().state.phase);
+        await useServersStore.getState().reload({ recheck: !busy });
+        setSpinning(false);
+    }
 
-        return () => clearInterval(interval);
-    }, [lockStatus?.startedAt, lockStatus?.status]);
+    const startedAt = presence?.startedAt ? Date.parse(presence.startedAt) : NaN;
+    const uptime = Number.isNaN(startedAt) ? null : Math.max(0, Math.floor((now - startedAt) / 1000));
 
-    if(!maxPlayers)
-        return (
-            <section className="members-section">
-                <button className='refresh-button' title='Refresh page' onClick={handleClick}>
-                    <RotateCcw className={`refresh-svg ${spinning ? "spin" : ""}`} size={24}/>
-                </button>
-            </section>
-        )
     return (
-        <section className="members-section">
-            <button className='refresh-button' title='Refresh page' onClick={handleClick}>
-                <RotateCcw className={`refresh-svg ${spinning ? "spin" : ""}`} size={24}/>
+        <section className='members-section'>
+            <button className='refresh-button' title='Check again' onClick={handleRefresh} disabled={spinning}>
+                <RotateCcw className={`refresh-svg ${spinning ? 'spin' : ''}`} size={24} />
             </button>
-            <div className='members-div'>
-                <h3>Online Players: <span>{players.length}/{maxPlayers}</span></h3>
-                {players.map((player, index) =>
-                    <span className="player-name" key={index}>{player}</span>
-                )}
-            <span className='uptime-span'>Uptime: {formatUptime(uptime)}</span>
-            </div>
+            {presence && (
+                <div className='members-div'>
+                    <h3>Online Players: <span>{presence.players.length}{maxPlayers !== null ? `/${maxPlayers}` : ''}</span></h3>
+                    {presence.players.map((player) => <span className='player-name' key={player}>{player}</span>)}
+                    {uptime !== null && <span className='uptime-span'>Uptime: {formatUptime(uptime)}</span>}
+                </div>
+            )}
         </section>
-    )
+    );
 }

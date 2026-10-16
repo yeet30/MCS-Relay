@@ -1,126 +1,65 @@
-import './select-server.css'
-import { useEffect, useState } from 'react';
-import { useServerStore, useUserStore, useLocalStore } from '../../store/store'
-import { Play, Loader2 } from "lucide-react";
-import { IServerFolder } from '../../lib/types';
+import './select-server.css';
+import { useState } from 'react';
+import { Loader2, Play } from 'lucide-react';
+import type { ServerSummary } from '../../../shared/types';
+import { hostingMessage, isSessionBusy } from '../../lib/sync';
+import { useAuthStore } from '../../stores/authStore';
+import { selectSelectedServer, useServersStore } from '../../stores/serversStore';
+import { lockFor, useSessionStore } from '../../stores/sessionStore';
 
-export default function SelectServer(){
-
-    const { setSelectedIndex } = useLocalStore();
-    const {userEmail} = useUserStore();
-    const {servers, 
-        selectedServer, 
-        loadingServers,
-        loadingHosting,
-        lockStatus,
-        setLockStatus,
-        setLoadingHosting, 
-        setServerById, 
-    } = useServerStore();
-
-    const [list, setList] = useState<IServerFolder[]>(servers)
-    const [isListOpen, setIsListOpen] = useState(false)
-    const [serverDisplay, setServerDisplay] = useState<string>(selectedServer?.name ?? "")
-
-    function getHostingMessage(): string {
-        switch (lockStatus && lockStatus.status) {
-            case "online":
-            return `is currently hosted by ${lockStatus.hostEmail === userEmail ? "you" : lockStatus.hostName}${lockStatus.publicIp ? " at:": "."}`;
-            case "starting":
-            return "is starting the hosting...";
-            case "stopping":
-            return "is stopping the hosting...";
-            default:
-            return "is not being hosted right now.";
-        }
-    }
-
-    function handleButton(){
-        setIsListOpen(!isListOpen)
-    }
-
-    function handleSelect(serverId: string){
-        const index = list.findIndex(server => server.id === serverId);
-        const selected = list[index];
-        if(!selected) return;
-        setIsListOpen(false)
-        setSelectedIndex(index)
-        setServerById(selected.id)
-        setServerDisplay(selected.name)
-    }
-
-    async function handleLock(){
-        if (loadingServers || !selectedServer || !selectedServer.id) return
-        setLoadingHosting(true)
-        try {
-            const lockRes = await window.ipcRenderer.invoke("get-server-lock", selectedServer.id)
-            setLockStatus(lockRes.lockData)
-        } catch (err) {
-            console.error("Failed to get server lock:", err)
-        } 
-        setLoadingHosting(false)
-    }    
-
-    useEffect(()=>{
-        if (!selectedServer) return;
-        setServerDisplay(selectedServer?.name ?? "");
-        
-        handleLock();
-    },[selectedServer])
-
-    useEffect(()=>{
-        setList(servers)
-    },[servers])
-
-    if(!servers.length)
-        return null
+function Group({ title, servers, onPick }: { title: string; servers: ServerSummary[]; onPick: (id: string) => void }) {
+    if (servers.length === 0) return null;
     return (
-        <div className="select-server-wrapper">
-            <span>
-                <button className={`select-button ${isListOpen && 'open'}`} onClick={handleButton}>
-                    <span className='button-title'>
-                        {(loadingServers || loadingHosting)
-                            ? <p><Loader2 size={12} className='spinner'/> Checking</p>
-                            : serverDisplay
-                        }
-                    </span>
-                    <Play size={12} className={`server-arrow ${isListOpen && 'open'}`} fill="currentColor"/>
-                </button>
+        <>
+            <span className={title.toLowerCase()}>
+                <span className='server-type'>{title}</span>
+            </span>
+            {servers.map((server) => (
+                <span className='server-item' key={server.id} onClick={() => onPick(server.id)}>
+                    <span className='item-text'>{server.name}</span>
+                </span>
+            ))}
+        </>
+    );
+}
 
-                <div className={`server-drawer ${isListOpen && 'open'}`}>
-                    
-                    {list.filter((server) => server.type === "owned" ).length > 0
-                        && <span className='owned'>
-                                <span className='server-type'>
-                                        Owned
-                                </span>    
-                            </span>
-                    }
-                    {list.filter((server) => server.type === "owned" ).map(server => (
-                        <span className='server-item' key={server.id} onClick={()=>handleSelect(server.id)}>
-                            <span className='item-text'>{server.name}</span>
-                        </span>
-                    ))}
-                    <span className='joined'>
-                        {list.filter((server) => server.type === "joined" ).length > 0 
-                            && <span className='server-type'>
-                                Joined
-                            </span>
-                        }
+export default function SelectServer() {
+    const servers = useServersStore((s) => s.servers);
+    const selected = useServersStore(selectSelectedServer);
+    const select = useServersStore((s) => s.select);
+    const myEmail = useAuthStore((s) => s.user?.email ?? null);
+    const busy = useSessionStore((s) => isSessionBusy(s.state.phase));
+    const checking = useSessionStore((s) => s.checkingId !== null && s.checkingId === selected?.id);
+    const lock = useSessionStore((s) => lockFor(s, selected?.id ?? null));
+    const [isListOpen, setIsListOpen] = useState(false);
+
+    if (servers.length === 0) return null;
+
+    function handlePick(serverId: string) {
+        setIsListOpen(false);
+        if (serverId !== selected?.id) void select(serverId);
+    }
+
+    return (
+        <div className='select-server-wrapper'>
+            <span>
+                <button
+                    className={`select-button ${isListOpen ? 'open' : ''}`}
+                    onClick={() => setIsListOpen(!isListOpen)}
+                    disabled={busy}
+                    title={busy ? 'Finish the current session before switching servers' : 'Choose a server'}
+                >
+                    <span className='button-title'>
+                        {checking ? <p><Loader2 size={12} className='spinner' /> Checking</p> : selected?.name ?? 'Select a server'}
                     </span>
-                    {list.filter((server) => server.type === "joined" ).map(server => (
-                        <span className='server-item' key={server.id} onClick={()=>handleSelect(server.id)}>
-                            <span className='item-text'>{server.name}</span>
-                        </span>
-                    ))}
+                    <Play size={12} className={`server-arrow ${isListOpen ? 'open' : ''}`} fill='currentColor' />
+                </button>
+                <div className={`server-drawer ${isListOpen ? 'open' : ''}`}>
+                    <Group title='Owned' servers={servers.filter((s) => s.kind === 'owned')} onPick={handlePick} />
+                    <Group title='Joined' servers={servers.filter((s) => s.kind === 'joined')} onPick={handlePick} />
                 </div>
             </span>
-            <h4>
-                {loadingHosting
-                    ? "... the server"
-                    : getHostingMessage()
-                }
-            </h4>
+            <h4>{selected ? hostingMessage(lock, myEmail) : ''}</h4>
         </div>
-    )
+    );
 }

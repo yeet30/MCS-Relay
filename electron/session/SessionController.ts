@@ -180,7 +180,7 @@ export class SessionController {
             }
             if (settings.launchServer) {
                 this.step('Starting the Minecraft server', 'loading', 'major');
-                this.consoleLog = [];
+                this.onMinecraftOutput([`[System] Starting the Minecraft server (${new Date(this.now()).toLocaleTimeString()})`]);
                 await this.d.minecraft.start({
                     serverPath: server.localPath ?? '', javaFlags: server.javaFlags,
                     readyTimeoutMs: this.d.timeouts?.minecraftMs ?? 180_000, signal,
@@ -379,6 +379,8 @@ export class SessionController {
 
     onMinecraftExit(code: number | null, expected: boolean): void {
         this.setState({ javaRunning: false, players: [] });
+        this.onMinecraftOutput([`[System] The server stopped (exit code ${code ?? 'unknown'})`]);
+        this.onMinecraftOutput([]);
         if (this.state.phase === 'running' && !expected) {
             this.step(`The Minecraft server stopped unexpectedly (exit code ${code ?? 'unknown'}); saving the world`, 'error', 'major');
             void this.stop().catch((err: unknown) => console.error('[session] stop after a crash failed:', err));

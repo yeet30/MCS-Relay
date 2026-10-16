@@ -255,7 +255,7 @@ describe('SessionController: things going wrong while hosting', () => {
         await t.session.start('s1');
         t.session.command('say hi');
         expect(t.minecraft.send).toHaveBeenCalledWith('say hi');
-        expect(t.session.consoleLines()).toEqual(['> say hi']);
+        expect(t.session.consoleLines().at(-1)).toBe('> say hi');
     });
 });
 

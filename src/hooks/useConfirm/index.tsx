@@ -1,53 +1,50 @@
-import { useState } from "react"
-import Popup from "../../components/popup"
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Popup from '../../components/popup';
 
+export interface ConfirmOptions {
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+}
+
+/** A promise-based confirm dialog. Render `popup` somewhere that stays mounted while the dialog is open.
+ *  `confirm` is stable across renders, so it is safe in effect dependencies. */
 export function useConfirm() {
+    const [options, setOptions] = useState<ConfirmOptions | null>(null);
+    const resolverRef = useRef<((value: boolean) => void) | null>(null);
 
-    const [isOpen, setIsOpen] = useState(false)
-    const [text, setText] = useState("")
-    const [confirmText, setConfirmText] = useState("Confirm")
-    const [cancelText, setCancelText] = useState("Cancel")
+    const settle = useCallback((value: boolean) => {
+        const resolve = resolverRef.current;
+        resolverRef.current = null;
+        setOptions(null);
+        resolve?.(value);
+    }, []);
 
-    const [resolver, setResolver] = useState<(value:boolean)=>void>()
+    const confirm = useCallback((next: ConfirmOptions) => {
+        // A newer question replaces an unanswered one; the old caller gets "no" instead of waiting forever.
+        resolverRef.current?.(false);
+        setOptions(next);
+        return new Promise<boolean>((resolve) => {
+            resolverRef.current = resolve;
+        });
+    }, []);
 
-    function confirm(options:{
-        message:string
-        confirmText?:string
-        cancelText?:string
-    }){
-
-        setText(options.message)
-        setConfirmText(options.confirmText ?? "Confirm")
-        setCancelText(options.cancelText ?? "Cancel")
-
-        setIsOpen(true)
-
-        return new Promise<boolean>((resolve)=>{
-            setResolver(() => resolve)
-        })
-    }
-
-    function handleAccept(){
-        resolver?.(true)
-        setIsOpen(false)
-    }
-
-    function handleClose(){
-        resolver?.(false)
-        setIsOpen(false)
-    }
+    useEffect(() => () => {
+        resolverRef.current?.(false);
+        resolverRef.current = null;
+    }, []);
 
     const popup = (
         <Popup
-            isOpen={isOpen}
-            onClose={handleClose}
-            onAccept={handleAccept}
-            confirmingOption={confirmText}
-            decliningOption={cancelText}
+            isOpen={options !== null}
+            onClose={() => settle(false)}
+            onAccept={() => settle(true)}
+            confirmingOption={options?.confirmText ?? 'Confirm'}
+            decliningOption={options?.cancelText ?? 'Cancel'}
         >
-            {text}
+            {options?.message ?? ''}
         </Popup>
-    )
+    );
 
-    return { confirm, popup }
+    return { confirm, popup };
 }

@@ -1,15 +1,15 @@
-.greeting-wrapper{
+.greeting-wrapper {
     width: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
 
-    .first-page{
+    .first-page {
         width: 100%;
-        height: 100dvh;
+        min-height: 100dvh;
     }
 
-    .greeting-title{
+    .greeting-title {
         text-align: center;
         margin: 0;
         margin-top: 1rem;
@@ -22,8 +22,8 @@
         flex-direction: column;
         align-items: center;
         justify-content: space-between;
-        padding: 2rem 0rem;
-        gap: 1rem;
+        padding: 1rem 0rem;
+        gap: 0.75rem;
     }
 
     .console-section {
@@ -34,7 +34,7 @@
         justify-content: center;
     }
 
-    .scroller-button{
+    .scroller-button {
         display: flex;
         align-items: center;
         justify-content: center;
@@ -43,19 +43,4 @@
         right: 1rem;
         bottom: 1rem;
     }
-
-    .spinner {
-        animation: spin 1s linear infinite;
-    }
 }
-
-@keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
-
-    to {
-        transform: rotate(360deg);
-    }
-}
-

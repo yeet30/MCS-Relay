@@ -1,89 +1,60 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import './burger-menu.css';
-import Modal from "../modal";
-import OwnedDriveFolders from "../owned-drive-folders";
-import JoinedDriveFolders from "../joined-drive-folders";
-import ScriptsOptions from "../scripts-options";
-import { useUserStore } from "../../store/store";
-import { IModalItems } from "../../lib/types";
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import type { IModalItems } from '../../lib/ui-types';
+import { useAuthStore } from '../../stores/authStore';
+import { useServersStore } from '../../stores/serversStore';
+import JoinedDriveFolders from '../joined-drive-folders';
+import Modal from '../modal';
+import OwnedDriveFolders from '../owned-drive-folders';
+import ScriptsOptions from '../scripts-options';
 
 export default function BurgerMenu() {
-
-    const {userPicture} = useUserStore(); 
-
+    const picture = useAuthStore((s) => s.user?.picture ?? '');
+    const logout = useAuthStore((s) => s.logout);
     const navigate = useNavigate();
-
-    const [isMenuOpen, setisMenuOpen] = useState(false);
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [loggingOut, setLoggingOut] = useState(false);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [modalItems, setModalItems] = useState<IModalItems[]>(
-        [{
-            title: "Your Folders",
-            content: <OwnedDriveFolders/>
-        }]
-    )
+    const [modalItems, setModalItems] = useState<IModalItems[] | null>(null);
 
     async function handleLogout() {
-        setLoggingOut(true)
-        const response = await window.ipcRenderer.invoke("google-logout")
-        setLoggingOut(false)
-        setisMenuOpen(false)
-        if (response.success)
-            navigate("/")
+        setLoggingOut(true);
+        const done = await logout();
+        setLoggingOut(false);
+        setIsMenuOpen(false);
+        if (!done) return;
+        useServersStore.getState().reset();
+        navigate('/');
     }
 
-    function handleScripts(){
-        setisMenuOpen(false)
-        setModalItems([{
-            title: "Script Options",
-            content: <ScriptsOptions/>
-        }])
-        setIsModalOpen(true)
-    }
-
-    function handleDrive() {
-        setisMenuOpen(false)
-        setModalItems([
-            {
-                title: "Your Folders",
-                content: <OwnedDriveFolders/>
-            },
-            {
-                title: "Joined Folders",
-                content: <JoinedDriveFolders/>
-            }
-        ])
-        setIsModalOpen(true)
+    function open(items: IModalItems[]) {
+        setIsMenuOpen(false);
+        setModalItems(items);
     }
 
     return (
-        <section id="burger-wrapper">
-
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} items={modalItems}/>
-
-            <div id="menu-clicker" onClick={() => { setisMenuOpen(!isMenuOpen) }} className={isMenuOpen ? 'open' : 'close'}>
-                <img
-                    id="profile-picture"
-                    src={userPicture}
-                    alt="Profile Picture"
-                    width="40"
-                    height="40"
-                />
-                <span id="settings-span" className={isMenuOpen ? 'open' : 'close'}>Settings</span>
-                <div id="hamburger-icon">
-                    ☰
-                </div>
+        <section id='burger-wrapper'>
+            <Modal isOpen={modalItems !== null} onClose={() => setModalItems(null)} items={modalItems ?? []} height={360} />
+            <div id='menu-clicker' onClick={() => setIsMenuOpen(!isMenuOpen)} className={isMenuOpen ? 'open' : 'close'}>
+                {picture
+                    ? <img id='profile-picture' src={picture} alt='Profile Picture' width='40' height='40' referrerPolicy='no-referrer' />
+                    : <span id='profile-picture' />}
+                <span id='settings-span' className={isMenuOpen ? 'open' : 'close'}>Settings</span>
+                <div id='hamburger-icon'>☰</div>
             </div>
-            <div id="drawer" className={isMenuOpen ? 'open' : 'close'}>
+            <div id='drawer' className={isMenuOpen ? 'open' : 'close'}>
                 <ul className={isMenuOpen ? 'open' : 'close'}>
-                    <li onClick={handleScripts}>Scripts</li>
-                    <li onClick={handleDrive}>Drive Folders</li>
+                    <li onClick={() => open([{ title: 'Script Options', content: <ScriptsOptions /> }])}>Scripts</li>
+                    <li onClick={() => open([
+                        { title: 'Your Folders', content: <OwnedDriveFolders /> },
+                        { title: 'Joined Folders', content: <JoinedDriveFolders /> },
+                    ])}
+                    >Drive Folders</li>
                     <li onClick={handleLogout}>Log Out</li>
-                    {loggingOut && ( <p>Logging out...</p> )}
+                    {loggingOut && <p>Logging out...</p>}
                 </ul>
             </div>
-            {isMenuOpen && <div id="burger-overlay" onClick={() => setisMenuOpen(false)} />}
+            {isMenuOpen && <div id='burger-overlay' onClick={() => setIsMenuOpen(false)} />}
         </section>
-    )
+    );
 }

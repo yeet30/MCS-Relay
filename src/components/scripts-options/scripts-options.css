@@ -144,3 +144,11 @@
         padding: 8px 20px;
     }
 }
+.scripts-wrapper .custom-flags {
+    margin-top: 0.5rem;
+
+    input {
+        width: 100%;
+        font-family: monospace;
+    }
+}

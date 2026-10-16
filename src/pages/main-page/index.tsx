@@ -1,101 +1,42 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import './main-page.css'
-import GreetingSection from "../../components/greeting-section"
+import './main-page.css';
+import { useEffect } from 'react';
+import GreetingSection from '../../components/greeting-section';
 import BurgerMenu from '../../components/burger-menu';
 import MembersSection from '../../components/members-section';
-import { useUserStore, useServerStore, useLocalStore } from '../../store/store.ts'
-import { ILockStatus } from '../../lib/types.ts';
-import { useConfirm } from '../../hooks/useConfirm/index.tsx';
+import { useAuthStore } from '../../stores/authStore';
+import { useServersStore } from '../../stores/serversStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 
-export default function MainPage(){
-
-    const navigate = useNavigate();
-    const { confirm, popup } = useConfirm();
-    const { selectedServer, loadServers, setServerByIndex, setLockStatus } = useServerStore();
-    const { loadUser, checkDriveScope } = useUserStore();
-    const { loadLocalVariables } = useLocalStore();
-    
-    const [isQuitting, setIsQuitting] = useState(false);
-
-    async function checkLoggedIn(){
-        const loggedIn = await window.ipcRenderer.invoke("google-is-logged-in");
-        if(!loggedIn) navigate ("/")
-    }
-
-    useEffect(() =>{
+export default function MainPage() {
+    useEffect(() => {
+        let cancelled = false;
         async function init() {
-            await checkLoggedIn();
-            await loadUser();
-            await checkDriveScope();
-            await loadLocalVariables();
-            await loadServers();
-
-            const index = useLocalStore.getState().selectedIndex;
-            setServerByIndex(index);
+            // Signed out -> the auth store says so and SignedOutRedirect returns to the login page.
+            const status = await useAuthStore.getState().refresh();
+            if (cancelled || !status?.loggedIn) return;
+            const settings = await useSettingsStore.getState().load();
+            if (cancelled) return;
+            const loaded = await useServersStore.getState().load();
+            if (cancelled || !loaded) return;
+            await useServersStore.getState().selectInitial(settings?.selectedServerId ?? null);
         }
-        init()
-    },[])
-
-    useEffect(() => {
-        if (!selectedServer) return;
-
-        const handler = (_: unknown, lock: ILockStatus) => {
-            setLockStatus(lock);
-        };
-
-        window.ipcRenderer.on("lock-updated", handler);
-
+        void init();
         return () => {
-            window.ipcRenderer.off("lock-updated", handler);
+            cancelled = true;
         };
-    }, [selectedServer]);
-
-    useEffect(() => {
-        window.ipcRenderer.on('app-quitting', () => {
-            setIsQuitting(true)
-        })
-    }, [])
-
-    useEffect(() => {
-        const handler = async (_: unknown, { isHosting }: { isHosting: boolean }) => {
-            const confirmed = await confirm({
-                message: isHosting
-                    ? "You are currently hosting a server. Closing will stop the server and upload all files to the cloud. This may take a moment."
-                    : "Are you sure you want to quit?",
-                confirmText: "Quit",
-                cancelText: "Cancel"
-            });
-
-            if (confirmed) {
-                window.ipcRenderer.invoke('confirm-quit-response', true);
-            }
-        };
-
-        window.ipcRenderer.on('confirm-quit', handler);
-        return () => window.ipcRenderer.off('confirm-quit', handler);
     }, []);
 
-
     return (
-        <section id="main-section">
+        <section id='main-section'>
             <section id='members-section'>
-                <MembersSection/>
+                <MembersSection />
             </section>
             <section id='greeting-section'>
-                <GreetingSection/>
+                <GreetingSection />
             </section>
             <section id='menu-section'>
-                <BurgerMenu/>
+                <BurgerMenu />
             </section>
-
-            {popup}
-
-            {isQuitting && (
-                <div className='quit-overlay'>
-                    <p>Stopping server...</p>
-                </div>
-            )}
         </section>
-    )
+    );
 }

@@ -1,76 +1,56 @@
-import './join-server.css'
-import { useServerStore, useUserStore } from '../../store/store';
+import './join-server.css';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { useConfirm } from '../../hooks/useConfirm';
+import type { ConfirmFn } from '../../stores/serverActions';
+import { joinServer } from '../../stores/serverActions';
+import { useServersStore } from '../../stores/serversStore';
 
-export default function JoinServer(){
-
-    const { servers, loadServers } = useServerStore();
-    const { driveScopeAllowed } = useUserStore();
-    const {confirm, popup} = useConfirm();
-    const [serverId,setServerId] = useState('')
-    const [loadingJoin,setLoadingJoin] = useState(false);
+/** Joins a server from the folder ID or Drive link in the invitation email. */
+export default function JoinServer({ confirm, onJoined }: { confirm: ConfirmFn; onJoined?: () => void }) {
+    const hasServers = useServersStore((s) => s.servers.length > 0);
+    const [idOrLink, setIdOrLink] = useState('');
+    const [joining, setJoining] = useState(false);
 
     async function handleJoin() {
-        setLoadingJoin(true)
-        const res = await window.ipcRenderer.invoke("join-by-id", serverId)
-        console.log("Join result: ", res)
-        if(!res.success){
-            alert(res.error)
-            setLoadingJoin(false)
-            return
-        }
-
-        const acceptPath = await confirm({
-            message: `Choose the local folder path for your server. The files will be downloaded to and uploaded from here.`,
-            confirmText:"Proceed",
-            cancelText:"Cancel"
-        })
-
-        if (!acceptPath) {
-            alert("Joined Server Folder! Please set the path later if you want to work with it.");
-            setLoadingJoin(false)
-            await loadServers();
-            return
-        }
-
-        await window.ipcRenderer.invoke("set-server-path", res.folder.id);
-        await loadServers();
-        setLoadingJoin(false)
-        setServerId('')
+        setJoining(true);
+        const joined = await joinServer(idOrLink, confirm);
+        setJoining(false);
+        if (!joined) return;
+        setIdOrLink('');
+        onJoined?.();
     }
 
     return (
         <div className='join-server-wrapper'>
-            {popup}
-            {(!servers.length && driveScopeAllowed)  && 
-                <h3>Paste the ID provided to you in the invitation email below to join a server.</h3>
-            }
+            {!hasServers && <h3>Paste the link or ID from your invitation email to join a server.</h3>}
             <div className='rows'>
                 <span className='first-row'>
                     <span className='list-text'>
-                        <input type="text" 
-                        id='join-input'
-                        placeholder='Paste the ID here.' 
-                        value={serverId}
-                        onChange={(e)=>setServerId(e.target.value)}/>
+                        <input
+                            type='text'
+                            id='join-input'
+                            placeholder='Paste the link or ID here.'
+                            value={idOrLink}
+                            onChange={(e) => setIdOrLink(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && idOrLink.trim()) void handleJoin();
+                            }}
+                        />
                     </span>
-
                     <span>
-                        <button 
-                        className='list-button'
-                        style={{backgroundColor:"rgb(10, 30, 10)"}}
-                        disabled={loadingJoin}
-                        onClick={handleJoin}>
-                            {loadingJoin && <Loader2 size={12} className='spinner'/>}
+                        <button
+                            className='list-button'
+                            style={{ backgroundColor: 'rgb(10, 30, 10)' }}
+                            disabled={joining || idOrLink.trim() === ''}
+                            onClick={handleJoin}
+                        >
+                            {joining && <Loader2 size={12} className='spinner' />}
                             Join
                         </button>
                     </span>
                 </span>
-
                 <span className='second-row'>+ Join New Server</span>
-            </div>   
+            </div>
         </div>
-    )
+    );
 }

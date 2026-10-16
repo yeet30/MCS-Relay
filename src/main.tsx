@@ -1,13 +1,9 @@
-import ReactDOM from 'react-dom/client'
-import App from './App.tsx'
-import './index.css'
-import './listeners/watcherListener.ts'
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './index.css';
+import { startEventSubscriptions } from './stores/events';
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-    <App />,
-)
+startEventSubscriptions();
 
-// Use contextBridge
-window.ipcRenderer.on('main-process-message', (_event, message) => {
-  console.log(message)
-})
+const root = document.getElementById('root');
+if (root) ReactDOM.createRoot(root).render(<App />);

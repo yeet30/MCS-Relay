@@ -20,3 +20,43 @@
     .progress-step.done { color: #98c379; }
     .progress-step.error { color: #e06c75; }
 }
+.startup-progress.compact .progress-step.major {
+    font-size: 0.85rem;
+}
+
+.step-history {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow-y: auto;
+    max-height: 100%;
+    text-align: left;
+
+    .history-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .history-time {
+        color: #777;
+        font-size: 0.75rem;
+        font-variant-numeric: tabular-nums;
+        min-width: 4.5rem;
+    }
+
+    .progress-step {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.8rem;
+    }
+
+    .progress-step.loading { color: #aaa; }
+    .progress-step.done { color: #98c379; }
+    .progress-step.error { color: #e06c75; }
+}
+
+.empty-steps {
+    color: #888;
+}

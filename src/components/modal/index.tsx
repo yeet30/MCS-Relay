@@ -1,43 +1,41 @@
-import './modal.css'
-import { useState, useEffect } from 'react';
-import { IModalItems } from '../../lib/types';
+import './modal.css';
+import { useEffect, useState } from 'react';
+import type { IModalItems } from '../../lib/ui-types';
 
 interface IModal {
-    isOpen: boolean,
-    onClose: () => void,
-    items: IModalItems[],
-    width?: number,
-    height?: number
+    isOpen: boolean;
+    onClose: () => void;
+    items: IModalItems[];
+    width?: number;
+    height?: number;
 }
 
-export default function Modal({ isOpen, onClose, items, width = 400, height = 300}: IModal) {
+export default function Modal({ isOpen, onClose, items, width = 400, height = 300 }: IModal) {
+    const [activeTab, setActiveTab] = useState(0);
 
-    const [activeTab, setActiveTab] = useState(0)
-
+    // Reset only when the modal opens: callers pass a new items array on every render, and the stores update
+    // several times a second, so resetting on items would make the other tabs unreachable.
     useEffect(() => {
-        setActiveTab(0)
-    }, [items, isOpen])
+        if (isOpen) setActiveTab(0);
+    }, [isOpen]);
 
-    if (!isOpen) return null;
+    if (!isOpen || items.length === 0) return null;
 
     const safeIndex = activeTab < items.length ? activeTab : 0;
 
     return (
         <div className='modal-wrapper'>
             <div id='modal-overlay' onClick={onClose} />
-            <div id='modal'
-                style={{
-                    width: width,
-                    height: height
-                }}
-            >
+            <div id='modal' style={{ width, height }}>
                 <button id='modal-close' onClick={onClose}>✕</button>
                 <div className='tab-section'>
                     <div id='modal-tabs'>
-                        {items.map((item: any, index: number) => (
-                            <h4 key={index}
-                                className={`tab ${activeTab === index ? 'active' : ''}`}
-                                onClick={() => { setActiveTab(index) }}>
+                        {items.map((item, index) => (
+                            <h4
+                                key={index}
+                                className={`tab ${safeIndex === index ? 'active' : ''}`}
+                                onClick={() => setActiveTab(index)}
+                            >
                                 {item.title}
                             </h4>
                         ))}
@@ -47,5 +45,5 @@ export default function Modal({ isOpen, onClose, items, width = 400, height = 30
                 <div id='children'>{items[safeIndex].content}</div>
             </div>
         </div>
-    )
+    );
 }

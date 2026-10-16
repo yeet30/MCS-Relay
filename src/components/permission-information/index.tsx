@@ -1,44 +1,41 @@
-import './permission-information.css'
-import { useServerStore, useUserStore } from '../../store/store';
+import './permission-information.css';
 import { useState } from 'react';
-import { Loader2, AlertCircle, ExternalLink } from 'lucide-react';
+import { AlertCircle, ExternalLink, Loader2 } from 'lucide-react';
+import { useAuthStore } from '../../stores/authStore';
+import { useServersStore } from '../../stores/serversStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 
+/** Shown to accounts that signed in with the old two-step login and lack the full Drive permission. */
 export default function PermissionInformation() {
+    const collaborationEnabled = useAuthStore((s) => s.collaborationEnabled);
+    const enableCollaboration = useAuthStore((s) => s.enableCollaboration);
+    const [loading, setLoading] = useState(false);
 
-    const { driveScopeAllowed, checkDriveScope}= useUserStore();
-    const { loadServers } = useServerStore();
-    
-    const [loadingLaunch, setLoadingLaunch] = useState(false);
-
-    async function handleLaunch(){
-        setLoadingLaunch(true)
-        const result = await window.ipcRenderer.invoke("request-drive-scope");
-        if (!result.success) {
-            alert(result.error);
-            return;
+    async function handleEnable() {
+        setLoading(true);
+        const enabled = await enableCollaboration();
+        setLoading(false);
+        if (!enabled) return;
+        const settings = await useSettingsStore.getState().load();
+        if (await useServersStore.getState().load()) {
+            await useServersStore.getState().selectInitial(settings?.selectedServerId ?? null);
         }
-        setLoadingLaunch(false)
-        checkDriveScope()
-        loadServers()
     }
 
-    if (!driveScopeAllowed)
-        return (
-            <div className='permission-information'>
-                <h3>Please grant the app permission to see the files created by others and the folders you joined.</h3>
-                <div className='access-statement'>
-                    <AlertCircle size={48}/>
-                    <h4> The app is only able to see the folders you give access to.</h4>
-                </div>
-                <span>
-                    <button 
-                    onClick={handleLaunch}
-                    disabled={loadingLaunch}>
-                        {loadingLaunch ? <Loader2 size={16} className='spinner'/> : ''}
-                        Enable Collaboration <ExternalLink size={16}/>
-                    </button>
-                </span>
+    if (collaborationEnabled) return null;
+    return (
+        <div className='permission-information'>
+            <h3>Please grant the app permission to see the files created by others and the folders you joined.</h3>
+            <div className='access-statement'>
+                <AlertCircle size={48} />
+                <h4>Without it the app only sees the files it created itself, so it cannot sync a world with your friends.</h4>
             </div>
-        )
-    
+            <span>
+                <button onClick={handleEnable} disabled={loading}>
+                    {loading && <Loader2 size={16} className='spinner' />}
+                    Enable Collaboration <ExternalLink size={16} />
+                </button>
+            </span>
+        </div>
+    );
 }
