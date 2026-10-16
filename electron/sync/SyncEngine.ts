@@ -138,6 +138,16 @@ export class SyncEngine {
         return this.d.appData.serversWithJournal();
     }
 
+    /** Forgets an unfinished upload that can no longer be committed (the cloud moved on). The files stay
+     *  on disk, so the next preflight shows them as local changes or as a conflict to choose from. */
+    discardJournal(serverId: string): void {
+        this.d.appData.deleteJournal(serverId);
+    }
+
+    baseRevision(serverId: string): number {
+        return this.d.appData.readBase(serverId)?.revision ?? 0;
+    }
+
     /* ------------------------------------------------------------------ rules */
 
     async getRules(serverId: string): Promise<SyncRules> {
@@ -371,6 +381,7 @@ export class SyncEngine {
             );
         }
 
+        signal?.throwIfAborted();
         const latest = await readManifest(this.d.launcher, serverId);
         if ((latest?.revision ?? 0) !== (remote?.revision ?? 0)) {
             throw new AppError('CONFLICT', 'The cloud changed during your upload, so it was not committed.');
@@ -385,6 +396,7 @@ export class SyncEngine {
             format: 2, revision: parentRevision + 1, parentRevision,
             author: { name: me.name, email: me.email }, createdAt: this.iso(), files, folders,
         };
+        signal?.throwIfAborted();                                     // the lock may have been lost meanwhile
         await writeManifest(this.d.launcher, serverId, next);         // the commit
         remote = next;
 

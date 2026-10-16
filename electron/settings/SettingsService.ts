@@ -7,8 +7,8 @@ import { RAM_LIMITS, isValidServerId } from '../store/appData';
 import type { AppData } from '../store/appData';
 
 export interface Dialogs {
-    chooseFolder(title: string): Promise<string | null>;
-    chooseFile(title: string, filters?: Array<{ name: string; extensions: string[] }>): Promise<string | null>;
+    chooseFolder(title: string, defaultPath?: string): Promise<string | null>;
+    chooseFile(title: string, filters?: Array<{ name: string; extensions: string[] }>, defaultPath?: string): Promise<string | null>;
     openPath(p: string): Promise<void>;
 }
 

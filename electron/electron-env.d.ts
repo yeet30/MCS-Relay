@@ -11,7 +11,7 @@ declare namespace NodeJS {
      * │ │
      * │ ├─┬ dist-electron
      * │ │ ├── main.js
-     * │ │ └── preload.js
+     * │ │ └── preload.mjs
      * │
      * ```
      */
@@ -19,9 +19,4 @@ declare namespace NodeJS {
     /** /dist/ or /public/ */
     VITE_PUBLIC: string
   }
-}
-
-// Used in Renderer process, expose in `preload.ts`
-interface Window {
-  ipcRenderer: import('electron').IpcRenderer
 }
