@@ -12,12 +12,20 @@ export default function ServerConsole() {
     const [input, setInput] = useState('');
     const [history, setHistory] = useState<string[]>([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
-    const bottomRef = useRef<HTMLDivElement>(null);
+    const outputRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const followRef = useRef(true);
 
+    // Scrolls the console box only (never the page), and only while the user has not scrolled up to read.
     useEffect(() => {
-        if (lines.length > 0) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        const output = outputRef.current;
+        if (output && followRef.current) output.scrollTop = output.scrollHeight;
     }, [lines]);
+
+    function handleScroll() {
+        const output = outputRef.current;
+        if (output) followRef.current = output.scrollHeight - output.scrollTop - output.clientHeight < 24;
+    }
 
     async function handleSend() {
         const command = input.trim();
@@ -49,11 +57,10 @@ export default function ServerConsole() {
                 Java Console <span className={javaRunning ? 'active' : 'inactive'}>{javaRunning ? '● Running' : '● Offline'}</span>
             </span>
             <div className='console-div'>
-                <div id='console-output'>
+                <div id='console-output' ref={outputRef} onScroll={handleScroll}>
                     {lines.map((text, i) => (
                         <div key={i} className={`log-line ${text.startsWith('> ') ? 'system' : classifyLine(text)}`}>{text}</div>
                     ))}
-                    <div ref={bottomRef} />
                 </div>
                 <div id='console-input-row'>
                     <span id='console-prompt'>&gt;</span>
