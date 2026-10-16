@@ -83,6 +83,8 @@ export function windowsPathProblem(relPath: string): string | null {
 export class SyncEngine {
     private readonly choices = new Map<string, ConflictChoice>();
     private cleaning: Promise<number> | null = null;
+    /** The last scan per server: preflight and the download that follows it do not hash the world twice. */
+    private readonly lastScan = new Map<string, Snapshot>();
 
     constructor(private readonly d: SyncEngineDeps) {}
 
@@ -317,7 +319,7 @@ export class SyncEngine {
         }
         const base = this.d.appData.readBase(serverId);
         const baseRevision = base?.revision ?? 0;
-        const local = await scanLocal(root, baseToSnapshot(base), isIgnored, signal);
+        const local = await this.scan(serverId, root, baseToSnapshot(base), isIgnored, signal);
         // Without a cloud manifest everything is new, whatever the base says.
         const planBase = remote ? baseToSnapshot(base) : new Map();
         const { upload, deleteRemote } = planUpload(planBase, local);
@@ -647,7 +649,7 @@ export class SyncEngine {
         const remote = await readManifest(this.d.launcher, serverId);
         const isIgnored = await this.loadRules(serverId, createRules);
         const baseSnap = baseToSnapshot(base);
-        const local = await scanLocal(root, baseSnap, isIgnored, signal);
+        const local = await this.scan(serverId, root, baseSnap, isIgnored, signal);
         const remoteSnap = manifestToSnapshot(remote);
 
         let plan: SyncPlan;
@@ -665,6 +667,15 @@ export class SyncEngine {
             status = 'unfinished-upload';
         }
         return { root, me, remote, baseRevision: base?.revision ?? null, local, remoteSnap, plan, status, lock };
+    }
+
+    /** Hashes only files whose size or modification time changed since the base or the last scan. */
+    private async scan(serverId: string, root: string, base: Snapshot, isIgnored: (rel: string) => boolean, signal?: AbortSignal): Promise<Snapshot> {
+        const last = this.lastScan.get(serverId);
+        const known = last ? new Map([...base, ...last]) : base;
+        const local = await scanLocal(root, known, isIgnored, signal);
+        this.lastScan.set(serverId, local);
+        return local;
     }
 
     private async requireRoot(serverId: string): Promise<string> {
