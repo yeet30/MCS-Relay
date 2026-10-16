@@ -63,7 +63,12 @@ export default function AppCockpit() {
     const [isJoinOpen, setIsJoinOpen] = useState(false);
     const [requesting, setRequesting] = useState(false);
 
-    const mode = powerMode(session, selectedId, report, lock);
+    const readOnly = selected !== null && (selected.myRole === 'reader' || selected.myRole === 'commenter');
+    const computed = powerMode(session, selectedId, report, lock);
+    // Readers can download and watch, but cannot write the lock or upload: they cannot host.
+    const mode: PowerMode = readOnly && computed.kind === 'start'
+        ? { kind: 'start', enabled: false, reason: 'You were invited as a reader, so you can watch this server but not host it.' }
+        : computed;
     // F33: what I may do comes from my role on the server, never from a constant.
     const canEditRules = selected !== null && (selected.myRole === 'owner' || selected.myRole === 'writer' || selected.kind === 'owned');
 
