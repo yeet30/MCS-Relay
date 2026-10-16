@@ -1,0 +1,426 @@
+// Two PCs, one fake Google Drive: the sync engine end to end, with the real planner, scanner,
+// manifest code, transfer engine and app-data store. Only Drive and the lock are fakes.
+import { mkdtemp, readFile, readdir, rm, stat, writeFile, mkdir } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { APP_PROPS, DEFAULT_JAVA_FLAGS } from '../../shared/types';
+import type { LockView, UserInfo } from '../../shared/types';
+import { FakeDriveStore } from '../../test/fakes/FakeDrive';
+import { DriveError } from '../drive/types';
+import { AppError } from '../errors';
+import { AppData } from '../store/appData';
+import { TransferEngine } from '../transfer/TransferEngine';
+import { LauncherFiles } from './launcherFiles';
+import { readManifest } from './manifest';
+import { SyncEngine, windowsPathProblem } from './SyncEngine';
+
+const ALICE: UserInfo = { name: 'Alice', email: 'alice@example.com', picture: '' };
+const BOB: UserInfo = { name: 'Bob', email: 'bob@example.com', picture: '' };
+const WRITES = new Set(['createFolder', 'createFile', 'updateContent', 'trash', 'deleteForever', 'rename', 'markDeleted']);
+
+interface Pc {
+    user: UserInfo;
+    root: string;
+    appData: AppData;
+    launcher: LauncherFiles;
+    sync: SyncEngine;
+    lockView: LockView;
+    steps: string[];
+}
+
+let store: FakeDriveStore;
+let serverId: string;
+let temp: string;
+let alice: Pc;
+let bob: Pc;
+
+async function makePc(user: UserInfo, name: string, platform: NodeJS.Platform = 'linux'): Promise<Pc> {
+    const root = path.join(temp, name, 'server');
+    await mkdir(root, { recursive: true });
+    const drive = store.as(user.email);
+    const launcher = new LauncherFiles(drive);
+    const appData = new AppData(path.join(temp, name, 'userData'));
+    const me = async () => user;
+    const pc: Pc = { user, root, appData, launcher, sync: null as unknown as SyncEngine, lockView: { state: 'free', lock: null }, steps: [] };
+    pc.sync = new SyncEngine({
+        drive, launcher, appData, me, platform,
+        lock: { inspect: async () => pc.lockView, sessionId: `session-${name}` },
+        transfers: new TransferEngine({ drive, me, emit: () => undefined, backoffMs: () => 0, maxAttempts: 3 }),
+        settings: { getServer: () => ({ localPath: root, javaFlags: { ...DEFAULT_JAVA_FLAGS } }) },
+        step: (message) => pc.steps.push(message),
+        now: () => store.now(),
+    });
+    return pc;
+}
+
+async function put(pc: Pc, rel: string, text: string): Promise<void> {
+    const abs = path.join(pc.root, ...rel.split('/'));
+    await mkdir(path.dirname(abs), { recursive: true });
+    await writeFile(abs, text);
+}
+
+async function read(pc: Pc, rel: string): Promise<string | null> {
+    try {
+        return await readFile(path.join(pc.root, ...rel.split('/')), 'utf8');
+    } catch {
+        return null;
+    }
+}
+
+/** A full session as the session controller runs it: preflight, download, (play), upload. */
+async function session(pc: Pc, play: () => Promise<void> = async () => undefined): Promise<{ uploaded: number; deleted: number; revision: number }> {
+    const report = await pc.sync.preflight(serverId);
+    await pc.sync.download(serverId, report);
+    await play();
+    return pc.sync.uploadSession(serverId);
+}
+
+function writesDuring(): () => number {
+    const before = store.calls.length;
+    return () => store.calls.slice(before).filter((c) => WRITES.has(c.op)).length;
+}
+
+beforeEach(async () => {
+    temp = await mkdtemp(path.join(os.tmpdir(), 'mdh-sync-'));
+    store = new FakeDriveStore();
+    serverId = store.createRoot('Server-1', ALICE.email);
+    alice = await makePc(ALICE, 'alice');
+    bob = await makePc(BOB, 'bob');
+});
+
+afterEach(async () => {
+    await rm(temp, { recursive: true, force: true });
+});
+
+describe('a new server', () => {
+    it('reports new-server, then uploads everything as revision 1', async () => {
+        await put(alice, 'server.properties', 'motd=hi');
+        await put(alice, 'world/level.dat', 'level');
+        await put(alice, 'world/region/r.0.0.mca', 'region');
+        await put(alice, 'logs/latest.log', 'not shared');
+        await put(alice, 'world/session.lock', 'never shared');
+
+        const report = await alice.sync.preflight(serverId);
+        expect(report.status).toBe('new-server');
+        expect(report.plan.upload).toEqual(['server.properties', 'world/level.dat', 'world/region/r.0.0.mca']);
+        expect(report.firstSyncOnThisPc).toBe(true);
+
+        await alice.sync.download(serverId, report);
+        const result = await alice.sync.uploadSession(serverId);
+        expect(result).toEqual({ uploaded: 3, deleted: 0, revision: 1 });
+
+        const manifest = await readManifest(alice.launcher, serverId);
+        expect(manifest?.revision).toBe(1);
+        expect(manifest?.author.email).toBe(ALICE.email);
+        expect(Object.keys(manifest?.files ?? {}).sort()).toEqual(['server.properties', 'world/level.dat', 'world/region/r.0.0.mca']);
+        const region = store.findPath(serverId, 'world/region/r.0.0.mca');
+        expect(region?.appProperties).toEqual({ [APP_PROPS.server]: serverId, [APP_PROPS.path]: 'world/region/r.0.0.mca' });
+        expect(manifest?.files['world/region/r.0.0.mca'].driveId).toBe(region?.id);
+        expect(manifest?.folders).toMatchObject({ world: store.findPath(serverId, 'world')?.id });
+        expect(store.findPath(serverId, 'logs')).toBeUndefined();
+        // The shared rules file is created with the defaults on the first upload.
+        expect(store.findPath(serverId, '.launcher/sync-rules.json')).toBeDefined();
+        expect(alice.appData.readBase(serverId)?.revision).toBe(1);
+        expect(alice.appData.readJournal(serverId)).toBeNull();
+
+        expect((await alice.sync.preflight(serverId)).status).toBe('in-sync');
+    });
+
+    it('preflight never writes to Drive, even for a server with no .launcher folder', async () => {
+        await put(alice, 'a.txt', 'a');
+        const writes = writesDuring();
+        await alice.sync.preflight(serverId);
+        expect(writes()).toBe(0);
+        expect(store.findPath(serverId, '.launcher')).toBeUndefined();
+    });
+
+    it('reports no-local-path when the folder is gone', async () => {
+        await rm(alice.root, { recursive: true });
+        expect((await alice.sync.preflight(serverId)).status).toBe('no-local-path');
+    });
+});
+
+describe('two PCs taking turns', () => {
+    beforeEach(async () => {
+        await put(alice, 'server.properties', 'motd=hi');
+        await put(alice, 'world/level.dat', 'level-1');
+        await put(alice, 'world/region/r.0.0.mca', 'region-1');
+        await session(alice);
+    });
+
+    it('the second PC downloads everything and ends in sync', async () => {
+        const report = await bob.sync.preflight(serverId);
+        expect(report.status).toBe('cloud-newer');
+        expect(report.downloadBytes).toBe('motd=hi'.length + 'level-1'.length + 'region-1'.length);
+        await bob.sync.download(serverId, report);
+        expect(await read(bob, 'world/region/r.0.0.mca')).toBe('region-1');
+        expect(bob.appData.readBase(serverId)?.revision).toBe(1);
+        expect((await bob.sync.preflight(serverId)).status).toBe('in-sync');
+        // Nothing changed, nothing is uploaded and no revision is made.
+        expect(await bob.sync.uploadSession(serverId)).toEqual({ uploaded: 0, deleted: 0, revision: 1 });
+    });
+
+    it('changes are written into the same Drive file, which keeps its owner', async () => {
+        const before = store.findPath(serverId, 'world/level.dat')!;
+        await session(bob, () => put(bob, 'world/level.dat', 'level-2'));
+        const after = store.findPath(serverId, 'world/level.dat')!;
+        expect(after.id).toBe(before.id);
+        expect(after.ownerEmail).toBe(ALICE.email);
+        expect(Buffer.from(after.content).toString()).toBe('level-2');
+        expect((await readManifest(bob.launcher, serverId))?.revision).toBe(2);
+
+        const report = await alice.sync.preflight(serverId);
+        expect(report.status).toBe('cloud-newer');
+        expect(report.plan.download).toEqual(['world/level.dat']);
+        await alice.sync.download(serverId, report);
+        expect(await read(alice, 'world/level.dat')).toBe('level-2');
+    });
+
+    it('a file deleted by someone who does not own it becomes a placeholder its owner deletes later', async () => {
+        await session(bob, async () => {
+            await rm(path.join(bob.root, 'world', 'region', 'r.0.0.mca'));
+        });
+        const manifest = await readManifest(bob.launcher, serverId);
+        expect(manifest?.files['world/region/r.0.0.mca']).toBeUndefined();
+        const pending = store.findPath(serverId, '.launcher/pending-delete/r.0.0.mca')!;
+        expect(pending.ownerEmail).toBe(ALICE.email);
+        expect(pending.content.length).toBe(0);
+        expect(pending.appProperties).toMatchObject({
+            [APP_PROPS.tombstone]: '1', [APP_PROPS.server]: serverId, [APP_PROPS.deletedBy]: BOB.email,
+        });
+        expect(store.findPath(serverId, 'world/region/r.0.0.mca')).toBeUndefined();
+
+        // Bob's preflight sees one file waiting for Alice; Alice's sees one of her own.
+        expect((await bob.sync.preflight(serverId)).cleanup).toEqual({ mine: 0, others: [{ ownerEmail: ALICE.email, count: 1 }] });
+        const report = await alice.sync.preflight(serverId);
+        expect(report.cleanup).toEqual({ mine: 1, others: [] });
+        expect(report.plan.deleteLocal).toEqual(['world/region/r.0.0.mca']);
+
+        expect(await alice.sync.cleanupMyPlaceholders()).toBe(1);
+        expect(store.nodes.has(pending.id)).toBe(false);          // deleted for good, not trashed
+        await alice.sync.download(serverId, report);
+        expect(await read(alice, 'world/region/r.0.0.mca')).toBeNull();
+    });
+
+    it('the owner deleting their own file trashes it', async () => {
+        const id = store.findPath(serverId, 'world/level.dat')!.id;
+        await session(alice, () => rm(path.join(alice.root, 'world', 'level.dat')));
+        expect(store.node(id).trashed).toBe(true);
+        expect(store.node(id).content.length).toBeGreaterThan(0);
+    });
+
+    it('cleanup skips a placeholder that the current manifest still lists', async () => {
+        const id = store.findPath(serverId, 'world/level.dat')!.id;
+        // As if Bob's upload had made the placeholder and then failed before committing.
+        await store.as(BOB.email).markDeleted(id, { [APP_PROPS.tombstone]: '1', [APP_PROPS.server]: serverId });
+        expect(await alice.sync.cleanupMyPlaceholders()).toBe(0);
+        expect(store.nodes.has(id)).toBe(true);
+    });
+
+    it('new files from the other PC are owned by that PC and placed in the right folders', async () => {
+        await session(bob, () => put(bob, 'world/DIM-1/region/r.1.1.mca', 'nether'));
+        const file = store.findPath(serverId, 'world/DIM-1/region/r.1.1.mca')!;
+        expect(file.ownerEmail).toBe(BOB.email);
+        const manifest = await readManifest(bob.launcher, serverId);
+        expect(manifest?.folders['world/DIM-1/region']).toBe(store.findPath(serverId, 'world/DIM-1/region')?.id);
+        // Folders are not created twice.
+        expect(store.children(serverId).filter((n) => n.name === 'world')).toHaveLength(1);
+    });
+});
+
+describe('when both PCs changed something', () => {
+    beforeEach(async () => {
+        await put(alice, 'a.txt', 'a-1');
+        await put(alice, 'b.txt', 'b-1');
+        await session(alice);
+        await session(bob);
+    });
+
+    it('different files: combine downloads theirs and uploads mine', async () => {
+        await session(bob, () => put(bob, 'a.txt', 'a-bob'));
+        await put(alice, 'b.txt', 'b-alice');
+
+        const report = await alice.sync.preflight(serverId);
+        expect(report.status).toBe('diverged');
+        expect(report.allowedChoices).toEqual(['combine', 'keep-cloud', 'keep-local']);
+        await expect(alice.sync.download(serverId, report)).rejects.toMatchObject({ code: 'CONFLICT' });
+
+        const resolved = await alice.sync.resolve(serverId, 'combine');
+        expect(resolved.pendingChoice).toBe('combine');
+        await alice.sync.download(serverId, resolved);
+        expect(await read(alice, 'a.txt')).toBe('a-bob');
+        expect(await read(alice, 'b.txt')).toBe('b-alice');
+        const result = await alice.sync.uploadSession(serverId);
+        expect(result.revision).toBe(3);
+        const manifest = await readManifest(alice.launcher, serverId);
+        expect(Buffer.from(store.node(manifest!.files['b.txt'].driveId).content).toString()).toBe('b-alice');
+        expect(Buffer.from(store.node(manifest!.files['a.txt'].driveId).content).toString()).toBe('a-bob');
+        expect(alice.sync.pendingChoice(serverId)).toBeNull();
+    });
+
+    it('the same file: combine is not offered; keep-cloud backs up my version first', async () => {
+        await session(bob, () => put(bob, 'a.txt', 'a-bob'));
+        await put(alice, 'a.txt', 'a-alice');
+        await put(alice, 'only-here.txt', 'mine');
+
+        const report = await alice.sync.preflight(serverId);
+        expect(report.plan.conflicts).toEqual(['a.txt']);
+        expect(report.allowedChoices).toEqual(['keep-cloud', 'keep-local']);
+        await expect(alice.sync.resolve(serverId, 'combine')).rejects.toBeInstanceOf(AppError);
+
+        const resolved = await alice.sync.resolve(serverId, 'keep-cloud');
+        expect(resolved.pendingChoice).toBe('keep-cloud');
+        await alice.sync.download(serverId, resolved);
+        expect(await read(alice, 'a.txt')).toBe('a-bob');
+        expect(await read(alice, 'only-here.txt')).toBeNull();
+
+        const backups = path.join(temp, 'alice', 'userData', 'servers', serverId, 'backups');
+        const [dir] = await readdir(backups);
+        expect(await readFile(path.join(backups, dir, 'a.txt'), 'utf8')).toBe('a-alice');
+        expect(await readFile(path.join(backups, dir, 'only-here.txt'), 'utf8')).toBe('mine');
+        expect((await alice.sync.uploadSession(serverId)).uploaded).toBe(0);
+    });
+
+    it('keep-local makes my copy the next revision', async () => {
+        await session(bob, () => put(bob, 'a.txt', 'a-bob'));
+        await put(alice, 'a.txt', 'a-alice');
+        const resolved = await alice.sync.resolve(serverId, 'keep-local');
+        expect(resolved.status).toBe('local-changes');
+        await alice.sync.download(serverId, resolved);
+        expect(await read(alice, 'a.txt')).toBe('a-alice');
+        await alice.sync.uploadSession(serverId);
+        const report = await bob.sync.preflight(serverId);
+        await bob.sync.download(serverId, report);
+        expect(await read(bob, 'a.txt')).toBe('a-alice');
+    });
+
+    it('an upload refuses to overwrite a cloud that moved on', async () => {
+        await session(bob, () => put(bob, 'a.txt', 'a-bob'));
+        await put(alice, 'b.txt', 'b-alice');
+        // Alice skips the download step (as the old app could) and tries to upload.
+        await expect(alice.sync.uploadSession(serverId)).rejects.toMatchObject({ code: 'CONFLICT' });
+        expect((await readManifest(alice.launcher, serverId))?.author.email).toBe(BOB.email);
+    });
+});
+
+describe('failures and resuming', () => {
+    beforeEach(async () => {
+        await put(alice, 'a.txt', 'a-1');
+        await session(alice);
+    });
+
+    it('a failed upload commits nothing, keeps the journal, and the retry creates no duplicates', async () => {
+        await put(alice, 'new-1.txt', 'one');
+        await put(alice, 'new-2.txt', 'two');
+        await put(alice, 'a.txt', 'a-2');
+        const fatal = () => new DriveError('Forbidden', 403, 'forbidden');
+        store.failNext('createFile', 1, fatal, (args) => args[0] === 'new-2.txt');
+
+        await expect(alice.sync.uploadSession(serverId)).rejects.toMatchObject({ code: 'UPLOAD_INCOMPLETE' });
+        expect((await readManifest(alice.launcher, serverId))?.revision).toBe(1);
+        expect(alice.appData.readJournal(serverId)).toMatchObject({ baseRevision: 1, sessionId: 'session-alice' });
+        expect(store.children(serverId).filter((n) => n.name === 'new-1.txt')).toHaveLength(1);
+
+        const creates = () => store.calls.filter((c) => c.op === 'createFile').length;
+        const before = creates();
+        const result = await alice.sync.uploadSession(serverId);
+        expect(result.revision).toBe(2);
+        expect(creates() - before).toBe(1);                         // only new-2.txt
+        expect(store.children(serverId).filter((n) => n.name === 'new-1.txt')).toHaveLength(1);
+        expect(alice.appData.readJournal(serverId)).toBeNull();
+    });
+
+    it('an upload whose commit landed before the app stopped is finished, not reported as a conflict', async () => {
+        await put(alice, 'a.txt', 'a-2');
+        await alice.sync.uploadSession(serverId);
+        // Simulate a crash between the commit and the base write: old base, journal still there.
+        const base = alice.appData.readBase(serverId)!;
+        alice.appData.writeBase(serverId, { ...base, revision: 1 });
+        alice.appData.writeJournal(serverId, { format: 1, serverId, startedAt: 'x', baseRevision: 1, sessionId: 's' });
+
+        expect(await alice.sync.uploadSession(serverId)).toEqual({ uploaded: 0, deleted: 0, revision: 2 });
+        expect(alice.appData.readBase(serverId)?.revision).toBe(2);
+        expect(alice.appData.readJournal(serverId)).toBeNull();
+    });
+
+    it('a failed download stops the start and leaves the base alone', async () => {
+        await session(bob);
+        await session(alice, () => put(alice, 'a.txt', 'a-2'));
+        store.failNext('download', 10, () => new DriveError('Forbidden', 403, 'forbidden'));
+        const report = await bob.sync.preflight(serverId);
+        await expect(bob.sync.download(serverId, report)).rejects.toMatchObject({ code: 'DOWNLOAD_INCOMPLETE' });
+        expect(bob.appData.readBase(serverId)?.revision).toBe(1);
+        expect(await read(bob, 'a.txt')).toBe('a-1');
+    });
+
+    it('a file trashed by hand on the Drive website is created again', async () => {
+        const id = store.findPath(serverId, 'a.txt')!.id;
+        store.node(id).trashed = true;
+        await put(alice, 'a.txt', 'a-2');
+        await alice.sync.uploadSession(serverId);
+        const manifest = await readManifest(alice.launcher, serverId);
+        expect(manifest?.files['a.txt'].driveId).not.toBe(id);
+        expect(Buffer.from(store.node(manifest!.files['a.txt'].driveId).content).toString()).toBe('a-2');
+    });
+
+    it('someone else\'s stale upload makes the server unfinished-upload; my own does not', async () => {
+        const stale = (email: string): LockView => ({
+            state: 'stale', ageSeconds: 300,
+            lock: { format: 2, sessionId: 'x', host: { name: 'X', email }, phase: 'uploading', leaseSeconds: 45, baseRevision: 1, startedAt: null, address: null, players: [] },
+        });
+        alice.lockView = stale(BOB.email);
+        expect((await alice.sync.preflight(serverId)).status).toBe('unfinished-upload');
+        alice.lockView = stale(ALICE.email);
+        expect((await alice.sync.preflight(serverId)).status).toBe('in-sync');
+    });
+});
+
+describe('deleting a whole server', () => {
+    it('hands every file the owner does not own back to its owner', async () => {
+        await put(alice, 'a.txt', 'a');
+        await session(alice);
+        await session(bob, () => put(bob, 'bob.txt', 'b'));
+        expect(await alice.sync.markForeignFilesDeleted(serverId)).toBe(1);
+        const bobs = store.findPath(serverId, 'bob.txt')!;
+        expect(bobs.appProperties[APP_PROPS.tombstone]).toBe('1');
+        expect(bobs.content.length).toBe(0);
+        expect(store.findPath(serverId, 'a.txt')!.appProperties[APP_PROPS.tombstone]).toBeUndefined();
+        // The manifest still lists bob.txt, so Bob's cleanup leaves it until the folder is gone.
+        expect(await bob.sync.cleanupMyPlaceholders()).toBe(0);
+        // Alice deletes the server folder for good: her files go, Bob's are left without a folder.
+        for (const node of [...store.nodes.values()]) if (node.ownerEmail === ALICE.email) store.nodes.delete(node.id);
+        expect(await bob.sync.cleanupMyPlaceholders()).toBe(1);
+        expect(store.nodes.has(bobs.id)).toBe(false);
+    });
+});
+
+describe('rules', () => {
+    it('creates sync-rules.json with the defaults and keeps user rules normalised', async () => {
+        expect((await alice.sync.getRules(serverId)).ignore).toEqual(['logs/', 'crash-reports/', 'debug/', '*.tmp']);
+        const rules = await alice.sync.setRules(serverId, [' backups/ ', '', 'a/../b', 'backups/']);
+        expect(rules.ignore).toEqual(['backups/']);
+        expect(rules.builtin).toContain('.launcher/');
+        await put(alice, 'backups/old.zip', 'zip');
+        await put(alice, 'logs/latest.log', 'log');
+        expect((await alice.sync.preflight(serverId)).plan.upload).toEqual(['logs/latest.log']);
+    });
+});
+
+describe('Windows names', () => {
+    it('explains which cloud names this PC cannot store', () => {
+        expect(windowsPathProblem('world/aux.dat')).toMatch(/reserved/);
+        expect(windowsPathProblem('world/a:b')).toMatch(/character/);
+        expect(windowsPathProblem('world/name.')).toMatch(/dot or a space/);
+        expect(windowsPathProblem('world/region/r.0.0.mca')).toBeNull();
+    });
+
+    it('refuses to download them on Windows instead of failing half way', async () => {
+        await put(alice, 'world/aux.dat', 'x');
+        await session(alice);
+        const win = await makePc(BOB, 'bob-win', 'win32');
+        const report = await win.sync.preflight(serverId);
+        await expect(win.sync.download(serverId, report)).rejects.toThrow(/aux\.dat/);
+        await expect(stat(path.join(win.root, 'world'))).rejects.toThrow();
+    });
+});
