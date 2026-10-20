@@ -69,7 +69,7 @@ export class ServersService {
         this.beforeDelete = deps.beforeDelete;
     }
 
-    /** Owned servers first, then joined ones. One me() per call and one permissions request per folder (F40). */
+    /** Owned servers first, then joined ones. One me() per call and one permissions request per folder. */
     async list(): Promise<ServerSummary[]> {
         const [me, rootId] = await Promise.all([this.auth.me(), this.findRoot()]);
         const ownedFolders = rootId ? await this.drive.listChildren(rootId, { foldersOnly: true }) : [];

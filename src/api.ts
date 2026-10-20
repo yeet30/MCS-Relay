@@ -1,5 +1,5 @@
 // The typed face of window.api (exposed by electron/preload.ts). Every request goes through invoke() and every
-// pushed event through on(), so a mistyped channel, argument or payload is a compile error (F31).
+// pushed event through on(), so a mistyped channel, argument or payload is a compile error.
 import type { CommandArgs, CommandName, CommandResult, EventName, Events, Result } from '../shared/ipc';
 import type { AppErrorInfo } from '../shared/types';
 

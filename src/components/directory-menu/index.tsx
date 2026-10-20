@@ -11,7 +11,7 @@ import ChangesPanel from '../changes-panel';
 import Modal from '../modal';
 import SyncRules from '../sync-rules';
 
-/** The folder menu next to the power button. What it offers follows from my role on the server (F33). */
+/** The folder menu next to the power button. What it offers follows from my role on the server. */
 export function DirectoryMenu({ server, canEditRules }: { server: ServerSummary | null; canEditRules: boolean }) {
     const [open, setOpen] = useState(false);
     const [modalItems, setModalItems] = useState<IModalItems[] | null>(null);

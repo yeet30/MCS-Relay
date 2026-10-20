@@ -9,7 +9,7 @@ import { request } from '../../stores/request';
 import { useSessionStore } from '../../stores/sessionStore';
 
 /** The files every member's app leaves out of the sync. Stored in the server's .launcher/sync-rules.json,
- *  so it is the same list on every PC (F24). */
+ *  so it is the same list on every PC. */
 export default function SyncRules({ serverId }: { serverId: string }) {
     const [rules, setRules] = useState<Rules | null>(null);
     const [draft, setDraft] = useState<string[]>([]);

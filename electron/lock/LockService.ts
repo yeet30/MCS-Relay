@@ -1,9 +1,9 @@
 // Who may run a server right now, kept in <server folder>/.launcher/lock.json.
 // The lock is a lease: the holder rewrites the file every renewEveryMs, and a lock whose modifiedTime is
 // older than its leaseSeconds is stale. Age is measured with Google's clock only (modifiedTime against the
-// Date header of the same response), so a PC with a wrong clock cannot misjudge it (F34).
+// Date header of the same response), so a PC with a wrong clock cannot misjudge it.
 // Drive has no "write only if unchanged", so claim() writes, waits, reads back, and every renewal re-checks
-// that the session id in the file is still ours (F6, F7, F27). inspect() never writes (F11).
+// that the session id in the file is still ours. inspect() never writes.
 import { createHash, randomUUID } from 'node:crypto';
 import type { LockContent, LockPhase, LockView, UserInfo } from '../../shared/types';
 import { DriveError } from '../drive/types';

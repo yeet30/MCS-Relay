@@ -1,4 +1,4 @@
-// The main-process side of the typed IPC contract in shared/ipc.ts (F26, F31).
+// The main-process side of the typed IPC contract in shared/ipc.ts.
 // Every handler answers with a Result: errors never cross the bridge as exceptions.
 import type { BrowserWindow } from 'electron';
 import type { CommandArgs, CommandName, CommandResult, EventName, Events, Result } from '../../shared/ipc';

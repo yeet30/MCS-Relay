@@ -9,7 +9,7 @@ import Modal from '../modal';
 const KIND_WORDS: Record<ChangeKind, string> = { added: 'new', changed: 'changed', removed: 'deleted' };
 
 /** Files the server changed during this session, grouped by folder. For display only: the upload makes its
- *  own scan, so nothing is lost if an event was missed (F17). */
+ *  own scan, so nothing is lost if an event was missed. */
 export default function ChangesPanel() {
     const changes = useSessionStore((s) => s.changes);
     const groups = groupChanges(changes);

@@ -13,7 +13,7 @@ import PermissionsList from '../permissions-list';
 
 const MAX_NAME = 60;
 
-/** One server in Settings > Drive Folders. Downloading and uploading happen only through a session (F10). */
+/** One server in Settings > Drive Folders. Downloading and uploading happen only through a session. */
 export default function ServerSlot({ server }: { server: ServerSummary }) {
     const { confirm, popup } = useConfirm();
     const inUse = useSessionStore((s) => isMySession(s.state, server.id) && s.state.phase !== 'failed');

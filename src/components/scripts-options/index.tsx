@@ -10,7 +10,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import OptionRow from '../option-row';
 
 /** What a session starts on this PC. Downloading and uploading are no longer options: every session
- *  downloads before it starts and uploads after it stops (F10). */
+ *  downloads before it starts and uploads after it stops. */
 export default function ScriptsOptions() {
     const settings = useSettingsStore((s) => s.settings);
     const server = useServersStore(selectSelectedServer);

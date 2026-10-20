@@ -1,5 +1,5 @@
 // Google sign-in for the whole app: one OAuth2Client for the app's lifetime, one consent screen,
-// tokens stored encrypted (Electron safeStorage), and one shared in-flight refresh (F28).
+// tokens stored encrypted (Electron safeStorage), and one shared in-flight refresh.
 // No electron import: main.ts passes openExternal, safeStorage and the folders in.
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
@@ -325,7 +325,7 @@ export class GoogleAuth {
         this.pendingLogin?.abort(notSignedIn('Signed out.'));
         const current = this.tokens();
         this.clearTokens();
-        // Revoking the refresh token ends the grant (and its access tokens) at Google, not only on this PC (F36).
+        // Revoking the refresh token ends the grant (and its access tokens) at Google, not only on this PC.
         const token = current?.refresh_token ?? current?.access_token;
         if (token) await this.revoke(token);
     }

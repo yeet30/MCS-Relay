@@ -149,7 +149,7 @@ describe('scanLocal', () => {
         expect([...snap.keys()]).toEqual(['world/kept.dat']);
     });
 
-    it('skips a file that vanishes between stat and hashing (F35)', async () => {
+    it('skips a file that vanishes between stat and hashing', async () => {
         await put('a.txt', 'a');
         const vanishing = await put('b.txt', 'b');
         await put('c.txt', 'c');

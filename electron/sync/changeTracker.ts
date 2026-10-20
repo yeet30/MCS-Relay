@@ -1,5 +1,5 @@
 // Shows what changed in the server folder while a session runs. Display only: the upload does
-// its own scan, so a missed event here never loses data (Part 2, section 8).
+// its own scan, so a missed event here never loses data.
 import path from 'node:path';
 import { watch } from 'chokidar';
 import type { FSWatcher } from 'chokidar';

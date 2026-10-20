@@ -1,5 +1,5 @@
 // Runs the Minecraft server (Java) as a child process: launch arguments, the "Done (" readiness
-// check, console output, the player list and a stop that waits for the process to really exit (F5).
+// check, console output, the player list and a stop that waits for the process to really exit.
 import { execFile, spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -635,7 +635,7 @@ export class MinecraftProcess {
     }
 }
 
-/** Accepts the EULA, writing only when needed so the file does not show up as a change every session (F39). */
+/** Accepts the EULA, writing only when needed so the file does not show up as a change every session. */
 async function ensureEula(serverPath: string): Promise<void> {
     const file = path.join(serverPath, 'eula.txt');
     try {
