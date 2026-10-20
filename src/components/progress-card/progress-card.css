@@ -75,6 +75,20 @@
         }
     }
 
+    .progress-note {
+        margin: 0;
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        font-size: 0.78rem;
+        color: var(--warn);
+
+        svg {
+            flex: none;
+            margin-top: 3px;
+        }
+    }
+
     .progress-meta,
     .progress-steps {
         margin: 0;
@@ -142,10 +156,17 @@
 
     li {
         display: grid;
-        grid-template-columns: 4.5rem 14px 1fr;
+        grid-template-columns: 4.5rem 14px 1fr auto;
         align-items: center;
         gap: 8px;
         user-select: text;
+    }
+
+    .log-duration {
+        color: #888;
+        font-size: 0.72rem;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
     }
 
     li.major .log-text {
@@ -203,9 +224,36 @@
 
     .lane {
         display: grid;
-        grid-template-columns: 1.4rem minmax(0, 1fr) 8rem;
+        grid-template-columns: 1.4rem minmax(0, 1fr) 5.5rem 7.5rem;
         align-items: center;
         gap: 8px;
+    }
+
+    .lane-meta {
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        text-align: right;
+    }
+
+    /* Busy without measurable bytes: a stripe slides along instead of a bar that jumps from 0 to 100 %. */
+    .lane-busy {
+        position: relative;
+        height: 6px;
+        border-radius: 3px;
+        background: var(--panel-2);
+        overflow: hidden;
+
+        span {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 35%;
+            border-radius: 3px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            animation: lane-busy 1.2s ease-in-out infinite;
+        }
     }
 
     .lane-number {
@@ -256,6 +304,11 @@
         color: var(--warn);
         white-space: nowrap;
     }
+}
+
+@keyframes lane-busy {
+    from { left: -35%; }
+    to { left: 100%; }
 }
 
 .failed-files {

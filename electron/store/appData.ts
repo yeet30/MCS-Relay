@@ -1,10 +1,13 @@
 // Everything the app keeps on this PC, in Electron's userData folder:
-//   settings.json                         app-wide settings (AppSettings)
-//   servers/<id>/settings.json            per-server settings (local path, Java flags)
-//   servers/<id>/base.json                what this PC and the cloud last agreed on
-//   servers/<id>/journal.json             exists only while an upload is unfinished
-//   servers/<id>/journal.log              what that upload has done so far, one JSON line per event
-//   servers/<id>/backups/<time>-<label>/  copies made before overwriting local files
+//   settings.json                         settings of this PC (playit.gg, launch, notifications)
+//   accounts/<email>/account.json         settings of one Google account (selected and joined servers, EULA)
+//   accounts/<email>/servers/<id>/        that account's files for one server:
+//       settings.json                     local path, Java flags
+//       base.json                         what this PC and the cloud last agreed on
+//       journal.json, journal.log         exist only while an upload is unfinished
+//       backups/<time>-<label>/           copies made before overwriting local files
+// Server data is kept per account, so two accounts on one PC can each pick any folder for their servers.
+// Data from before accounts were separated lives in servers/<id>/ and moves to the first account that uses it.
 // The files are small, so synchronous fs is fine; every write is atomic (write *.tmp, fsync, rename).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -39,11 +42,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
     usePlayitgg: false,
     launchServer: true,
     joinedServerIds: [],
+    eulaAccepted: false,
+    notifications: true,
+    notificationSound: true,
 };
 
 const LEGACY_FILE = 'localStore.json';
 const LEGACY_MIGRATED_FILE = 'localStore.migrated.json';
 const BACKUPS = 'backups';
+const ACCOUNTS = 'accounts';
 // Drive file ids use this alphabet. Checking it also keeps ids that arrive over IPC from escaping servers/.
 const SERVER_ID = /^[A-Za-z0-9_-]{1,200}$/;
 
@@ -51,22 +58,76 @@ export function isValidServerId(id: unknown): id is string {
     return typeof id === 'string' && SERVER_ID.test(id);
 }
 
+/** The folder name for an account: the lower-cased email with anything unusual replaced. */
+export function accountKey(email: string): string {
+    return email.trim().toLowerCase().replace(/[^a-z0-9._@+-]/g, '_').slice(0, 200) || '_';
+}
+
 export class AppData {
-    private readonly serversRoot: string;
+    private serversRoot: string;
+    private account: string | null = null;
 
     /** `now` exists for tests (backup folder names). */
     constructor(private readonly root: string, private readonly now: () => Date = () => new Date()) {
         this.serversRoot = path.join(root, 'servers');
     }
 
+    /** Switches to the files of a Google account; null (nobody signed in) uses the shared, older location. */
+    setAccount(email: string | null): void {
+        const key = email ? accountKey(email) : null;
+        if (key === this.account) return;
+        this.account = key;
+        this.serversRoot = key ? path.join(this.root, ACCOUNTS, key, 'servers') : path.join(this.root, 'servers');
+        if (key) this.seedAccount(key);
+        console.log(`[appData] using the data of ${key ?? 'no account'}`);
+    }
+
     /* -------------------------------------------------------------- app settings */
 
     readSettings(): AppSettings {
-        return parseSettings(this.readJson(path.join(this.root, 'settings.json')));
+        const pc = parseSettings(this.readJson(this.settingsFile()));
+        const file = this.accountFile();
+        return file ? { ...pc, ...parseAccount(this.readJson(file)) } : pc;
     }
 
     writeSettings(s: AppSettings): void {
-        writeJsonAtomic(path.join(this.root, 'settings.json'), parseSettings(s));
+        const clean = parseSettings(s);
+        const file = this.accountFile();
+        if (!file) {
+            writeJsonAtomic(this.settingsFile(), clean);
+            return;
+        }
+        // The account's part goes to its own file; settings.json keeps what belongs to this PC.
+        const { selectedServerId, joinedServerIds, eulaAccepted, ...pc } = clean;
+        writeJsonAtomic(this.settingsFile(), { ...parseSettings(this.readJson(this.settingsFile())), ...pc });
+        writeJsonAtomic(file, { selectedServerId, joinedServerIds, eulaAccepted });
+    }
+
+    private settingsFile(): string {
+        return path.join(this.root, 'settings.json');
+    }
+
+    private accountFile(): string | null {
+        return this.account ? path.join(this.root, ACCOUNTS, this.account, 'account.json') : null;
+    }
+
+    /** The first account on this PC inherits the servers selected and joined before accounts were separated. */
+    private seedAccount(key: string): void {
+        const file = path.join(this.root, ACCOUNTS, key, 'account.json');
+        if (fs.existsSync(file)) return;
+        let others: string[] = [];
+        try {
+            others = fs.readdirSync(path.join(this.root, ACCOUNTS)).filter((name) => name !== key);
+        } catch {
+            // no accounts yet
+        }
+        const legacy = parseSettings(this.readJson(this.settingsFile()));
+        const inherit = others.length === 0;
+        writeJsonAtomic(file, {
+            selectedServerId: inherit ? legacy.selectedServerId : null,
+            joinedServerIds: inherit ? legacy.joinedServerIds : [],
+            eulaAccepted: false,
+        });
     }
 
     /* -------------------------------------------------------------- per-server files */
@@ -262,7 +323,22 @@ export class AppData {
 
     private serverDir(id: string): string {
         if (!isValidServerId(id)) throw new AppError('INVALID', 'Invalid server id.', JSON.stringify(id));
-        return path.join(this.serversRoot, id);
+        const dir = path.join(this.serversRoot, id);
+        if (this.account) this.adoptLegacy(id, dir);
+        return dir;
+    }
+
+    /** Moves a server's data from the shared, older location to the first account that uses that server. */
+    private adoptLegacy(id: string, dir: string): void {
+        const legacy = path.join(this.root, 'servers', id);
+        if (fs.existsSync(dir) || !fs.existsSync(legacy)) return;
+        try {
+            fs.mkdirSync(path.dirname(dir), { recursive: true });
+            renameWithRetry(legacy, dir);
+            console.log(`[appData] moved the data of server ${id} to account ${this.account}`);
+        } catch (err) {
+            console.warn(`[appData] could not move the data of server ${id}:`, err);
+        }
     }
 
     private serverFile(id: string, name: string): string {
@@ -312,7 +388,15 @@ function parseSettings(raw: unknown): AppSettings {
         usePlayitgg: typeof r.usePlayitgg === 'boolean' ? r.usePlayitgg : DEFAULT_SETTINGS.usePlayitgg,
         launchServer: typeof r.launchServer === 'boolean' ? r.launchServer : DEFAULT_SETTINGS.launchServer,
         joinedServerIds: Array.isArray(r.joinedServerIds) ? unique(r.joinedServerIds.filter(isValidServerId)) : [],
+        eulaAccepted: r.eulaAccepted === true,
+        notifications: typeof r.notifications === 'boolean' ? r.notifications : DEFAULT_SETTINGS.notifications,
+        notificationSound: typeof r.notificationSound === 'boolean' ? r.notificationSound : DEFAULT_SETTINGS.notificationSound,
     };
+}
+
+function parseAccount(raw: unknown): Pick<AppSettings, 'selectedServerId' | 'joinedServerIds' | 'eulaAccepted'> {
+    const s = parseSettings(raw);
+    return { selectedServerId: s.selectedServerId, joinedServerIds: s.joinedServerIds, eulaAccepted: s.eulaAccepted };
 }
 
 function parseServerSettings(raw: unknown): ServerSettings {

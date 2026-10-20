@@ -180,6 +180,9 @@ describe('legacy import', () => {
             usePlayitgg: true,
             launchServer: false,
             joinedServerIds: ['srvB', 'srvC'],
+            eulaAccepted: false,
+            notifications: true,
+            notificationSound: true,
         });
         const flags = { minRAM: 1024, maxRAM: 6144, customFlags: '' };
         expect(appData.readServerSettings('srvA')).toEqual({ localPath: local, javaFlags: flags });
@@ -259,5 +262,43 @@ describe('upload journal log', () => {
         appData.appendJournalLog(SERVER, [{ t: 'start', p: 'a' }]);
         fs.appendFileSync(path.join(root, 'servers', SERVER, 'journal.log'), '{"t":"done","p":"a","id":"x","md');
         expect(appData.readJournalLog(SERVER)).toEqual([{ t: 'start', p: 'a' }]);
+    });
+});
+
+describe('accounts', () => {
+    const settingsOf = (data: AppData) => data.readSettings();
+
+    test('each account keeps its own servers, so two accounts can use the same folder', () => {
+        appData.setAccount('Alice@Example.com');
+        appData.writeServerSettings('srvA', { localPath: 'D:\\MC', javaFlags: { ...DEFAULT_JAVA_FLAGS } });
+        expect(appData.serverIds()).toEqual(['srvA']);
+        appData.setAccount('bob@example.com');
+        expect(appData.serverIds()).toEqual([]);
+        expect(appData.readServerSettings('srvA').localPath).toBeNull();
+        appData.writeServerSettings('srvB', { localPath: 'D:\\MC', javaFlags: { ...DEFAULT_JAVA_FLAGS } });
+        appData.setAccount('alice@example.com');
+        expect(appData.serverIds()).toEqual(['srvA']);
+        expect(fs.existsSync(path.join(root, 'accounts', 'alice@example.com', 'servers', 'srvA', 'settings.json'))).toBe(true);
+    });
+
+    test('selected and joined servers and the EULA belong to the account, the rest to the PC', () => {
+        appData.setAccount('alice@example.com');
+        appData.writeSettings({ ...settingsOf(appData), selectedServerId: 'srvA', joinedServerIds: ['srvJ'], eulaAccepted: true, launchServer: false });
+        appData.setAccount('bob@example.com');
+        expect(settingsOf(appData)).toMatchObject({ selectedServerId: null, joinedServerIds: [], eulaAccepted: false, launchServer: false });
+        appData.setAccount('alice@example.com');
+        expect(settingsOf(appData)).toMatchObject({ selectedServerId: 'srvA', joinedServerIds: ['srvJ'], eulaAccepted: true });
+    });
+
+    test('data from before accounts moves to the first account that uses the server', () => {
+        appData.writeServerSettings('old', { localPath: 'D:\\Old', javaFlags: { ...DEFAULT_JAVA_FLAGS } });
+        appData.writeSettings({ ...settingsOf(appData), joinedServerIds: ['old'] });
+        appData.setAccount('alice@example.com');
+        expect(settingsOf(appData).joinedServerIds).toEqual(['old']);
+        expect(appData.readServerSettings('old').localPath).toBe('D:\\Old');
+        expect(fs.existsSync(path.join(root, 'servers', 'old'))).toBe(false);
+        appData.setAccount('bob@example.com');
+        expect(settingsOf(appData).joinedServerIds).toEqual([]);
+        expect(appData.readServerSettings('old').localPath).toBeNull();
     });
 });

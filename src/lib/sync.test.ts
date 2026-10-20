@@ -188,7 +188,7 @@ describe('describeReport', () => {
 
     test('new server, missing folder and errors', () => {
         expect(describeReport(report({ status: 'new-server', plan: { ...emptyPlan(), upload: ['a'] }, uploadBytes: 100 }), ctx).body)
-            .toBe('This folder becomes the first version: 1 file (100 B) will be uploaded when your first session ends.');
+            .toBe('This folder becomes the first version: 1 file (100 B) will be uploaded when your first session ends. The first upload takes much longer than later ones, because every folder and file has to be created on Google Drive.');
         expect(describeReport(report({ status: 'no-local-path' }), ctx).title).toBe('Choose a folder on this PC');
         expect(describeReport(report({ status: 'error', error: 'Offline.' }), ctx).body).toBe('Offline.');
     });

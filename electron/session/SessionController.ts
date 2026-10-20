@@ -5,6 +5,7 @@ import type {
     AppErrorInfo, ConflictChoice, LockPhase, LockView, SessionPhase, SessionProgress, SessionState, StepMessage,
     SyncReport, TransferSnapshot, UserInfo,
 } from '../../shared/types';
+import { formatDuration } from '../../shared/duration';
 import { ancestorsOf, parentOf } from '../../shared/paths';
 import { AppError, toAppError } from '../errors';
 import type { LockService } from '../lock/LockService';
@@ -35,6 +36,9 @@ export interface SessionDeps {
     lockPollMs?: number;
     sleep?: (ms: number) => Promise<void>;
     timeouts?: { playitMs?: number; minecraftMs?: number; stopMs?: number };
+    /** Tells the user (notification, chime) that a start or stop finished. */
+    notify?: (n: { title: string; body: string; outcome: 'done' | 'failed' }) => void;
+    serverName?: (serverId: string) => string | null;
 }
 
 const MAX_STEPS = 100;
@@ -42,6 +46,9 @@ const MAX_CONSOLE = 1000;
 const LOCK_PHASES = new Set<SessionPhase>(['downloading', 'launching', 'running', 'stopping', 'uploading']);
 const IDLE_PHASES = new Set<SessionPhase>(['idle', 'failed']);
 const STARTING_PHASES = new Set<SessionPhase>(['checking', 'claiming', 'downloading', 'launching']);
+const FIRST_UPLOAD_NOTE = 'First upload of this server: every folder and file has to be created on Google Drive, so this takes much longer than later uploads.';
+
+type UploadKind = 'stop' | 'retry' | 'resume' | 'up';
 
 const IDLE: SessionState = {
     phase: 'idle', serverId: null, startedAt: null, address: null, players: [], javaRunning: false, error: null,
@@ -196,6 +203,9 @@ export class SessionController {
         let report: SyncReport;
         try {
             this.progress.enter('check', 'Checking the server');
+            if (settings.launchServer && !settings.eulaAccepted) {
+                throw new AppError('INVALID', 'Accept the Minecraft EULA before starting the server.');
+            }
             report = await this.preflight(serverId, this.progress);
             this.checkReport(report);
             this.progress.setTotal('download', downloadCount(report));
@@ -231,7 +241,7 @@ export class SessionController {
                 this.onMinecraftOutput([`[System] Starting the Minecraft server (${new Date(this.now()).toLocaleTimeString()})`]);
                 await this.d.minecraft.start({
                     serverPath: server.localPath ?? '', javaFlags: server.javaFlags,
-                    readyTimeoutMs: this.d.timeouts?.minecraftMs ?? 180_000, signal,
+                    readyTimeoutMs: this.d.timeouts?.minecraftMs ?? 180_000, signal, acceptEula: settings.eulaAccepted,
                 });
                 this.setState({ javaRunning: true });
                 this.progress.complete('java', 'The Minecraft server is ready');
@@ -246,6 +256,8 @@ export class SessionController {
             if (server.localPath) await this.d.changes.start(server.localPath, await this.d.sync.loadRules(serverId));
             this.progress.complete('watch', 'Hosting');
             this.progress.finish('done');
+            this.announce(serverId, 'done', `${this.nameOf(serverId)} is running`,
+                `${address ? `Friends can join at ${address}. ` : ''}Started in ${this.elapsed()}.`);
         } catch (err) {
             const info = this.lockLost ? this.lostInfo() : toAppError(err);
             this.abort?.abort();
@@ -260,6 +272,7 @@ export class SessionController {
             }
             console.warn('[session] start failed:', info.detail ?? info.message);
             this.setState({ ...IDLE, phase: 'failed', serverId, error: info });
+            this.announce(serverId, 'failed', `${this.nameOf(serverId)} could not start`, info.message);
             throw new AppError(info.code, info.message, info.detail);
         }
     }
@@ -321,7 +334,7 @@ export class SessionController {
         const playitRunning = this.state.address !== null;
         this.progress.begin('Stopping and uploading', this.uploadPlan({
             stopJava: javaRunning, stopPlayit: playitRunning, ...this.estimateUpload(serverId),
-        }));
+        }), this.uploadNote(serverId));
         await this.enter('stopping');
         await this.d.changes.stop();
         if (javaRunning) this.progress.enter('stop-java', 'Stopping the Minecraft server (it saves the world first)');
@@ -342,12 +355,19 @@ export class SessionController {
         this.setState({ address: null });
         if (playitRunning) this.progress.complete('stop-playit', 'playit.gg has stopped');
         if (this.lockLost) return;
-        await this.upload(serverId);
+        await this.upload(serverId, 'stop');
+    }
+
+    private uploadNote(serverId: string): string | null {
+        const report = this.report?.serverId === serverId ? this.report : null;
+        const first = report ? report.status === 'new-server' : this.d.sync.baseRevision(serverId) === 0;
+        return first ? FIRST_UPLOAD_NOTE : null;
     }
 
     /** The stages of an upload. Folder and file counts are estimates until the scan has run. */
-    private uploadPlan(o: { claim?: boolean; stopJava?: boolean; stopPlayit?: boolean; files: number; folders: number }): StagePlan[] {
+    private uploadPlan(o: { check?: boolean; claim?: boolean; stopJava?: boolean; stopPlayit?: boolean; files: number; folders: number }): StagePlan[] {
         const plan: StagePlan[] = [];
+        if (o.check) plan.push({ key: 'check', label: 'Checking the server', total: 1 });
         if (o.claim) plan.push({ key: 'claim', label: 'Reserving the server', total: 1 });
         if (o.stopJava) plan.push({ key: 'stop-java', label: 'Stopping the Minecraft server', total: 1 });
         if (o.stopPlayit) plan.push({ key: 'stop-playit', label: 'Stopping playit.gg', total: 1 });
@@ -398,7 +418,7 @@ export class SessionController {
         this.setState({ javaRunning: false, error: null });
         const holding = this.d.lock.isHolding(serverId);
         const failed = this.lastTransfer?.filesFailed ?? 0;
-        this.progress.begin('Retrying the failed uploads', this.uploadPlan({ claim: !holding, files: failed, folders: 0 }));
+        this.progress.begin('Retrying the failed uploads', this.uploadPlan({ claim: !holding, files: failed, folders: 0 }), this.uploadNote(serverId));
         this.step(failed > 0 ? `Retrying the ${failed === 1 ? 'file' : `${failed} files`} that failed to upload` : 'Retrying the upload', 'done', 'major');
         if (!holding) {
             try {
@@ -412,11 +432,11 @@ export class SessionController {
                 throw err;
             }
         }
-        await this.upload(serverId);
+        await this.upload(serverId, 'retry');
     }
 
     /** uploading -> releasing -> idle; on failure upload-pending, still holding the lock. */
-    private async upload(serverId: string): Promise<void> {
+    private async upload(serverId: string, kind: UploadKind): Promise<void> {
         await this.enter('uploading');
         try {
             await this.d.sync.uploadSession(serverId, this.abort?.signal, this.progress);
@@ -424,6 +444,7 @@ export class SessionController {
             if (this.lockLost) return;
             const info = toAppError(err);
             this.progress.finish('failed', info.message);
+            this.announce(serverId, 'failed', `The upload of ${this.nameOf(serverId)} did not finish`, info.message);
             if (info.code === 'CONFLICT') {
                 // Someone committed while we were not holding the lock: keep the files, let the user choose.
                 this.d.sync.discardJournal(serverId);
@@ -441,7 +462,129 @@ export class SessionController {
         this.progress.complete('release', 'The server is free for the others');
         this.progress.finish('done');
         this.setState({ ...IDLE, serverId: null });
+        this.announce(serverId, 'done', `${this.nameOf(serverId)} is saved to the cloud`,
+            `${kind === 'retry' ? 'The retried upload finished' : 'Uploaded'} in ${this.elapsed()}. The server is free for the others.`);
         void this.refreshAfterSession(serverId);
+    }
+
+    /* ------------------------------------------------------------------ sync without playing */
+
+    /** Downloads the latest version, or uploads this PC's changes, under the lock and without starting anything. */
+    syncNow(serverId: string, direction: 'down' | 'up'): Promise<void> {
+        if (this.isBusy()) return Promise.reject(new AppError('BUSY', 'A session is already in progress.'));
+        const run = direction === 'down' ? this.runSyncDown(serverId) : this.runSyncUp(serverId);
+        this.current = run.catch(() => undefined);
+        return run;
+    }
+
+    /** Starts a sync-only run: finishes an unfinished upload first, then checks the server. When the check says
+     *  no, the state goes back to idle and the error is thrown. */
+    private async checkForSync(serverId: string, title: string, plan: StagePlan[], note: string | null): Promise<SyncReport> {
+        this.stopPolling();
+        this.setState({ ...IDLE, phase: 'checking', serverId });
+        if (this.d.sync.hasJournal(serverId) && !(await this.finishUnfinishedUpload(serverId))) {
+            const info = this.state.error ?? { code: 'UNFINISHED_UPLOAD' as const, message: 'Your last upload of this server has not finished yet. Try again in a minute.' };
+            if (this.state.phase === 'checking') this.setState({ ...IDLE });
+            throw new AppError(info.code, info.message, info.detail);
+        }
+        this.lockLost = false;
+        this.cancelled = false;
+        this.abort = new AbortController();
+        this.setState({ ...IDLE, phase: 'checking', serverId });
+        this.progress.begin(title, plan, note);
+        try {
+            this.progress.enter('check', 'Checking the server');
+            const report = await this.preflight(serverId, this.progress);
+            this.checkReport(report);
+            this.progress.complete('check', 'Checked the server');
+            return report;
+        } catch (err) {
+            this.progress.finish('failed', toAppError(err).message);
+            this.setState({ ...IDLE });
+            this.schedulePoll();
+            throw err;
+        }
+    }
+
+    private async runSyncDown(serverId: string): Promise<void> {
+        const known = this.report?.serverId === serverId ? this.report : null;
+        const report = await this.checkForSync(serverId, 'Downloading the latest version', [
+            { key: 'check', label: 'Checking the server', total: 1 },
+            { key: 'claim', label: 'Reserving the server', total: 1 },
+            { key: 'scan', label: 'Checking your files', total: 1 },
+            { key: 'download', label: 'Downloading files', total: known ? downloadCount(known) : 0 },
+            { key: 'release', label: 'Releasing the server', total: 1 },
+        ], null);
+        try {
+            this.progress.setTotal('download', downloadCount(report));
+            this.setState({ phase: 'claiming' });
+            this.progress.enter('claim', 'Reserving the server');
+            await this.claim(serverId, report);
+            this.progress.complete('claim', 'The server is reserved for you');
+            await this.enter('downloading');
+            await this.d.sync.download(serverId, report, this.abort?.signal, this.progress);
+            this.throwIfLost();
+            this.setState({ phase: 'releasing' });
+            this.progress.enter('release', 'Releasing the server');
+            await this.d.lock.releaseIfMine(serverId);
+            this.progress.complete('release', 'The server is free for the others');
+            this.progress.finish('done');
+            this.setState({ ...IDLE });
+            this.announce(serverId, 'done', `${this.nameOf(serverId)} is up to date`, `Downloaded the latest version in ${this.elapsed()}.`);
+            void this.refreshAfterSession(serverId);
+        } catch (err) {
+            const info = this.lockLost ? this.lostInfo() : toAppError(err);
+            this.progress.finish('failed', info.message);
+            await this.d.lock.releaseIfMine(serverId);
+            this.setState({ ...IDLE, phase: 'failed', serverId, error: info });
+            this.announce(serverId, 'failed', `${this.nameOf(serverId)} could not be downloaded`, info.message);
+            throw new AppError(info.code, info.message, info.detail);
+        }
+    }
+
+    private async runSyncUp(serverId: string): Promise<void> {
+        const report = await this.checkForSync(serverId, 'Uploading your changes',
+            this.uploadPlan({ check: true, claim: true, ...this.estimateUpload(serverId) }), this.uploadNote(serverId));
+        const refuse = (message: string): never => {
+            this.progress.finish('failed', message);
+            this.setState({ ...IDLE });
+            this.schedulePoll();
+            throw new AppError('INVALID', message);
+        };
+        if (report.status === 'in-sync') refuse('Nothing changed on this PC, so there is nothing to upload.');
+        if (report.status === 'cloud-newer') refuse('The cloud is newer than your copy. Download the latest version first.');
+        if (report.status === 'diverged') refuse('Your copy and the cloud both changed. Download the latest version (or choose which version to keep) first.');
+        try {
+            this.setState({ phase: 'claiming' });
+            this.progress.enter('claim', 'Reserving the server');
+            await this.d.lock.claim(serverId, report.baseRevision ?? 0, { phase: 'uploading' });
+            this.progress.complete('claim', 'The server is reserved for you');
+        } catch (err) {
+            const info = toAppError(err);
+            this.progress.finish('failed', info.message);
+            await this.d.lock.releaseIfMine(serverId);
+            this.setState({ ...IDLE, phase: 'failed', serverId, error: info });
+            throw new AppError(info.code, info.message, info.detail);
+        }
+        await this.upload(serverId, 'up');
+    }
+
+    private nameOf(serverId: string): string {
+        return this.d.serverName?.(serverId) ?? 'The server';
+    }
+
+    /** How long the current (or last) run took, as text. */
+    private elapsed(): string {
+        const started = this.progress.snapshot().startedAt;
+        return formatDuration(started ? this.now() - Date.parse(started) : 0);
+    }
+
+    private announce(serverId: string, outcome: 'done' | 'failed', title: string, body: string): void {
+        try {
+            this.d.notify?.({ title, body, outcome });
+        } catch (err) {
+            console.warn(`[session] could not notify about ${serverId}:`, err);
+        }
     }
 
     private async refreshAfterSession(serverId: string): Promise<void> {
@@ -542,7 +685,7 @@ export class SessionController {
     private async finishUnfinishedUpload(serverId: string): Promise<boolean> {
         if (!this.d.settings.getServer(serverId).localPath) return false;
         this.setState({ error: null });
-        this.progress.begin('Finishing your last upload', this.uploadPlan({ claim: true, files: 0, folders: 0 }));
+        this.progress.begin('Finishing your last upload', this.uploadPlan({ claim: true, files: 0, folders: 0 }), this.uploadNote(serverId));
         try {
             this.progress.enter('claim', 'Reserving the server');
             await this.d.lock.claim(serverId, this.d.sync.baseRevision(serverId), { phase: 'uploading', allowStaleFromMe: true });
@@ -556,7 +699,7 @@ export class SessionController {
         this.lockLost = false;
         this.abort = new AbortController();
         this.setState({ ...IDLE, phase: 'uploading', serverId });
-        await this.upload(serverId);
+        await this.upload(serverId, 'resume');
         return !this.d.sync.hasJournal(serverId);
     }
 
@@ -622,6 +765,7 @@ export class SessionController {
         const before = this.stepLog[index];
         if (before.message === message && before.status === status) return;
         const entry: StepMessage = { ...before, message, status };
+        if (before.status === 'loading' && status !== 'loading') entry.endedAt = new Date(this.now()).toISOString();
         this.stepLog[index] = entry;
         this.d.events.emit('session:step', entry);
     }

@@ -31,7 +31,7 @@ const EMIT_EVERY_MS = 150;
 
 const IDLE: SessionProgress = {
     active: false, title: '', message: '', unitsDone: 0, unitsTotal: 0, fraction: 0, stages: [],
-    outcome: 'done', startedAt: null, endedAt: null,
+    outcome: 'done', startedAt: null, endedAt: null, note: null,
 };
 
 export class OrchestrationProgress implements ProgressSink {
@@ -44,6 +44,7 @@ export class OrchestrationProgress implements ProgressSink {
     private startedAt: string | null = null;
     private endedAt: string | null = null;
     private failureMessage: string | null = null;
+    private note: string | null = null;
     private timer: ReturnType<typeof setTimeout> | null = null;
     private lastEmit = 0;
     private readonly now: () => number;
@@ -58,8 +59,9 @@ export class OrchestrationProgress implements ProgressSink {
     }
 
     /** Starts a new run. Stages with total 0 are kept (their size may become known) but weigh nothing yet. */
-    begin(title: string, plan: StagePlan[]): void {
+    begin(title: string, plan: StagePlan[], note: string | null = null): void {
         this.title = title;
+        this.note = note;
         this.stages = plan.map((p) => ({
             key: p.key, label: p.label, total: Math.max(0, p.total), done: 0, settled: 0, live: 0,
             state: 'pending', message: p.label, taskId: null,
@@ -196,6 +198,7 @@ export class OrchestrationProgress implements ProgressSink {
             outcome: this.outcome,
             startedAt: this.startedAt,
             endedAt: this.endedAt,
+            note: this.note,
         };
     }
 

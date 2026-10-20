@@ -184,6 +184,9 @@ const PILLS: Record<SyncStatus, { tone: Tone; pill: string }> = {
     error: { tone: 'bad', pill: 'Error' },
 };
 
+/** Shown wherever a first upload is about to happen or is running. */
+export const FIRST_UPLOAD_HINT = 'The first upload takes much longer than later ones, because every folder and file has to be created on Google Drive.';
+
 export const CHOICE_LABELS: Record<ConflictChoice, string> = {
     'keep-cloud': 'Keep cloud version',
     'keep-local': 'Keep my version',
@@ -311,7 +314,7 @@ export function describeReport(report: SyncReport, ctx: CopyContext): CardCopy {
             return {
                 tone, pill, title: 'Nothing in the cloud yet',
                 body: count > 0
-                    ? `This folder becomes the first version: ${plural(count, 'file')} (${formatBytes(report.uploadBytes)}) will be uploaded when your first session ends.`
+                    ? `This folder becomes the first version: ${plural(count, 'file')} (${formatBytes(report.uploadBytes)}) will be uploaded when your first session ends. ${FIRST_UPLOAD_HINT}`
                     : 'This folder is empty. Put your server files in it and press Start; they are uploaded when the session ends.',
             };
         }

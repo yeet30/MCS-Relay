@@ -45,6 +45,9 @@ export interface AppSettings {
     usePlayitgg: boolean;
     launchServer: boolean;              // false = the app only syncs and holds the lock; you run Java yourself
     joinedServerIds: ServerId[];
+    eulaAccepted: boolean;              // this Google account accepted the Minecraft EULA in the app
+    notifications: boolean;             // a desktop notification when a start or stop finishes in the background
+    notificationSound: boolean;         // a short chime when a start or stop finishes
 }
 
 export interface ServerSettings {
@@ -199,6 +202,7 @@ export interface StepMessage {
     status: 'loading' | 'done' | 'error';
     importance: 'major' | 'minor';
     at: string;
+    endedAt?: string;                   // when a task's line stopped loading: the UI shows how long it took
 }
 
 /* ------------------------------------------------------------------ progress of a whole start or stop */
@@ -228,6 +232,7 @@ export interface SessionProgress {
     outcome: 'running' | 'done' | 'failed' | 'cancelled';
     startedAt: string | null;
     endedAt: string | null;
+    note: string | null;                // a hint for this run, e.g. that a first upload takes long
 }
 
 /* ------------------------------------------------------------------ transfers */
@@ -240,6 +245,7 @@ export interface LaneView {
     size: number;
     state: 'active' | 'idle' | 'backoff';
     retryInMs: number | null;
+    elapsedMs: number | null;           // how long the job in this lane has been running
 }
 
 export type TransferKind = 'download' | 'upload' | 'delete-remote' | 'delete-local' | 'create-folder';

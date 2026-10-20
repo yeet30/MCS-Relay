@@ -33,6 +33,17 @@
         overflow-y: auto;
     }
 
+    .popup-link {
+        display: block;
+        margin-top: 12px;
+        padding: 0;
+        background: none;
+        border: none;
+        color: #8b91ff;
+        text-decoration: underline;
+        font-size: 0.9rem;
+    }
+
     #popup-options{
         display: flex;
         flex-direction: row;

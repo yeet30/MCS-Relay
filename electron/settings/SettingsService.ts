@@ -50,6 +50,9 @@ export class SettingsService {
         }
         if ('usePlayitgg' in patch) next.usePlayitgg = requireBoolean(patch.usePlayitgg, 'usePlayitgg');
         if ('launchServer' in patch) next.launchServer = requireBoolean(patch.launchServer, 'launchServer');
+        if ('eulaAccepted' in patch) next.eulaAccepted = requireBoolean(patch.eulaAccepted, 'eulaAccepted');
+        if ('notifications' in patch) next.notifications = requireBoolean(patch.notifications, 'notifications');
+        if ('notificationSound' in patch) next.notificationSound = requireBoolean(patch.notificationSound, 'notificationSound');
         this.appData.writeSettings(next);
         return next;
     }

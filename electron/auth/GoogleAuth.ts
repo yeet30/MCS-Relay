@@ -43,6 +43,8 @@ export interface GoogleAuthDeps {
     fetchImpl?: typeof fetch;
     loginTimeoutMs?: number;
     now?: () => number;
+    /** Called when the signed-in account changes (null: signed out), so per-account data can follow it. */
+    onUserChanged?: (user: UserInfo | null) => void;
 }
 
 const LOGGED_OUT: AuthStatus = { loggedIn: false, user: null, collaborationEnabled: false };
@@ -277,6 +279,7 @@ export class GoogleAuth {
     private user: UserInfo | null = null;
     private userLoading: Promise<UserInfo> | null = null;
     private pendingLogin: AbortController | null = null;
+    private announced: string | null = null;
 
     constructor(private readonly deps: GoogleAuthDeps) {
         this.store = new TokenStore(deps.userDataDir, deps.safeStorage);
@@ -357,7 +360,10 @@ export class GoogleAuth {
             const generation = this.generation;
             this.userLoading = this.loadUser()
                 .then((user) => {
-                    if (generation === this.generation) this.user = user;
+                    if (generation === this.generation) {
+                        this.user = user;
+                        this.announce(user);
+                    }
                     return user;
                 })
                 .finally(() => {
@@ -434,6 +440,18 @@ export class GoogleAuth {
         this.user = user;
         this.userLoading = null;
         this.setTokens(tokens);
+        if (user) this.announce(user);
+    }
+
+    private announce(user: UserInfo | null): void {
+        const email = user?.email.toLowerCase() ?? null;
+        if (email === this.announced) return;
+        this.announced = email;
+        try {
+            this.deps.onUserChanged?.(user);
+        } catch (err) {
+            console.error('[auth] onUserChanged failed:', describe(err));
+        }
     }
 
     private setTokens(tokens: Credentials): void {
@@ -457,6 +475,7 @@ export class GoogleAuth {
         this.userLoading = null;
         this.oauth?.setCredentials({});
         this.store.clear();
+        this.announce(null);
     }
 
     private async revoke(token: string): Promise<void> {

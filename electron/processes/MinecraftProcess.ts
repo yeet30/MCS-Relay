@@ -277,7 +277,8 @@ export class MinecraftProcess {
     }
 
     /** Resolves when the server prints "Done (". Rejects with AppError('JAVA' | 'TIMEOUT') if it exits first or times out (then kills it). */
-    async start(opts: { serverPath: string; javaFlags: JavaFlags; readyTimeoutMs: number; signal?: AbortSignal }): Promise<void> {
+    /** `acceptEula`: the user accepted the Minecraft EULA in the app, so eula.txt may be written for them. */
+    async start(opts: { serverPath: string; javaFlags: JavaFlags; readyTimeoutMs: number; signal?: AbortSignal; acceptEula?: boolean }): Promise<void> {
         if (this.child || this.launching) throw new AppError('BUSY', 'The Minecraft server is already running.');
         const { serverPath, javaFlags, readyTimeoutMs, signal } = opts;
         this.launching = true;
@@ -292,7 +293,7 @@ export class MinecraftProcess {
             const { command, args } = MinecraftProcess.resolveLaunch(serverPath, javaFlags, this.platform);
             await this.checkJava(command);
             checkCancelled();
-            await ensureEula(serverPath);
+            await ensureEula(serverPath, opts.acceptEula ?? true);
             checkCancelled();
             console.log(`[minecraft] starting in ${serverPath}: ${command} ${args.join(' ')}`);
             let child: ChildProcess;
@@ -635,13 +636,15 @@ export class MinecraftProcess {
     }
 }
 
-/** Accepts the EULA, writing only when needed so the file does not show up as a change every session. */
-async function ensureEula(serverPath: string): Promise<void> {
+/** Writes eula=true for a user who accepted the EULA in the app, only when needed so the file does not show
+ *  up as a change every session. Without that acceptance Java is not started. */
+async function ensureEula(serverPath: string, accepted: boolean): Promise<void> {
     const file = path.join(serverPath, 'eula.txt');
     try {
         if (/^[ \t]*eula[ \t]*=[ \t]*true[ \t]*\r?$/im.test(await readFile(file, 'utf8'))) return;
     } catch (err) {
         if (!(typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT')) throw err;
     }
+    if (!accepted) throw new AppError('JAVA', 'The Minecraft EULA has not been accepted, so the server was not started.');
     await writeFile(file, 'eula=true\n');
 }

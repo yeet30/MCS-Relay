@@ -1,16 +1,18 @@
 import './burger-menu.css';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FolderTree, LoaderCircle, LogOut, SlidersHorizontal, Terminal } from 'lucide-react';
 import type { IModalItems } from '../../lib/ui-types';
 import { useAuthStore } from '../../stores/authStore';
 import { useServersStore } from '../../stores/serversStore';
 import JoinedDriveFolders from '../joined-drive-folders';
 import Modal from '../modal';
 import OwnedDriveFolders from '../owned-drive-folders';
+import Preferences from '../preferences';
 import ScriptsOptions from '../scripts-options';
 
 export default function BurgerMenu() {
-    const picture = useAuthStore((s) => s.user?.picture ?? '');
+    const user = useAuthStore((s) => s.user);
     const logout = useAuthStore((s) => s.logout);
     const navigate = useNavigate();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -32,27 +34,45 @@ export default function BurgerMenu() {
         setModalItems(items);
     }
 
+    const state = isMenuOpen ? 'open' : 'close';
     return (
         <section id='burger-wrapper'>
-            <Modal isOpen={modalItems !== null} onClose={() => setModalItems(null)} items={modalItems ?? []} height={360} />
-            <div id='menu-clicker' onClick={() => setIsMenuOpen(!isMenuOpen)} className={isMenuOpen ? 'open' : 'close'}>
-                {picture
-                    ? <img id='profile-picture' src={picture} alt='Profile Picture' width='40' height='40' referrerPolicy='no-referrer' />
-                    : <span id='profile-picture' />}
-                <span id='settings-span' className={isMenuOpen ? 'open' : 'close'}>Settings</span>
+            <Modal isOpen={modalItems !== null} onClose={() => setModalItems(null)} items={modalItems ?? []} width={460} height={380} />
+            <div id='menu-clicker' onClick={() => setIsMenuOpen(!isMenuOpen)} className={state}>
+                {user?.picture
+                    ? <img id='profile-picture' src={user.picture} alt='Profile Picture' width='40' height='40' referrerPolicy='no-referrer' />
+                    : <span id='profile-picture' className='initial'>{(user?.name ?? '?').charAt(0).toUpperCase()}</span>}
+                <span id='settings-span' className={state}>Settings</span>
                 <div id='hamburger-icon'>☰</div>
             </div>
-            <div id='drawer' className={isMenuOpen ? 'open' : 'close'}>
-                <ul className={isMenuOpen ? 'open' : 'close'}>
-                    <li onClick={() => open([{ title: 'Script Options', content: <ScriptsOptions /> }])}>Scripts</li>
-                    <li onClick={() => open([
-                        { title: 'Your Folders', content: <OwnedDriveFolders /> },
-                        { title: 'Joined Folders', content: <JoinedDriveFolders /> },
-                    ])}
-                    >Drive Folders</li>
-                    <li onClick={handleLogout}>Log Out</li>
-                    {loggingOut && <p>Logging out...</p>}
-                </ul>
+            <div id='drawer' className={state}>
+                <div className='drawer-body'>
+                    {user && (
+                        <div className='drawer-user'>
+                            <span className='drawer-name'>{user.name}</span>
+                            <span className='drawer-email' title={user.email}>{user.email}</span>
+                        </div>
+                    )}
+                    <ul>
+                        <li onClick={() => open([{ title: 'Script Options', content: <ScriptsOptions /> }])}>
+                            <Terminal size={15} /> Scripts
+                        </li>
+                        <li onClick={() => open([
+                            { title: 'Your Folders', content: <OwnedDriveFolders /> },
+                            { title: 'Joined Folders', content: <JoinedDriveFolders /> },
+                        ])}
+                        >
+                            <FolderTree size={15} /> Drive Folders
+                        </li>
+                        <li onClick={() => open([{ title: 'Preferences', content: <Preferences /> }])}>
+                            <SlidersHorizontal size={15} /> Preferences
+                        </li>
+                        <li className='danger' onClick={handleLogout}>
+                            {loggingOut ? <LoaderCircle size={15} className='spinner' /> : <LogOut size={15} />}
+                            {loggingOut ? 'Logging out…' : 'Log out'}
+                        </li>
+                    </ul>
+                </div>
             </div>
             {isMenuOpen && <div id='burger-overlay' onClick={() => setIsMenuOpen(false)} />}
         </section>

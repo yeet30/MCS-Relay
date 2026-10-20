@@ -54,6 +54,8 @@ export interface Commands {
     'session:stop': () => void;
     'session:resolve': (serverId: ServerId, choice: ConflictChoice) => SyncReport;
     'session:retryUpload': () => void;
+    /** Sync without playing: download the latest version, or upload this PC's changes, under the lock. */
+    'session:syncNow': (serverId: ServerId, direction: 'down' | 'up') => void;
     'session:dismiss': () => void;
     'session:command': (command: string) => void;
     'session:changes': () => ChangeBatch;
@@ -91,6 +93,8 @@ export interface Events {
     'console:output': string[];
     'app:confirmQuit': QuitPrompt;
     'app:quitting': null;
+    /** A start or stop finished: play the chime (sent only when the sound is on). */
+    'app:chime': { outcome: 'done' | 'failed' };
 }
 
 export type CommandName = keyof Commands;

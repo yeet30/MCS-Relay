@@ -51,6 +51,8 @@ export interface ServersServiceDeps {
 const ROLE_ORDER: MemberRole[] = ['owner', 'organizer', 'fileOrganizer', 'writer', 'commenter', 'reader'];
 
 export class ServersService {
+    /** Server names from the last listing, for notifications. */
+    private readonly names = new Map<string, string>();
     private readonly drive: ServersDrive;
     private readonly launcher: LauncherFiles;
     private readonly auth: { me(): Promise<UserInfo> };
@@ -132,6 +134,12 @@ export class ServersService {
         if (trimmed === '') throw new AppError('INVALID', 'The server name cannot be empty.');
         if (trimmed.length > MAX_NAME_LENGTH) throw new AppError('INVALID', `The server name can be at most ${MAX_NAME_LENGTH} characters long.`);
         await this.drive.rename(id, trimmed);
+        this.names.set(id, trimmed);
+    }
+
+    /** The name a server had in the last listing (null when it was never listed). */
+    nameOf(id: string): string | null {
+        return this.names.get(id) ?? null;
     }
 
     async invite(id: string, email: string, role: 'writer' | 'reader', message: string): Promise<void> {
@@ -239,6 +247,7 @@ export class ServersService {
             .map(toMember)
             .sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || a.name.localeCompare(b.name));
         const mine = members.find((m) => sameEmail(m.email, me.email));
+        this.names.set(meta.id, meta.name);
         return {
             id: meta.id,
             name: meta.name,

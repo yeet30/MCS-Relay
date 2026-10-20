@@ -22,6 +22,7 @@ interface Entry {
     state: EntryState;
     slot: number | null;                // index into slots; lane number = slot + 1
     retryAt: number | null;
+    startedAt: number | null;
 }
 
 export class ProgressReporter {
@@ -87,6 +88,7 @@ export class ProgressReporter {
         entry.state = 'active';
         entry.bytesDone = 0;
         entry.retryAt = null;
+        entry.startedAt = this.now();
         return entry.slot + 1;
     }
 
@@ -166,7 +168,7 @@ export class ProgressReporter {
         for (let i = 0; i < laneCount; i++) {
             const entry = this.slots[i] ?? null;
             if (!entry) {
-                lanes.push({ lane: i + 1, path: null, kind: null, bytesDone: 0, size: 0, state: 'idle', retryInMs: null });
+                lanes.push({ lane: i + 1, path: null, kind: null, bytesDone: 0, size: 0, state: 'idle', retryInMs: null, elapsedMs: null });
                 continue;
             }
             inLanes += 1;
@@ -180,6 +182,7 @@ export class ProgressReporter {
                 size: entry.size,
                 state: backoff ? 'backoff' : 'active',
                 retryInMs: backoff && entry.retryAt !== null ? Math.max(0, entry.retryAt - now) : null,
+                elapsedMs: entry.startedAt !== null ? Math.max(0, now - entry.startedAt) : null,
             });
         }
         const bytesDone = this.doneBytes + inFlightBytes;
@@ -224,7 +227,7 @@ export class ProgressReporter {
     }
 
     private add(path: string, kind: TransferKind, size: number): Entry {
-        const entry: Entry = { path, kind, size: Math.max(0, size), bytesDone: 0, state: 'queued', slot: null, retryAt: null };
+        const entry: Entry = { path, kind, size: Math.max(0, size), bytesDone: 0, state: 'queued', slot: null, retryAt: null, startedAt: null };
         const list = this.entries.get(path);
         if (list) list.push(entry);
         else this.entries.set(path, [entry]);

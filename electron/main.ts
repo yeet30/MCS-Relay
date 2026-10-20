@@ -1,6 +1,6 @@
 // Composition root: creates every service once, wires them together, and owns the window, the tray
 // and the quit flow. No business logic lives here.
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, safeStorage, shell, Tray } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, Notification, safeStorage, shell, Tray } from 'electron';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { GoogleAuth } from './auth/GoogleAuth';
@@ -47,6 +47,8 @@ const auth = new GoogleAuth({
     credentialsPath: path.join(app.getAppPath(), 'config', 'client_secret.json'),
     openExternal: (url) => shell.openExternal(url),
     safeStorage,
+    // Server folders, bases and journals are kept per Google account.
+    onUserChanged: (user) => appData.setAccount(user?.email ?? null),
 });
 const drive = new DriveFiles(new DriveClient({ auth }));
 const launcher = new LauncherFiles(drive);
@@ -75,7 +77,11 @@ const minecraft = new MinecraftProcess({
     onExit: (code, expected) => session.onMinecraftExit(code, expected),
 });
 const playit = new PlayitProcess();
-const session: SessionController = new SessionController({ lock, sync, changes, minecraft, playit, settings, events, me });
+const session: SessionController = new SessionController({
+    lock, sync, changes, minecraft, playit, settings, events, me,
+    notify: (n) => notifyUser(n),
+    serverName: (serverId) => servers.nameOf(serverId),
+});
 const servers = new ServersService({
     drive, launcher, auth, settings, appData, dialogs,
     beforeDelete: async (serverId) => {
@@ -86,6 +92,20 @@ const servers = new ServersService({
         return sync.markForeignFilesDeleted(serverId);
     },
 });
+
+/* ------------------------------------------------------------------ notifications */
+
+/** A start or stop finished: a chime (if on), and a desktop notification (if on) when the window is not in front. */
+function notifyUser(n: { title: string; body: string; outcome: 'done' | 'failed' }): void {
+    const prefs = settings.get();
+    if (prefs.notificationSound) events.emit('app:chime', { outcome: n.outcome });
+    const inFront = win !== null && win.isVisible() && win.isFocused();
+    if (!prefs.notifications || inFront || !Notification.isSupported()) return;
+    // silent: the chime above is the sound, so Windows does not play its own on top of it.
+    const notification = new Notification({ title: n.title, body: n.body, silent: true, icon: path.join(process.env.VITE_PUBLIC, 'launcher.ico') });
+    notification.on('click', showWindow);
+    notification.show();
+}
 
 /* ------------------------------------------------------------------ quit flow */
 
@@ -145,7 +165,8 @@ function createWindow(): void {
         height: 600,
         resizable: false,
         icon: path.join(process.env.VITE_PUBLIC, 'launcher.ico'),
-        webPreferences: { preload: path.join(__dirname, 'preload.mjs') },
+        // The chime is played by the page, also while the window is hidden in the tray.
+        webPreferences: { preload: path.join(__dirname, 'preload.mjs'), autoplayPolicy: 'no-user-gesture-required', backgroundThrottling: false },
     });
     win.on('minimize', () => win?.hide());            // minimised to the tray
     win.on('close', (event) => {
@@ -201,6 +222,9 @@ if (!app.requestSingleInstanceLock()) {
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
+
+    // Windows shows notifications only for an app with an id (in development: the Electron binary).
+    if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'com.yeet.drivelauncher' : process.execPath);
 
     void app.whenReady().then(async () => {
         appData.migrateLegacy();

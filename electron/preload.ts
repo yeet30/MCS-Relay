@@ -8,7 +8,7 @@ import type { BridgeApi, EventName } from '../shared/ipc';
 const EVENTS: Record<EventName, true> = {
     'session:state': true, 'session:step': true, 'session:progress': true, 'sync:report': true, 'lock:update': true,
     'transfer:progress': true, 'changes:batch': true, 'changes:reset': true, 'console:output': true,
-    'app:confirmQuit': true, 'app:quitting': true,
+    'app:confirmQuit': true, 'app:quitting': true, 'app:chime': true,
 };
 
 const api: BridgeApi = {

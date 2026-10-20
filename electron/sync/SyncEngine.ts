@@ -108,7 +108,7 @@ export function windowsPathProblem(relPath: string): string | null {
 export class SyncEngine {
     private readonly choices = new Map<string, ConflictChoice>();
     private cleaning: Promise<number> | null = null;
-    /** The last scan per server: preflight and the download that follows it do not hash the world twice. */
+    /** The last scan per server folder: preflight and the download that follows it do not hash the world twice. */
     private readonly lastScan = new Map<string, Snapshot>();
 
     constructor(private readonly d: SyncEngineDeps) {}
@@ -871,12 +871,13 @@ export class SyncEngine {
         serverId: string, root: string, base: Snapshot, isIgnored: (rel: string) => boolean, signal: AbortSignal | undefined,
         progress: ProgressSink = NO_PROGRESS, stage: ProgressStageKey = 'scan',
     ): Promise<Snapshot> {
-        const last = this.lastScan.get(serverId);
+        const key = `${serverId}|${root}`;
+        const last = this.lastScan.get(key);
         const known = last ? new Map([...base, ...last]) : base;
         const local = await scanLocal(root, known, isIgnored, signal, (done, total) => {
             progress.report(stage, done, total, `Checking your files (${count(done)} of ${count(total)})`);
         });
-        this.lastScan.set(serverId, local);
+        this.lastScan.set(key, local);
         return local;
     }
 

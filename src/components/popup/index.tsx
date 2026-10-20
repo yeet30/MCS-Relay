@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import './popup.css';
+import { useScrollLock } from '../../hooks/useScrollLock';
 
 interface PopupProps {
     isOpen: boolean;
@@ -11,6 +12,7 @@ interface PopupProps {
 }
 
 export default function Popup({ isOpen, onClose, onAccept, confirmingOption, decliningOption, children }: PopupProps) {
+    useScrollLock(isOpen);
     if (!isOpen) return null;
 
     return (

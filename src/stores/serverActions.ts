@@ -28,7 +28,7 @@ async function offerLocalPath(server: ServerSummary, confirm: ConfirmFn, what: s
 /** Creates a server folder in my Drive, then offers to choose its local folder. */
 export async function createServer(confirm: ConfirmFn): Promise<ServerSummary | null> {
     const accepted = await confirm({
-        message: 'This creates a new server folder inside "Minecraft Shared Servers" in your Google Drive. You can own up to 3 servers.\n\nDon\'t change the files in a server folder by hand while someone is hosting it.',
+        message: 'This creates a new server folder inside "Minecraft Shared Servers" in your Google Drive. You can own up to 3 servers.\n\nThe first upload of a server takes much longer than later ones, because every folder and file has to be created on Google Drive.\n\nDon\'t change the files in a server folder by hand while someone is hosting it.',
         confirmText: 'Create',
         cancelText: 'Cancel',
     });

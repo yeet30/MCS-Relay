@@ -21,7 +21,7 @@ export interface HandlerDeps {
         'list' | 'create' | 'delete' | 'rename' | 'invite' | 'removeMember' | 'leave' | 'join' | 'chooseLocalPath' | 'openFolder' | 'info'>;
     session: Pick<SessionController,
         'getState' | 'preflight' | 'lastReport' | 'start' | 'stop' | 'resolve' | 'retryUpload' | 'dismiss' | 'command'
-        | 'steps' | 'consoleLines' | 'select' | 'isBusy' | 'resumeUnfinishedUploads' | 'getProgress'>;
+        | 'steps' | 'consoleLines' | 'select' | 'isBusy' | 'resumeUnfinishedUploads' | 'getProgress' | 'syncNow'>;
     settings: Pick<SettingsService, 'get' | 'set' | 'getServer' | 'setServer' | 'choosePlayitPath'>;
     sync: Pick<SyncEngine, 'getRules' | 'setRules'>;
     transfers: Pick<TransferEngine, 'snapshot'>;
@@ -142,6 +142,7 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
     handle('session:stop', () => d.session.stop());
     handle('session:resolve', (serverId, choice) => d.session.resolve(id(serverId), oneOf(choice, CHOICES, 'choice')));
     handle('session:retryUpload', () => d.session.retryUpload());
+    handle('session:syncNow', (serverId, direction) => d.session.syncNow(id(serverId), oneOf(direction, ['down', 'up'] as const, 'direction')));
     handle('session:dismiss', () => d.session.dismiss());
     handle('session:command', (command) => d.session.command(text(command, 'command', { max: 1000 })));
     handle('session:changes', () => d.changes.all());

@@ -10,6 +10,7 @@ import { request } from '../../stores/request';
 import { createServer } from '../../stores/serverActions';
 import { selectSelectedServer, useServersStore } from '../../stores/serversStore';
 import { lockFor, reportFor, useSessionStore } from '../../stores/sessionStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { DirectoryMenu } from '../directory-menu';
 import FailedFiles from '../progress-card/failed-files';
 import JoinServer from '../join-server';
@@ -69,8 +70,8 @@ export default function AppCockpit() {
     const mode: PowerMode = readOnly && computed.kind === 'start'
         ? { kind: 'start', enabled: false, reason: 'You were invited as a reader, so you can watch this server but not host it.' }
         : computed;
-    // what I may do comes from my role on the server, never from a constant.
-    const canEditRules = selected !== null && (selected.myRole === 'owner' || selected.myRole === 'writer' || selected.kind === 'owned');
+    // What I may do comes from my role on the server, never from a constant.
+    const canWrite = selected !== null && (selected.myRole === 'owner' || selected.myRole === 'writer' || selected.kind === 'owned');
 
     async function handleCreate() {
         setCreating(true);
@@ -78,8 +79,23 @@ export default function AppCockpit() {
         setCreating(false);
     }
 
+    /** Mojang's EULA has to be accepted before a server runs; asked once per Google account. */
+    async function eulaAccepted(): Promise<boolean> {
+        const store = useSettingsStore.getState();
+        const prefs = store.settings ?? (await store.load());
+        if (!prefs || !prefs.launchServer || prefs.eulaAccepted) return true;
+        const accepted = await confirm({
+            message: 'A Minecraft server only runs after you accept the Minecraft End User License Agreement (EULA).\n\nDo you accept it? Drive Launcher remembers your answer for this Google account and writes eula=true into the server folder for you.',
+            confirmText: 'I accept',
+            cancelText: 'Cancel',
+            link: { label: 'Read the Minecraft EULA', url: 'https://www.minecraft.net/en-us/eula' },
+        });
+        return accepted && (await store.update({ eulaAccepted: true }));
+    }
+
     async function handleStart() {
         if (!selectedId) return;
+        if (!(await eulaAccepted())) return;
         setRequesting(true);
         const res = await invoke('session:start', selectedId);
         setRequesting(false);
@@ -178,7 +194,7 @@ export default function AppCockpit() {
             <div className='cockpit-wrapper'>
                 {button}
                 <div className='directory-menu'>
-                    <DirectoryMenu server={selected} canEditRules={canEditRules} />
+                    <DirectoryMenu server={selected} canWrite={canWrite} />
                 </div>
             </div>
             {mode.kind === 'start' && !mode.enabled && mode.reason && report && <p className='power-reason'>{mode.reason}</p>}

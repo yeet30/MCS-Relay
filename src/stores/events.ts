@@ -1,6 +1,7 @@
 // The ONE place that subscribes to events from the main process. Called once from main.tsx; calling it again
 // does nothing, so the subscriptions cannot pile up.
 import { on, onSignedOut } from '../api';
+import { playChime } from '../lib/chime';
 import { useAuthStore } from './authStore';
 import { useServersStore } from './serversStore';
 import { useSessionStore } from './sessionStore';
@@ -23,6 +24,7 @@ export function startEventSubscriptions(): void {
         on('console:output', (lines) => session().appendConsole(lines)),
         on('app:confirmQuit', (prompt) => session().setQuitPrompt(prompt)),
         on('app:quitting', () => session().setQuitting(true)),
+        on('app:chime', ({ outcome }) => playChime(outcome)),
         onSignedOut((message) => {
             useAuthStore.getState().markSignedOut(message);
             useServersStore.getState().reset();

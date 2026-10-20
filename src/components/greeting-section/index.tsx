@@ -1,6 +1,6 @@
 import './greeting-section.css';
-import { useEffect, useState } from 'react';
-import { ChevronUp } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ChevronDown, ChevronUp, Terminal } from 'lucide-react';
 import SelectServer from '../select-server';
 import PermissionInformation from '../permission-information';
 import ServerConsole from '../server-console';
@@ -38,15 +38,43 @@ function SessionArea() {
     );
 }
 
+const CONSOLE_HINT_KEY = 'mdh.consoleHintSeen';
+
+function readHintSeen(): boolean {
+    try {
+        return localStorage.getItem(CONSOLE_HINT_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+
+function rememberHintSeen(): void {
+    try {
+        localStorage.setItem(CONSOLE_HINT_KEY, '1');
+    } catch {
+        // private storage unavailable: the dot simply shows again next time
+    }
+}
+
 export default function GreetingSection() {
     const authPhase = useAuthStore((s) => s.phase);
     const user = useAuthStore((s) => s.user);
     const collaborationEnabled = useAuthStore((s) => s.collaborationEnabled);
+    const consoleHasOutput = useSessionStore((s) => s.console.length > 0);
     const [notAtTop, setNotAtTop] = useState(false);
+    // The red dot points out the console the first time it shows something; any scroll dismisses it for good.
+    const [hintSeen, setHintSeen] = useState(readHintSeen);
+    const outputRef = useRef(consoleHasOutput);
+    outputRef.current = consoleHasOutput;
 
     useEffect(() => {
         function handleScroll() {
-            setNotAtTop(window.scrollY > 0);
+            const scrolled = window.scrollY > 0;
+            setNotAtTop(scrolled);
+            if (scrolled && outputRef.current) {
+                setHintSeen(true);
+                rememberHintSeen();
+            }
         }
         window.addEventListener('scroll', handleScroll);
         handleScroll();
@@ -80,7 +108,18 @@ export default function GreetingSection() {
                 </div>
             </div>
 
-            <div className='console-section'><ServerConsole /></div>
+            <div className='console-section' id='console-section'><ServerConsole /></div>
+            {!notAtTop && consoleHasOutput && (
+                <button
+                    className='scroller-button console-jump'
+                    title='Go to the server console'
+                    onClick={() => document.getElementById('console-section')?.scrollIntoView({ behavior: 'smooth' })}
+                >
+                    <Terminal size={16} />
+                    <ChevronDown size={18} />
+                    {!hintSeen && <span className='scroller-dot' aria-label='The console has new output' />}
+                </button>
+            )}
             {notAtTop && (
                 <button
                     className='scroller-button'

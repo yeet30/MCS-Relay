@@ -1,0 +1,109 @@
+.preferences {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    text-align: left;
+
+    .pref-section {
+        margin: 6px 0 0;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+    }
+
+    .pref-row {
+        display: grid;
+        grid-template-columns: 24px 1fr auto;
+        align-items: start;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: var(--panel-2);
+    }
+
+    .pref-icon {
+        display: inline-flex;
+        margin-top: 2px;
+        color: var(--accent);
+    }
+
+    .pref-text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+    }
+
+    .pref-title {
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+
+    .pref-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 6px;
+    }
+
+    .pref-test {
+        align-self: flex-start;
+        margin-top: 6px;
+    }
+}
+
+.pref-help {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+/* An on/off switch built on a checkbox, so it works with the keyboard too. */
+.switch {
+    position: relative;
+    display: inline-flex;
+    margin-top: 2px;
+    cursor: pointer;
+
+    input {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .switch-track {
+        width: 36px;
+        height: 20px;
+        border-radius: 10px;
+        background: rgb(70, 70, 70);
+        position: relative;
+        transition: background 0.2s ease;
+    }
+
+    .switch-thumb {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #ddd;
+        transition: transform 0.2s ease;
+    }
+
+    input:checked + .switch-track {
+        background: var(--accent);
+    }
+
+    input:checked + .switch-track .switch-thumb {
+        transform: translateX(16px);
+        background: #fff;
+    }
+
+    input:focus-visible + .switch-track {
+        outline: 2px solid #8b91ff;
+        outline-offset: 2px;
+    }
+}

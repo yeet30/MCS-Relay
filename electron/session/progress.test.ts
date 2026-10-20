@@ -64,7 +64,7 @@ describe('OrchestrationProgress', () => {
         t.progress.enter('files', 'Uploading 10 files');
         t.progress.applyTransfer(transfer({
             filesTotal: 10, filesDone: 3, filesFailed: 1,
-            lanes: [{ lane: 1, path: 'a', kind: 'upload', bytesDone: 50, size: 100, state: 'active', retryInMs: null }],
+            lanes: [{ lane: 1, path: 'a', kind: 'upload', bytesDone: 50, size: 100, state: 'active', retryInMs: null, elapsedMs: 10 }],
         }));
         expect(t.last().fraction).toBeCloseTo(4.5 / 10);
         expect(t.last().message).toBe('Uploading files (4 of 10)');

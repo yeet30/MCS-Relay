@@ -1,5 +1,6 @@
 import './modal.css';
 import { useEffect, useState } from 'react';
+import { useScrollLock } from '../../hooks/useScrollLock';
 import type { IModalItems } from '../../lib/ui-types';
 
 interface IModal {
@@ -14,6 +15,7 @@ interface IModal {
 
 export default function Modal({ isOpen, onClose, items, width = 400, height = 300, initialTab = 0 }: IModal) {
     const [activeTab, setActiveTab] = useState(0);
+    useScrollLock(isOpen);
 
     // Reset only when the modal opens: callers pass a new items array on every render, and the stores update
     // several times a second, so resetting on items would make the other tabs unreachable.

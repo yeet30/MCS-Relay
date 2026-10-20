@@ -1,12 +1,25 @@
 import './progress-card.css';
-import { useState } from 'react';
-import { Check, ChevronRight, Clock, Loader2, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Check, ChevronRight, Clock, Info, Loader2, X } from 'lucide-react';
 import type { LaneView, SessionProgress, StepMessage, TransferKind, TransferSnapshot } from '../../../shared/types';
-import { formatBytesPair, formatClock, formatCount, formatEta, formatSpeed, formatWhen } from '../../lib/format';
+import {
+    durationBetween, formatBytes, formatBytesPair, formatClock, formatCount, formatDuration, formatEta, formatSpeed, formatWhen,
+} from '../../lib/format';
 import type { IModalItems } from '../../lib/ui-types';
 import { useSessionStore } from '../../stores/sessionStore';
 import Modal from '../modal';
 import FailedFiles from './failed-files';
+
+/** Re-renders every second while `running`, for clocks that count up. */
+function useNow(running: boolean): number {
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        if (!running) return undefined;
+        const timer = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(timer);
+    }, [running]);
+    return running ? now : Date.now();
+}
 
 function StatusIcon({ status }: { status: StepMessage['status'] }) {
     if (status === 'loading') return <Loader2 size={12} className='spinner' />;
@@ -14,19 +27,26 @@ function StatusIcon({ status }: { status: StepMessage['status'] }) {
     return <X size={12} />;
 }
 
-/** Every line the session wrote, newest first. A task's line changes in place from loading to done or error. */
+/** Every line the session wrote, newest first, with how long each task took. A task's line changes in place
+ *  from loading to done or error. */
 function ProgressLog() {
     const steps = useSessionStore((s) => s.steps);
+    const running = steps.some((s) => s.status === 'loading');
+    const now = useNow(running);
     if (steps.length === 0) return <p className='log-empty'>Nothing has happened yet.</p>;
     return (
         <ul className='progress-log'>
-            {[...steps].reverse().map((step) => (
-                <li key={step.id} className={`${step.status} ${step.importance}`}>
-                    <span className='log-time'>{formatClock(step.at)}</span>
-                    <StatusIcon status={step.status} />
-                    <span className='log-text'>{step.message}</span>
-                </li>
-            ))}
+            {[...steps].reverse().map((step) => {
+                const ms = step.status === 'loading' ? now - Date.parse(step.at) : durationBetween(step.at, step.endedAt);
+                return (
+                    <li key={step.id} className={`${step.status} ${step.importance}`}>
+                        <span className='log-time'>{formatClock(step.at)}</span>
+                        <StatusIcon status={step.status} />
+                        <span className='log-text'>{step.message}</span>
+                        <span className='log-duration'>{ms !== null && Number.isFinite(ms) ? formatDuration(ms) : ''}</span>
+                    </li>
+                );
+            })}
         </ul>
     );
 }
@@ -35,19 +55,34 @@ const DOING: Record<TransferKind, string> = {
     download: 'downloading', upload: 'uploading', 'delete-remote': 'deleting', 'delete-local': 'deleting', 'create-folder': 'creating',
 };
 
+function shortTime(ms: number | null): string {
+    if (ms === null) return '';
+    return ms < 10_000 ? `${(ms / 1000).toFixed(1)} s` : formatDuration(ms);
+}
+
+/** One lane. A small file goes in one request, so its bytes cannot be followed: the lane shows that it is busy
+ *  and for how long. Only a file that reports bytes along the way (big uploads, downloads) gets a real bar. */
 function Lane({ lane }: { lane: LaneView }) {
-    const fraction = lane.size > 0 ? Math.min(1, lane.bytesDone / lane.size) : 0;
-    // Folders and deletions have no bytes to count: say what the lane does instead of showing an empty bar.
-    const sizeless = lane.path !== null && lane.size === 0;
+    const measurable = lane.size > 0 && lane.bytesDone > 0 && lane.bytesDone < lane.size;
+    let status;
+    if (lane.state === 'backoff') {
+        status = <span className='lane-wait'><Clock size={11} /> retry in {Math.ceil((lane.retryInMs ?? 0) / 1000)} s</span>;
+    } else if (lane.path === null) {
+        status = <span className='lane-idle' />;
+    } else if (measurable) {
+        status = <span className='lane-bar'><span style={{ width: `${(lane.bytesDone / lane.size) * 100}%` }} /></span>;
+    } else {
+        status = <span className='lane-busy' title={lane.kind ? DOING[lane.kind] : 'working'}><span /></span>;
+    }
     return (
         <li className={`lane ${lane.state}`}>
             <span className='lane-number'>{lane.lane}</span>
             <span className='lane-name' title={lane.path ?? ''}>{lane.path ?? 'idle'}</span>
-            {lane.state === 'backoff'
-                ? <span className='lane-wait'><Clock size={11} /> retry in {Math.ceil((lane.retryInMs ?? 0) / 1000)} s</span>
-                : sizeless
-                    ? <span className='lane-doing'>{lane.kind ? DOING[lane.kind] : 'working'}…</span>
-                    : <span className='lane-bar'><span style={{ width: `${fraction * 100}%` }} /></span>}
+            {status}
+            <span className='lane-meta'>
+                {lane.path === null ? '' : [lane.size > 0 ? formatBytes(lane.size) : lane.kind ? DOING[lane.kind] : '', shortTime(lane.elapsedMs)]
+                    .filter(Boolean).join(' · ')}
+            </span>
         </li>
     );
 }
@@ -99,6 +134,7 @@ export default function ProgressCard({ compact = false }: { compact?: boolean })
     const progress = useSessionStore((s) => s.progress);
     const transfer = useSessionStore((s) => s.transfer);
     const [modalTab, setModalTab] = useState<number | null>(null);
+    const now = useNow(Boolean(progress?.active));
     if (!progress) return null;
 
     const transferring = Boolean(transfer?.active);
@@ -109,6 +145,9 @@ export default function ProgressCard({ compact = false }: { compact?: boolean })
     const modal = (
         <Modal isOpen={modalTab !== null} initialTab={modalTab ?? 0} onClose={() => setModalTab(null)} width={560} height={400} items={tabs} />
     );
+    const took = progress.active
+        ? durationBetween(progress.startedAt, new Date(now).toISOString())
+        : durationBetween(progress.startedAt, progress.endedAt);
 
     if (compact || (!progress.active && progress.outcome === 'done')) {
         return (
@@ -117,6 +156,7 @@ export default function ProgressCard({ compact = false }: { compact?: boolean })
                 <span className='compact-icon'>{progress.outcome === 'done' ? <Check size={13} /> : <X size={13} />}</span>
                 <span className='compact-text'>
                     {progress.title}: {OUTCOME_WORDS[progress.outcome]}
+                    {took !== null && ` in ${formatDuration(took)}`}
                     {progress.endedAt && <span className='compact-when'> · {formatWhen(progress.endedAt)}</span>}
                 </span>
                 <button className='text-button' onClick={openDetails}>Show details</button>
@@ -139,9 +179,13 @@ export default function ProgressCard({ compact = false }: { compact?: boolean })
                 <span>{progress.message}</span>
             </p>
             {extra && <p className='progress-meta'>{extra}</p>}
+            {progress.note && progress.active && <p className='progress-note'><Info size={12} /> <span>{progress.note}</span></p>}
             {transfer && transfer.failures.length > 0 && <FailedFiles failures={transfer.failures} />}
             <div className='progress-foot'>
-                <span className='progress-steps'>{stageLine(progress)}</span>
+                <span className='progress-steps'>
+                    {stageLine(progress)}
+                    {took !== null && ` · ${failed ? 'after ' : ''}${formatDuration(took)}`}
+                </span>
                 <button className='text-button' onClick={openDetails}>
                     Show details <ChevronRight size={12} />
                 </button>

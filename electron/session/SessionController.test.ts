@@ -30,6 +30,7 @@ function deferred<T = void>(): { promise: Promise<T>; resolve: (v: T) => void; r
 }
 
 function setup(overrides: { report?: SyncReport; journal?: boolean } = {}) {
+    const notes: Array<{ title: string; body: string; outcome: 'done' | 'failed' }> = [];
     const phases: SessionPhase[] = [];
     const events: Array<[EventName, unknown]> = [];
     let holding = false;
@@ -79,7 +80,10 @@ function setup(overrides: { report?: SyncReport; journal?: boolean } = {}) {
     };
     const playit = { start: vi.fn(async () => 'abc.joinmc.link'), stop: vi.fn(async () => undefined) };
     const settings = {
-        get: vi.fn(() => ({ selectedServerId: 's1', playitggPath: 'C:/playit.exe', usePlayitgg: true, launchServer: true, joinedServerIds: [] })),
+        get: vi.fn(() => ({
+            selectedServerId: 's1', playitggPath: 'C:/playit.exe', usePlayitgg: true, launchServer: true, joinedServerIds: [] as string[],
+            eulaAccepted: true, notifications: true, notificationSound: true,
+        })),
         set: vi.fn(),
         getServer: vi.fn(() => ({ localPath: 'C:/servers/s1', javaFlags: { ...DEFAULT_JAVA_FLAGS } })),
     };
@@ -102,10 +106,12 @@ function setup(overrides: { report?: SyncReport; journal?: boolean } = {}) {
         me: async () => ME,
         sleep: vi.fn(async () => undefined),
         lockPollMs: 1_000_000,
+        notify: (n) => void notes.push(n),
+        serverName: () => 'Survival',
     };
     const session = new SessionController(deps);
     return {
-        session, lock, sync, changes, minecraft, playit, settings, phases, events,
+        session, lock, sync, changes, minecraft, playit, settings, phases, events, notes,
         setJava: (running: boolean) => {
             javaRunning = running;
         },
@@ -143,7 +149,10 @@ describe('SessionController: a normal session', () => {
 
     it('does not start playit or Java when the settings say so', async () => {
         const t = setup();
-        t.settings.get.mockReturnValue({ selectedServerId: 's1', playitggPath: '', usePlayitgg: true, launchServer: false, joinedServerIds: [] });
+        t.settings.get.mockReturnValue({
+            selectedServerId: 's1', playitggPath: '', usePlayitgg: true, launchServer: false, joinedServerIds: [],
+            eulaAccepted: false, notifications: true, notificationSound: true,
+        });
         await t.session.start('s1');
         expect(t.playit.start).not.toHaveBeenCalled();
         expect(t.minecraft.start).not.toHaveBeenCalled();
@@ -328,5 +337,55 @@ describe('SessionController: progress', () => {
         await t.session.retryUpload();
         expect(t.session.getProgress()).toMatchObject({ title: 'Retrying the failed uploads', outcome: 'done' });
         expect(t.session.steps().some((s) => s.message.startsWith('Retrying'))).toBe(true);
+    });
+});
+
+describe('SessionController: EULA, notifications and syncing without playing', () => {
+    it('does not start the Minecraft server before the EULA is accepted', async () => {
+        const t = setup();
+        t.settings.get.mockReturnValue({ ...t.settings.get(), eulaAccepted: false });
+        await expect(t.session.start('s1')).rejects.toThrow(/EULA/);
+        expect(t.lock.claim).not.toHaveBeenCalled();
+        expect(t.minecraft.start).not.toHaveBeenCalled();
+    });
+
+    it('tells the user when the server is running and when it is saved', async () => {
+        const t = setup();
+        await t.session.start('s1');
+        await t.session.stop();
+        expect(t.notes.map((n) => [n.outcome, n.title])).toEqual([
+            ['done', 'Survival is running'],
+            ['done', 'Survival is saved to the cloud'],
+        ]);
+        expect(t.notes[0].body).toMatch(/Friends can join at abc\.joinmc\.link\. Started in \d+ s\./);
+    });
+
+    it('log lines record when they finished, so the UI can show how long each took', async () => {
+        const t = setup();
+        await t.session.start('s1');
+        const finished = t.session.steps().filter((s) => s.status === 'done' && s.endedAt);
+        expect(finished.length).toBeGreaterThan(3);
+    });
+
+    it('downloads the latest version under the lock without starting anything', async () => {
+        const t = setup({ report: report({ status: 'cloud-newer' }) });
+        await t.session.syncNow('s1', 'down');
+        expect(t.phases).toEqual(['checking', 'claiming', 'downloading', 'releasing', 'idle']);
+        expect(t.sync.download).toHaveBeenCalledTimes(1);
+        expect(t.minecraft.start).not.toHaveBeenCalled();
+        expect(t.lock.releaseIfMine).toHaveBeenCalledWith('s1');
+        expect(t.notes.at(-1)?.title).toBe('Survival is up to date');
+    });
+
+    it('uploads this PC\'s changes under the lock, and refuses when there is nothing to upload', async () => {
+        const t = setup({ report: report({ status: 'local-changes' }) });
+        await t.session.syncNow('s1', 'up');
+        expect(t.lock.claim).toHaveBeenCalledWith('s1', 3, { phase: 'uploading' });
+        expect(t.sync.uploadSession).toHaveBeenCalledTimes(1);
+        expect(t.session.getState().phase).toBe('idle');
+
+        const idle = setup();
+        await expect(idle.session.syncNow('s1', 'up')).rejects.toThrow(/nothing to upload/);
+        expect(idle.lock.claim).not.toHaveBeenCalled();
     });
 });

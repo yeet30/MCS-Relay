@@ -1,4 +1,5 @@
 // Plain-language formatting for sizes, speeds, durations and times. Pure: no React, no stores.
+export { durationBetween, formatDuration } from '../../shared/duration';
 
 const UNITS = ['KB', 'MB', 'GB', 'TB'] as const;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;

@@ -59,7 +59,7 @@ export default function SelectServer() {
                     <Group title='Joined' servers={servers.filter((s) => s.kind === 'joined')} onPick={handlePick} />
                 </div>
             </span>
-            <h4>{selected ? hostingMessage(lock, myEmail) : ''}</h4>
+            <h4>{!selected ? '' : checking ? 'if the server is being hosted…' : hostingMessage(lock, myEmail)}</h4>
         </div>
     );
 }

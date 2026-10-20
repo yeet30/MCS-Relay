@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Popup from '../../components/popup';
+import { invoke } from '../../api';
 
 export interface ConfirmOptions {
     message: string;
     confirmText?: string;
     cancelText?: string;
+    /** A link shown under the message, opened in the browser. */
+    link?: { label: string; url: string };
 }
 
 /** A promise-based confirm dialog. Render `popup` somewhere that stays mounted while the dialog is open.
@@ -43,6 +46,11 @@ export function useConfirm() {
             decliningOption={options?.cancelText ?? 'Cancel'}
         >
             {options?.message ?? ''}
+            {options?.link && (
+                <button className='popup-link' onClick={() => void invoke('app:openExternal', options.link!.url)}>
+                    {options.link.label}
+                </button>
+            )}
         </Popup>
     );
 
