@@ -1,25 +1,28 @@
 // Decides what to move between this PC and the cloud, and moves it.
 // preflight() only reads. download() and uploadSession() run while the session holds the lock.
-// The manifest is written LAST in an upload: that single write is the commit (Part 2, section 7).
+// The manifest is written LAST in an upload: that single write is the commit.
 import { copyFile, mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { APP_PROPS } from '../../shared/types';
 import type {
-    BaseEntry, ConflictChoice, LockView, Manifest, ManifestEntry, PendingCleanup, Snapshot,
+    BaseEntry, ConflictChoice, LockView, Manifest, ManifestEntry, PendingCleanup, ProgressStageKey, Snapshot,
     StepMessage, SyncPlan, SyncReport, SyncRules, SyncStatus, UserInfo,
 } from '../../shared/types';
 import { BUILTIN_IGNORES, DEFAULT_SHARED_IGNORES, ancestorsOf, baseName, compileRules, normalizeRule, parentOf } from '../../shared/paths';
-import { DriveError } from '../drive/types';
+import { DriveError, FOLDER_MIME } from '../drive/types';
 import type { DriveApi, DriveFileMeta } from '../drive/types';
 import { AppError, toAppError } from '../errors';
 import type { LockService } from '../lock/LockService';
 import type { SettingsService } from '../settings/SettingsService';
-import type { AppData } from '../store/appData';
-import type { JobOutcome, TransferEngine, TransferJob, TransferResult } from '../transfer/TransferEngine';
+import type { AppData, JournalEntry, UploadJournal } from '../store/appData';
+import type { JobOutcome, RunHooks, TransferEngine, TransferJob, TransferResult } from '../transfer/TransferEngine';
 import type { LauncherFiles } from './launcherFiles';
 import { baseToSnapshot, manifestToSnapshot, readManifest, readRules, writeManifest, writeRules } from './manifest';
 import { allowedChoices, deriveStatus, emptyPlan, planMirrorRemote, planSync, planUpload, sumBytes } from './planner';
+import { NO_PROGRESS } from './progressSink';
+import type { ProgressSink } from './progressSink';
 import { scanLocal } from './scanner';
+import { creationTags, pathHash } from './tags';
 
 export interface SyncEngineDeps {
     drive: DriveApi;
@@ -46,8 +49,22 @@ interface Analysis {
     lock: LockView;
 }
 
+/** What journal.log says an interrupted upload already did. */
+interface JournalMemory {
+    /** A journal from before the log existed: nothing is known, everything has to be looked up on Drive. */
+    legacy: boolean;
+    folders: Record<string, string>;
+    done: Map<string, { id: string; md5: string; size: number }>;
+    started: Set<string>;
+    gone: Set<string>;
+}
+
+type UploadOutcome = Extract<JobOutcome, { kind: 'upload' }>;
+type Log = (entry: JournalEntry) => void;
+
 const FREE_LOCK: LockView = { state: 'free', lock: null };
-const META_CONCURRENCY = 8;
+/** Parallel metadata requests (lookups, listings, trash): enough to hide round trips, few enough for Google's limits. */
+const LOOKUP_CONCURRENCY = 8;
 
 function isNotFound(err: unknown): boolean {
     return err instanceof DriveError && err.status === 404;
@@ -55,6 +72,14 @@ function isNotFound(err: unknown): boolean {
 
 function sorted(paths: Iterable<string>): string[] {
     return [...paths].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+}
+
+function count(n: number): string {
+    return n.toLocaleString('en-US');
+}
+
+function plural(n: number, one: string, many = `${one}s`): string {
+    return `${count(n)} ${n === 1 ? one : many}`;
 }
 
 /** Runs `task` over `items` with at most `limit` running at once. */
@@ -90,8 +115,9 @@ export class SyncEngine {
 
     /* ------------------------------------------------------------------ reading */
 
-    /** Read-only on Drive and on disk: what would happen if this PC started a session now. */
-    async preflight(serverId: string, signal?: AbortSignal): Promise<SyncReport> {
+    /** Read-only on Drive and on disk: what would happen if this PC started a session now.
+     *  With `progress`, hashing the folder is reported as the "check" stage. */
+    async preflight(serverId: string, signal?: AbortSignal, progress?: ProgressSink): Promise<SyncReport> {
         const checkedAt = this.iso();
         const report: SyncReport = {
             serverId, status: 'error', firstSyncOnThisPc: this.d.appData.readBase(serverId) === null,
@@ -102,7 +128,7 @@ export class SyncEngine {
         };
         try {
             report.lock = await this.d.lock.inspect(serverId);
-            const a = await this.analyze(serverId, false, signal, report.lock);
+            const a = await this.analyze(serverId, false, signal, report.lock, progress, 'check');
             report.status = a.status;
             report.baseRevision = a.baseRevision;
             report.remoteRevision = a.remote?.revision ?? null;
@@ -226,16 +252,18 @@ export class SyncEngine {
 
     /* ------------------------------------------------------------------ download (under the lock) */
 
-    async download(serverId: string, _report: SyncReport, signal?: AbortSignal): Promise<void> {
+    async download(serverId: string, _report: SyncReport, signal?: AbortSignal, progress: ProgressSink = NO_PROGRESS): Promise<void> {
         const lock = await this.d.lock.inspect(serverId);
         // Plan again: the cloud may have changed since the preflight the user looked at.
-        const a = await this.analyze(serverId, true, signal, lock);
+        progress.enter('scan', 'Checking your files');
+        const a = await this.analyze(serverId, true, signal, lock, progress, 'scan');
+        progress.complete('scan', `Checked ${plural(a.local.size, 'file')}`);
         const choice = this.choices.get(serverId) ?? null;
         if (!a.remote) {
             if (this.d.appData.readBase(serverId) === null) {
                 this.d.appData.writeBase(serverId, { format: 2, serverId, revision: 0, files: {}, folders: {} });
             }
-            this.d.step('This server has no files in the cloud yet; your folder will be uploaded after the session', 'done', 'minor');
+            progress.complete('download', 'Nothing in the cloud yet: your folder is uploaded after the session');
             return;
         }
         let download: string[];
@@ -258,10 +286,12 @@ export class SyncEngine {
             }),
             ...deleteLocal.map((p): TransferJob => ({ kind: 'delete-local', path: p, target: this.abs(a.root, p) })),
         ];
+        progress.setTotal('download', jobs.length);
         let result: TransferResult = { done: [], failed: [] };
         if (jobs.length > 0) {
-            this.d.step(`Downloading ${download.length} files from the cloud`, 'loading', 'major');
-            result = await this.d.transfers.run('Downloading', jobs, signal);
+            progress.enter('download', `Downloading ${plural(download.length, 'file')}`);
+            result = await this.d.transfers.run('Downloading files', jobs, signal);
+            progress.settle('download', result.done.length);
             if (result.failed.length > 0) {
                 throw new AppError(
                     'DOWNLOAD_INCOMPLETE',
@@ -269,7 +299,9 @@ export class SyncEngine {
                     result.failed.slice(0, 5).map((f) => `${f.job.path}: ${f.error.message}`).join('\n'),
                 );
             }
-            this.d.step(`Downloaded ${download.length} files`, 'done', 'major');
+            progress.complete('download', `Downloaded ${plural(download.length, 'file')}`);
+        } else {
+            progress.complete('download', 'Nothing to download');
         }
 
         const downloaded = new Map<string, Extract<JobOutcome, { kind: 'download' }>>();
@@ -307,7 +339,9 @@ export class SyncEngine {
 
     /* ------------------------------------------------------------------ upload (under the lock) */
 
-    async uploadSession(serverId: string, signal?: AbortSignal): Promise<{ uploaded: number; deleted: number; revision: number }> {
+    async uploadSession(
+        serverId: string, signal?: AbortSignal, progress: ProgressSink = NO_PROGRESS,
+    ): Promise<{ uploaded: number; deleted: number; revision: number }> {
         const root = await this.requireRoot(serverId);
         const isIgnored = await this.loadRules(serverId, true);
         let journal = this.d.appData.readJournal(serverId);
@@ -319,47 +353,70 @@ export class SyncEngine {
         }
         const base = this.d.appData.readBase(serverId);
         const baseRevision = base?.revision ?? 0;
-        const local = await this.scan(serverId, root, baseToSnapshot(base), isIgnored, signal);
+        progress.enter('scan', 'Checking your files');
+        const local = await this.scan(serverId, root, baseToSnapshot(base), isIgnored, signal, progress, 'scan');
+        progress.complete('scan', `Checked ${plural(local.size, 'file')}`);
         // Without a cloud manifest everything is new, whatever the base says.
         const planBase = remote ? baseToSnapshot(base) : new Map();
         const { upload, deleteRemote } = planUpload(planBase, local);
 
         if (upload.length === 0 && deleteRemote.length === 0) {
             if (journal) this.d.appData.deleteJournal(serverId);
+            for (const key of ['folders', 'files', 'commit', 'cleanup'] as const) progress.skip(key);
             this.d.step('Nothing changed, so nothing was uploaded', 'done', 'major');
             return { uploaded: 0, deleted: 0, revision: remote?.revision ?? baseRevision };
         }
         if (remote && remote.revision !== baseRevision) {
             throw new AppError('CONFLICT', 'The cloud changed since this PC last synced, so the upload was stopped to protect the other copy.');
         }
-        const resuming = journal !== null;
-        this.d.appData.writeJournal(serverId, { format: 1, serverId, startedAt: this.iso(), baseRevision, sessionId: this.d.lock.sessionId });
+        const memory = this.journalMemory(serverId, journal);
+        this.d.appData.writeJournal(serverId, {
+            format: 1, serverId, startedAt: journal?.startedAt ?? this.iso(), baseRevision, sessionId: this.d.lock.sessionId, logged: true,
+        });
+        const log: Log = (entry) => this.d.appData.appendJournalLog(serverId, [entry]);
 
         const remoteFiles: Record<string, ManifestEntry> = remote?.files ?? {};
         // A file someone trashed by hand on the Drive website would still accept new content, but nobody
         // else could download it any more: such paths are created again instead of updated.
         const gone = await this.missingTargets(serverId, upload.filter((p) => remoteFiles[p]), remoteFiles, remote?.folders ?? {});
         const isNew = (p: string): boolean => !remoteFiles[p] || gone.has(p);
-        const folders = await this.ensureFolders(serverId, upload.filter(isNew), remote?.folders ?? {});
-        const reused: Array<Extract<JobOutcome, { kind: 'upload' }>> = [];
+        const newPaths = upload.filter(isNew);
+        const manifestFolders = remote?.folders ?? {};
+        const folders = await this.ensureFolders(
+            serverId, newPaths, { ...manifestFolders, ...memory.folders }, new Set(Object.keys(manifestFolders)), signal, progress, log,
+        );
+
+        // Only a create that may have reached Drive without being logged has to be looked for on Drive.
+        const uncertain = newPaths.filter((p) => memory.legacy || (memory.started.has(p) && !memory.done.has(p)));
+        const earlier = uncertain.length > 0 ? await this.findOwnFiles(serverId, uncertain, progress) : new Map<string, DriveFileMeta[]>();
+
+        const reused: UploadOutcome[] = [];
         const jobs: TransferJob[] = [];
-        // A resumed upload finds the files the interrupted attempt already created, so it does not create them twice.
-        const earlier = resuming ? await this.filesFromEarlierAttempt(serverId, upload.filter(isNew), folders) : new Map<string, DriveFileMeta>();
+        let uploads = 0;
         for (const p of upload) {
             const l = local.get(p)!;
+            const logged = memory.done.get(p);
+            if (logged && logged.md5 === l.md5) {
+                reused.push({ kind: 'upload', path: p, driveId: logged.id, md5: l.md5, size: l.size });
+                continue;
+            }
             const existing = isNew(p) ? undefined : remoteFiles[p];
-            const earlierFile = earlier.get(p);
-            if (resuming && existing && (await this.alreadyUploaded(existing.driveId, l.md5))) {
+            const unsure = memory.legacy || (memory.started.has(p) && !logged);
+            if (existing && unsure && (await this.alreadyUploaded(existing.driveId, l.md5))) {
                 reused.push({ kind: 'upload', path: p, driveId: existing.driveId, md5: l.md5, size: l.size });
                 continue;
             }
-            if (earlierFile && earlierFile.md5Checksum === l.md5) {
-                reused.push({ kind: 'upload', path: p, driveId: earlierFile.id, md5: l.md5, size: l.size });
+            const candidates = earlier.get(p) ?? [];
+            const same = candidates.find((c) => c.md5Checksum === l.md5);
+            if (same) {
+                reused.push({ kind: 'upload', path: p, driveId: same.id, md5: l.md5, size: l.size });
                 continue;
             }
-            jobs.push(this.uploadJob(serverId, root, p, l.size, l.md5, existing?.driveId ?? earlierFile?.id, folders));
+            const earlierId = candidates.length > 0 ? candidates[candidates.length - 1].id : undefined;
+            jobs.push(this.uploadJob(serverId, root, p, l.size, l.md5, existing?.driveId ?? logged?.id ?? earlierId, folders));
+            uploads += 1;
         }
-        const deletions = deleteRemote.filter((p) => remoteFiles[p]);
+        const deletions = deleteRemote.filter((p) => remoteFiles[p] && !memory.gone.has(p));
         if (deletions.length > 0) {
             let pendingFolderId: string | null = null;
             try {
@@ -371,18 +428,31 @@ export class SyncEngine {
                 jobs.push({ kind: 'delete-remote', path: p, driveId: remoteFiles[p].driveId, serverId, pendingFolderId });
             }
         }
+        if (reused.length > 0) console.log(`[sync] ${reused.length} files were already uploaded by the interrupted attempt`);
 
-        this.d.step(`Uploading ${upload.length - reused.length} files${deletions.length ? ` and removing ${deletions.length}` : ''}`, 'loading', 'major');
-        let result = jobs.length > 0 ? await this.d.transfers.run('Uploading', jobs, signal) : { done: [], failed: [] };
-        result = await this.recreateMissing(serverId, root, result, folders, signal);
+        const hooks = this.journalHooks(log);
+        const what = [uploads > 0 ? `Uploading ${plural(uploads, 'file')}` : '', deletions.length > 0 ? `removing ${plural(deletions.length, 'file')}` : '']
+            .filter(Boolean).join(' and ');
+        progress.setTotal('files', jobs.length);
+        progress.enter('files', what ? what.charAt(0).toUpperCase() + what.slice(1) : 'Everything was already uploaded');
+        let result: TransferResult = { done: [], failed: [] };
+        if (jobs.length > 0) {
+            result = await this.d.transfers.run('Uploading files', jobs, signal, hooks);
+            progress.settle('files', result.done.length);
+        }
+        result = await this.recreateMissing(serverId, root, result, folders, signal, progress, hooks, log);
         if (result.failed.length > 0) {
             throw new AppError(
                 'UPLOAD_INCOMPLETE',
-                `${result.failed.length} files could not be uploaded. Your session is kept on this PC; press Retry.`,
+                `${plural(result.failed.length, 'file')} could not be uploaded. Your session is kept on this PC; press Retry to send just those again.`,
                 result.failed.slice(0, 5).map((f) => `${f.job.path}: ${f.error.message}`).join('\n'),
             );
         }
+        const doneText = [uploads > 0 ? `Uploaded ${plural(uploads, 'file')}` : '', deletions.length > 0 ? `removed ${plural(deletions.length, 'file')}` : '']
+            .filter(Boolean).join(' and ');
+        progress.complete('files', doneText ? doneText.charAt(0).toUpperCase() + doneText.slice(1) : 'Everything was already uploaded');
 
+        progress.enter('commit', 'Saving the new version to the cloud');
         signal?.throwIfAborted();
         const latest = await readManifest(this.d.launcher, serverId);
         if ((latest?.revision ?? 0) !== (remote?.revision ?? 0)) {
@@ -401,10 +471,18 @@ export class SyncEngine {
         signal?.throwIfAborted();                                     // the lock may have been lost meanwhile
         await writeManifest(this.d.launcher, serverId, next);         // the commit
         remote = next;
-
         this.writeBaseFrom(serverId, next, local);
         this.d.appData.deleteJournal(serverId);
-        this.d.step(`Uploaded the session (revision ${next.revision})`, 'done', 'major');
+        progress.complete('commit', `Saved revision ${next.revision}`);
+
+        progress.enter('cleanup', 'Looking for leftovers on Google Drive');
+        let swept = 0;
+        try {
+            swept = await this.sweepLeftovers(serverId, next);
+        } catch (err) {
+            console.warn('[sync] could not look for leftovers:', toAppError(err).detail);
+        }
+        progress.complete('cleanup', swept > 0 ? `Moved ${plural(swept, 'leftover file')} to the trash` : 'No leftovers on Google Drive');
         void this.cleanupMyPlaceholders().catch((err: unknown) => console.warn('[sync] placeholder cleanup failed:', toAppError(err).detail));
         return { uploaded: upload.length, deleted: deletions.length, revision: next.revision };
     }
@@ -424,6 +502,35 @@ export class SyncEngine {
         return true;
     }
 
+    private journalMemory(serverId: string, journal: UploadJournal | null): JournalMemory {
+        const memory: JournalMemory = { legacy: false, folders: {}, done: new Map(), started: new Set(), gone: new Set() };
+        if (!journal) return memory;
+        if (!journal.logged) {
+            memory.legacy = true;
+            return memory;
+        }
+        for (const e of this.d.appData.readJournalLog(serverId)) {
+            if (e.t === 'folder') memory.folders[e.p] = e.id;
+            else if (e.t === 'start') memory.started.add(e.p);
+            else if (e.t === 'done') memory.done.set(e.p, { id: e.id, md5: e.md5, size: e.size });
+            else memory.gone.add(e.p);
+        }
+        return memory;
+    }
+
+    /** Writes each job to journal.log as it starts and as it ends. */
+    private journalHooks(log: Log): RunHooks {
+        return {
+            onStart: (job) => {
+                if (job.kind === 'upload' || job.kind === 'delete-remote') log({ t: 'start', p: job.path });
+            },
+            onDone: (o) => {
+                if (o.kind === 'upload') log({ t: 'done', p: o.path, id: o.driveId, md5: o.md5, size: o.size });
+                else if (o.kind === 'delete-remote') log({ t: 'gone', p: o.path });
+            },
+        };
+    }
+
     private writeBaseFrom(serverId: string, m: Manifest, local: Snapshot): void {
         const files: Record<string, BaseEntry> = {};
         for (const [p, e] of Object.entries(m.files)) {
@@ -440,32 +547,35 @@ export class SyncEngine {
         return {
             kind: 'upload', path: p, name: baseName(p), size, md5, source: this.abs(root, p), driveId,
             parentId: driveId ? undefined : dir ? folders[dir] : serverId,
-            appProperties: driveId ? undefined : { [APP_PROPS.server]: serverId, [APP_PROPS.path]: p },
+            appProperties: driveId ? undefined : creationTags(serverId, p),
         };
     }
 
     /** A file someone trashed by hand in the Drive website cannot be updated in place: create it again. */
     private async recreateMissing(
-        serverId: string, root: string, result: TransferResult, folders: Record<string, string>, signal?: AbortSignal,
+        serverId: string, root: string, result: TransferResult, folders: Record<string, string>, signal: AbortSignal | undefined,
+        progress: ProgressSink, hooks: RunHooks, log: Log,
     ): Promise<TransferResult> {
         const missing = result.failed.filter((f) => f.job.kind === 'upload' && f.job.driveId && f.error.code === 'NOT_FOUND');
         if (missing.length === 0) return result;
-        const dirs = missing.map((f) => f.job.path);
-        const ensured = await this.ensureFolders(serverId, dirs, folders);
+        const paths = missing.map((f) => f.job.path);
+        const ensured = await this.ensureFolders(serverId, paths, folders, new Set(Object.keys(folders)), signal, progress, log);
         Object.assign(folders, ensured);
         const retry = missing.map((f) => {
             const job = f.job as Extract<TransferJob, { kind: 'upload' }>;
             return this.uploadJob(serverId, root, job.path, job.size, job.md5, undefined, folders);
         });
-        const second = await this.d.transfers.run('Uploading', retry, signal);
+        progress.enter('files', `Uploading ${plural(retry.length, 'file')} again that were removed on the Drive website`);
+        const second = await this.d.transfers.run('Uploading files', retry, signal, hooks);
+        progress.settle('files', second.done.length);
         return {
             done: [...result.done, ...second.done],
             failed: [...result.failed.filter((f) => !missing.includes(f)), ...second.failed],
         };
     }
 
-    /** Paths whose Drive file was trashed or deleted outside the app. One listing per folder; only files
-     *  missing from their folder's listing cost an extra request. */
+    /** Paths whose Drive file was trashed or deleted outside the app. One listing per folder (in parallel);
+     *  only files missing from their folder's listing cost an extra request. */
     private async missingTargets(serverId: string, paths: string[], files: Record<string, ManifestEntry>, folders: Record<string, string>): Promise<Set<string>> {
         const gone = new Set<string>();
         const byParent = new Map<string, string[]>();
@@ -474,7 +584,8 @@ export class SyncEngine {
             const parentId = dir ? folders[dir] : serverId;
             if (parentId) byParent.set(parentId, [...(byParent.get(parentId) ?? []), p]);
         }
-        for (const [parentId, group] of byParent) {
+        const notListed: string[] = [];
+        await eachLimited([...byParent], LOOKUP_CONCURRENCY, async ([parentId, group]) => {
             let present: Set<string>;
             try {
                 present = new Set((await this.d.drive.listChildren(parentId)).map((c) => c.id));
@@ -482,12 +593,12 @@ export class SyncEngine {
                 if (!isNotFound(err)) throw err;
                 present = new Set();
             }
-            for (const p of group) {
-                if (present.has(files[p].driveId)) continue;
-                // Not in its folder: moved elsewhere (still usable) or really gone.
-                if (!(await this.fileAlive(files[p].driveId))) gone.add(p);
-            }
-        }
+            for (const p of group) if (!present.has(files[p].driveId)) notListed.push(p);
+        });
+        // Not in its folder: moved elsewhere (still usable) or really gone.
+        await eachLimited(notListed, LOOKUP_CONCURRENCY, async (p) => {
+            if (!(await this.fileAlive(files[p].driveId))) gone.add(p);
+        });
         if (gone.size > 0) console.warn(`[sync] ${gone.size} files were removed outside the app and will be uploaded again`);
         return gone;
     }
@@ -501,23 +612,21 @@ export class SyncEngine {
         }
     }
 
-    /** My files, tagged with this server and path, that sit where an earlier, uncommitted attempt put them. */
-    private async filesFromEarlierAttempt(serverId: string, newPaths: string[], folders: Record<string, string>): Promise<Map<string, DriveFileMeta>> {
-        const found = new Map<string, DriveFileMeta>();
-        const byParent = new Map<string, string[]>();
-        for (const p of newPaths) {
-            const dir = parentOf(p);
-            const parentId = dir ? folders[dir] : serverId;
-            if (parentId) byParent.set(parentId, [...(byParent.get(parentId) ?? []), p]);
-        }
-        for (const [parentId, paths] of byParent) {
-            const wanted = new Set(paths);
-            for (const child of await this.d.drive.listChildren(parentId)) {
-                const p = child.appProperties?.[APP_PROPS.path];
-                if (!p || !wanted.has(p) || found.has(p) || !child.ownedByMe) continue;
-                if (child.appProperties?.[APP_PROPS.server] !== serverId || child.appProperties?.[APP_PROPS.tombstone]) continue;
-                found.set(p, child);
-            }
+    /** Files of mine, tagged with this server, that an interrupted attempt may have created for `paths`.
+     *  One search over the whole server instead of one listing per folder; also finds files in a folder that
+     *  exists twice. Newest last. */
+    private async findOwnFiles(serverId: string, paths: string[], progress: ProgressSink): Promise<Map<string, DriveFileMeta[]>> {
+        progress.enter('files', 'Checking what the interrupted upload already sent');
+        const byHash = new Map(paths.map((p) => [pathHash(p), p]));
+        const wanted = new Set(paths);
+        const found = new Map<string, DriveFileMeta[]>();
+        for (const item of await this.d.drive.listMyTagged(serverId)) {
+            const props = item.appProperties ?? {};
+            if (item.mimeType === FOLDER_MIME || props[APP_PROPS.tombstone] === '1') continue;
+            const hash = props[APP_PROPS.pathHash];
+            const p = hash !== undefined ? byHash.get(hash) : props[APP_PROPS.path];
+            if (p === undefined || !wanted.has(p)) continue;
+            found.set(p, [...(found.get(p) ?? []), item]);
         }
         return found;
     }
@@ -531,24 +640,109 @@ export class SyncEngine {
         }
     }
 
-    /** Folder ids for the parents of new files, creating missing folders parents-first. */
-    private async ensureFolders(serverId: string, newFiles: string[], known: Record<string, string>): Promise<Record<string, string>> {
+    /** Folder ids for the parents of new files. Missing folders are created level by level (parents before
+     *  children), each level in parallel lanes. Ids in `verify` come from the manifest and may be stale. */
+    private async ensureFolders(
+        serverId: string, newFiles: string[], known: Record<string, string>, verify: Set<string>,
+        signal: AbortSignal | undefined, progress: ProgressSink, log: Log,
+    ): Promise<Record<string, string>> {
         const folders = { ...known };
         const needed = new Set<string>();
         for (const p of newFiles) {
             const dir = parentOf(p);
             if (dir) for (const ancestor of ancestorsOf(dir)) needed.add(ancestor);
         }
-        const ordered = [...needed].sort((a, b) => a.split('/').length - b.split('/').length || (a < b ? -1 : 1));
-        for (const dir of ordered) {
-            if (folders[dir] && (await this.fileAlive(folders[dir]))) continue;
-            const parentDir = parentOf(dir);
-            const parentId = parentDir ? folders[parentDir] : serverId;
-            const name = baseName(dir);
-            const existing = await this.d.drive.listChildren(parentId, { name, foldersOnly: true });
-            folders[dir] = existing[0]?.id ?? (await this.d.drive.createFolder(name, parentId)).id;
+        if (needed.size === 0) {
+            progress.complete('folders', 'No new folders needed');
+            return folders;
         }
+        progress.enter('folders', 'Looking up folders on Google Drive');
+        const stale = [...needed].filter((dir) => folders[dir] !== undefined && verify.has(dir));
+        await eachLimited(stale, LOOKUP_CONCURRENCY, async (dir) => {
+            if (!(await this.fileAlive(folders[dir]))) delete folders[dir];
+        });
+
+        const missing = [...needed].filter((dir) => folders[dir] === undefined);
+        progress.setTotal('folders', missing.length);
+        const byDepth = new Map<number, string[]>();
+        for (const dir of missing) {
+            const depth = dir.split('/').length;
+            byDepth.set(depth, [...(byDepth.get(depth) ?? []), dir]);
+        }
+        const createdNow = new Set<string>();
+        let created = 0;
+        for (const depth of [...byDepth.keys()].sort((a, b) => a - b)) {
+            const level = sorted(byDepth.get(depth)!);
+            // A parent that existed before may already hold a folder of that name (another member's, or one an
+            // interrupted attempt made without logging it): list each such parent once.
+            const parentsToList = [...new Set(level.map(parentOf))].filter((dir) => !createdNow.has(dir));
+            const existing = new Map<string, Map<string, string>>();
+            await eachLimited(parentsToList, LOOKUP_CONCURRENCY, async (dir) => {
+                const names = new Map<string, string>();
+                for (const child of await this.d.drive.listChildren(dir ? folders[dir] : serverId, { foldersOnly: true })) {
+                    if (!names.has(child.name)) names.set(child.name, child.id);           // oldest wins
+                }
+                existing.set(dir, names);
+            });
+            const jobs: TransferJob[] = [];
+            let found = 0;
+            for (const dir of level) {
+                const parentDir = parentOf(dir);
+                const id = existing.get(parentDir)?.get(baseName(dir));
+                if (id) {
+                    folders[dir] = id;
+                    log({ t: 'folder', p: dir, id });
+                    found += 1;
+                    continue;
+                }
+                jobs.push({
+                    kind: 'create-folder', path: dir, name: baseName(dir), parentId: parentDir ? folders[parentDir] : serverId,
+                    serverId, appProperties: creationTags(serverId, dir),
+                });
+            }
+            progress.settle('folders', found);
+            if (jobs.length === 0) continue;
+            progress.enter('folders', `Creating ${plural(missing.length, 'folder')} on Google Drive`);
+            const result = await this.d.transfers.run('Creating folders', jobs, signal, {
+                onDone: (o) => {
+                    if (o.kind !== 'create-folder') return;
+                    folders[o.path] = o.driveId;
+                    log({ t: 'folder', p: o.path, id: o.driveId });
+                },
+            });
+            progress.settle('folders', result.done.length);
+            if (result.failed.length > 0) {
+                throw new AppError(
+                    'UPLOAD_INCOMPLETE',
+                    `${plural(result.failed.length, 'folder')} could not be created on Google Drive. Press Retry to try again.`,
+                    result.failed.slice(0, 5).map((f) => `${f.job.path}: ${f.error.message}`).join('\n'),
+                );
+            }
+            for (const job of jobs) createdNow.add(job.path);
+            created += jobs.length;
+        }
+        progress.complete('folders', created > 0 ? `Created ${plural(created, 'folder')} on Google Drive` : 'All folders already exist');
         return folders;
+    }
+
+    /** After a commit: files of mine tagged with this server that the new manifest does not use are leftovers
+     *  of interrupted attempts (or of the duplicate folders older versions could make). They go to the trash,
+     *  so 30 days remain to undo a mistake. Placeholders and folders are left alone. */
+    private async sweepLeftovers(serverId: string, manifest: Manifest): Promise<number> {
+        const used = new Set(Object.values(manifest.files).map((f) => f.driveId));
+        const leftovers = (await this.d.drive.listMyTagged(serverId)).filter((item) =>
+            item.mimeType !== FOLDER_MIME && !used.has(item.id) && item.appProperties?.[APP_PROPS.tombstone] !== '1');
+        let trashed = 0;
+        await eachLimited(leftovers, LOOKUP_CONCURRENCY, async (item) => {
+            try {
+                await this.d.drive.trash(item.id);
+                trashed += 1;
+            } catch (err) {
+                if (!isNotFound(err)) console.warn(`[sync] could not trash leftover ${item.name}:`, toAppError(err).detail);
+            }
+        });
+        if (trashed > 0) console.log(`[sync] moved ${trashed} leftover files of ${serverId} to the trash`);
+        return trashed;
     }
 
     /* ------------------------------------------------------------------ placeholders */
@@ -585,15 +779,15 @@ export class SyncEngine {
                     }
                 }
             }
-            for (const file of files) {
-                if (referenced.has(file.id)) continue;          // an upload that has not committed yet still points at it
+            // An upload that has not committed yet still points at a referenced placeholder.
+            await eachLimited(files.filter((file) => !referenced.has(file.id)), LOOKUP_CONCURRENCY, async (file) => {
                 try {
                     await this.d.drive.deleteForever(file.id);
                     deleted += 1;
                 } catch (err) {
                     if (!isNotFound(err)) console.warn(`[sync] could not delete placeholder ${file.name}:`, toAppError(err).detail);
                 }
-            }
+            });
         }
         if (deleted > 0) this.d.step(`Deleted ${deleted} of your old files that other members removed`, 'done', 'minor');
         return deleted;
@@ -606,7 +800,7 @@ export class SyncEngine {
         const me = await this.d.me();
         const deletedAt = this.iso();
         let marked = 0;
-        await eachLimited(Object.values(m.files), META_CONCURRENCY, async (entry) => {
+        await eachLimited(Object.values(m.files), LOOKUP_CONCURRENCY, async (entry) => {
             try {
                 const meta = await this.d.drive.getMeta(entry.driveId);
                 if (meta.ownedByMe || meta.trashed || !meta.capabilities?.canModifyContent) return;
@@ -633,7 +827,7 @@ export class SyncEngine {
                 if (file.ownedByMe || owner === me.email) mine += 1;
                 else others.set(owner, (others.get(owner) ?? 0) + 1);
             }
-            return { mine, others: [...others].map(([ownerEmail, count]) => ({ ownerEmail, count })) };
+            return { mine, others: [...others].map(([ownerEmail, n]) => ({ ownerEmail, count: n })) };
         } catch (err) {
             console.warn('[sync] could not count placeholders:', toAppError(err).detail);
             return { mine: 0, others: [] };
@@ -642,14 +836,17 @@ export class SyncEngine {
 
     /* ------------------------------------------------------------------ helpers */
 
-    private async analyze(serverId: string, createRules: boolean, signal: AbortSignal | undefined, lock: LockView): Promise<Analysis> {
+    private async analyze(
+        serverId: string, createRules: boolean, signal: AbortSignal | undefined, lock: LockView,
+        progress: ProgressSink = NO_PROGRESS, stage: ProgressStageKey = 'scan',
+    ): Promise<Analysis> {
         const root = await this.requireRoot(serverId);
         const me = await this.d.me();
         const base = this.d.appData.readBase(serverId);
         const remote = await readManifest(this.d.launcher, serverId);
         const isIgnored = await this.loadRules(serverId, createRules);
         const baseSnap = baseToSnapshot(base);
-        const local = await this.scan(serverId, root, baseSnap, isIgnored, signal);
+        const local = await this.scan(serverId, root, baseSnap, isIgnored, signal, progress, stage);
         const remoteSnap = manifestToSnapshot(remote);
 
         let plan: SyncPlan;
@@ -670,10 +867,15 @@ export class SyncEngine {
     }
 
     /** Hashes only files whose size or modification time changed since the base or the last scan. */
-    private async scan(serverId: string, root: string, base: Snapshot, isIgnored: (rel: string) => boolean, signal?: AbortSignal): Promise<Snapshot> {
+    private async scan(
+        serverId: string, root: string, base: Snapshot, isIgnored: (rel: string) => boolean, signal: AbortSignal | undefined,
+        progress: ProgressSink = NO_PROGRESS, stage: ProgressStageKey = 'scan',
+    ): Promise<Snapshot> {
         const last = this.lastScan.get(serverId);
         const known = last ? new Map([...base, ...last]) : base;
-        const local = await scanLocal(root, known, isIgnored, signal);
+        const local = await scanLocal(root, known, isIgnored, signal, (done, total) => {
+            progress.report(stage, done, total, `Checking your files (${count(done)} of ${count(total)})`);
+        });
         this.lastScan.set(serverId, local);
         return local;
     }

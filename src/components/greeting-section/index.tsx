@@ -6,36 +6,34 @@ import PermissionInformation from '../permission-information';
 import ServerConsole from '../server-console';
 import PlayitggLink from '../playitgg-link';
 import AppCockpit from '../app-cockpit';
-import StartupProgress from '../startup-progress';
+import ProgressCard from '../progress-card';
 import SyncStatusCard from '../sync-status-card';
-import TransfersPanel from '../transfers-panel';
 import { ChangesSummary } from '../changes-panel';
 import { useAuthStore } from '../../stores/authStore';
 import { useServersStore } from '../../stores/serversStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { isSessionBusy } from '../../lib/sync';
 
-/** Under the server picker: the transfer while one runs, the sync status card while idle, and the startup
- *  progress (plus the changes line while running) in between. */
+/** Under the server picker: the progress of a start or stop while one runs (or failed), the sync status card
+ *  while idle, and the session's changes while the server runs. */
 function SessionArea() {
     const phase = useSessionStore((s) => s.state.phase);
-    const transferActive = useSessionStore((s) => s.transfer?.active ?? false);
     const hasServers = useServersStore((s) => s.servers.length > 0);
 
     if (!hasServers) return null;
-    if (transferActive) return <TransfersPanel />;
-    if (!isSessionBusy(phase)) {
+    if (phase === 'running') {
         return (
             <>
-                <SyncStatusCard />
-                <StartupProgress compact />
+                <ProgressCard compact />
+                <ChangesSummary />
             </>
         );
     }
+    if (isSessionBusy(phase) || phase === 'failed') return <ProgressCard />;
     return (
         <>
-            <StartupProgress />
-            {phase === 'running' && <ChangesSummary />}
+            <SyncStatusCard />
+            <ProgressCard compact />
         </>
     );
 }

@@ -57,6 +57,7 @@ export function formatSpeed(bytesPerSec: number): string {
  *  so the estimate does not flicker. */
 export function formatEta(etaSec: number | null): string {
     if (etaSec === null || !Number.isFinite(etaSec) || etaSec < 0) return 'estimating time left…';
+    if (etaSec >= 99 * 3600) return 'more than 99 h left';
     if (etaSec < 1) return 'almost done';
     if (etaSec < 60) return `about ${Math.ceil(etaSec)} s left`;
     if (etaSec < 3600) {

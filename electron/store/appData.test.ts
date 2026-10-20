@@ -203,7 +203,7 @@ describe('legacy import', () => {
             },
         }));
         appData.migrateLegacy();
-        // playit.gg was "on" without a path in the old defaults, which blocked every start (F41).
+        // playit.gg was "on" without a path in the old defaults, which blocked every start.
         expect(appData.readSettings()).toMatchObject({ usePlayitgg: false, launchServer: true, playitggPath: '' });
         expect(appData.readServerSettings('srvA')).toEqual({ localPath: 'C:\\mc', javaFlags: { minRAM: 2048, maxRAM: 2048, customFlags: '-XX:+UseG1GC' } });
         expect(appData.legacyBlacklist()).toEqual([]);
@@ -235,5 +235,29 @@ describe('legacy import', () => {
     test('the blacklist is readable before the migration ran', () => {
         write('localStore.json', JSON.stringify({ localVariables: { watcherBlacklist: ['logs/', 'cache\\'] } }));
         expect(appData.legacyBlacklist()).toEqual(['logs/', 'cache/']);
+    });
+});
+
+describe('upload journal log', () => {
+    const SERVER = 'abcDEF123';
+
+    test('appends entries in order and forgets them with the journal', () => {
+        appData.writeJournal(SERVER, { format: 1, serverId: SERVER, startedAt: 'x', baseRevision: 2, sessionId: 's', logged: true });
+        appData.appendJournalLog(SERVER, [{ t: 'folder', p: 'world', id: 'f1' }, { t: 'start', p: 'world/a.mca' }]);
+        appData.appendJournalLog(SERVER, [{ t: 'done', p: 'world/a.mca', id: 'd1', md5: 'abc', size: 3 }]);
+        expect(appData.readJournal(SERVER)?.logged).toBe(true);
+        expect(appData.readJournalLog(SERVER)).toEqual([
+            { t: 'folder', p: 'world', id: 'f1' },
+            { t: 'start', p: 'world/a.mca' },
+            { t: 'done', p: 'world/a.mca', id: 'd1', md5: 'abc', size: 3 },
+        ]);
+        appData.deleteJournal(SERVER);
+        expect(appData.readJournalLog(SERVER)).toEqual([]);
+    });
+
+    test('skips a line torn by a crash while it was written', () => {
+        appData.appendJournalLog(SERVER, [{ t: 'start', p: 'a' }]);
+        fs.appendFileSync(path.join(root, 'servers', SERVER, 'journal.log'), '{"t":"done","p":"a","id":"x","md');
+        expect(appData.readJournalLog(SERVER)).toEqual([{ t: 'start', p: 'a' }]);
     });
 });

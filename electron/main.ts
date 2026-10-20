@@ -1,5 +1,5 @@
 // Composition root: creates every service once, wires them together, and owns the window, the tray
-// and the quit flow. No business logic lives here (F30).
+// and the quit flow. No business logic lives here.
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, safeStorage, shell, Tray } from 'electron';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -54,7 +54,13 @@ const me = () => auth.me();
 
 // The callbacks below use `session`, declared further down; services call them later, never in constructors.
 const lock = new LockService({ drive, launcher, me, onLost: (serverId, reason) => session.onLockLost(serverId, reason) });
-const transfers = new TransferEngine({ drive, me, emit: (snapshot) => events.emit('transfer:progress', snapshot) });
+const transfers = new TransferEngine({
+    drive, me,
+    emit: (snapshot) => {
+        events.emit('transfer:progress', snapshot);
+        session.onTransfer(snapshot);
+    },
+});
 const sync = new SyncEngine({
     drive, launcher, lock, transfers, appData, settings, me,
     step: (message, status, importance) => session.step(message, status, importance),

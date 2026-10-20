@@ -45,6 +45,7 @@ export class FakeDriveStore {
     private seq = 0;
     private clockMs = Date.UTC(2026, 9, 15, 12, 0, 0);
     private failures: Failure[] = [];
+    private lostResponses: Failure[] = [];
 
     now(): number {
         return this.clockMs;
@@ -88,6 +89,18 @@ export class FakeDriveStore {
         this.failures.push({ op, remaining: count, error, when });
     }
 
+    /** The next `count` calls of `op` succeed on "Drive" but their answer is lost: the caller gets a 500. */
+    loseNextResponse(op: Op, count: number, when?: (args: unknown[]) => boolean): void {
+        this.lostResponses.push({ op, remaining: count, error: () => new DriveError('Internal Error', 500, 'internalError'), when });
+    }
+
+    maybeLose(op: Op, args: unknown[]): void {
+        const lost = this.lostResponses.find((f) => f.op === op && f.remaining > 0 && (!f.when || f.when(args)));
+        if (!lost) return;
+        lost.remaining -= 1;
+        throw lost.error();
+    }
+
     maybeFail(op: Op, args: unknown[]): void {
         const failure = this.failures.find((f) => f.op === op && f.remaining > 0 && (!f.when || f.when(args)));
         if (!failure) return;
@@ -119,6 +132,15 @@ export class FakeDriveStore {
 
     text(id: string): string {
         return Buffer.from(this.node(id).content).toString('utf8');
+    }
+}
+
+/** Drive's limit: 124 bytes per property, key and value together (403 propertyLengthLimitExceeded). */
+function checkPropertyLength(props: Record<string, string> | undefined): void {
+    for (const [key, value] of Object.entries(props ?? {})) {
+        if (Buffer.byteLength(key + value, 'utf8') > 124) {
+            throw new DriveError('The property exceeds the maximum length.', 403, 'propertyLengthLimitExceeded');
+        }
     }
 }
 
@@ -186,10 +208,13 @@ class FakeDriveView implements DriveApi {
             .map((n) => this.meta(n));
     }
 
-    async createFolder(name: string, parentId: string): Promise<DriveFileMeta> {
-        this.enter('createFolder', [name, parentId]);
+    async createFolder(name: string, parentId: string, _opts?: TransferOptions, appProperties?: Record<string, string>): Promise<DriveFileMeta> {
+        this.enter('createFolder', [name, parentId, appProperties]);
         this.folder(parentId);
-        return this.meta(this.store.addNode({ name, mimeType: FOLDER_MIME, parentId, ownerEmail: this.user }));
+        checkPropertyLength(appProperties);
+        const node = this.store.addNode({ name, mimeType: FOLDER_MIME, parentId, ownerEmail: this.user, appProperties: { ...appProperties } });
+        this.store.maybeLose('createFolder', [name, parentId, appProperties]);
+        return this.meta(node);
     }
 
     async createFile(
@@ -197,11 +222,13 @@ class FakeDriveView implements DriveApi {
     ): Promise<UploadResult> {
         this.enter('createFile', [name, parentId, source, appProperties]);
         this.folder(parentId);
+        checkPropertyLength(appProperties);
         const content = await this.bytes(source);
         const node = this.store.addNode({
             name, mimeType: 'application/octet-stream', parentId, ownerEmail: this.user, content,
             appProperties: { ...appProperties },
         });
+        this.store.maybeLose('createFile', [name, parentId, source, appProperties]);
         opts?.onProgress?.(content.length);
         return { id: node.id, md5Checksum: md5Hex(content), size: content.length };
     }
@@ -270,6 +297,14 @@ class FakeDriveView implements DriveApi {
         node.appProperties = { ...node.appProperties, ...appProperties };
         node.modifiedTime = this.store.tick();
         node.revisions += 1;
+    }
+
+    async listMyTagged(serverId: string): Promise<DriveFileMeta[]> {
+        this.enter('listMyTagged', [serverId]);
+        return [...this.store.nodes.values()]
+            .filter((n) => !n.trashed && n.ownerEmail === this.user && n.appProperties.mdhServer === serverId)
+            .sort((a, b) => a.createdTime - b.createdTime)
+            .map((n) => this.meta(n));
     }
 
     async listTombstones(filter: { mineOnly: boolean; serverId?: string }): Promise<DriveFileMeta[]> {

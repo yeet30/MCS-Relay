@@ -605,3 +605,45 @@ describe('TransferEngine run', () => {
         expect(labels.lastIndexOf('First')).toBeLessThan(labels.indexOf('Second'));
     });
 });
+
+describe('TransferEngine create-folder and journal hooks', () => {
+    function folderJob(name: string, parentId = world): TransferJob {
+        const relPath = `world/${name}`;
+        return { kind: 'create-folder', path: relPath, name, parentId, serverId: root, appProperties: { mdhServer: root, mdhPath: relPath } };
+    }
+
+    it('creates folders in parallel lanes and reports each one', async () => {
+        const { engine, snaps } = makeEngine(store.as(ALICE));
+        const result = await engine.run('Creating folders', ['a', 'b', 'c', 'd', 'e', 'f'].map((n) => folderJob(n)));
+        expect(result.failed).toEqual([]);
+        expect(result.done.map((o) => o.path).sort()).toEqual(['a', 'b', 'c', 'd', 'e', 'f'].map((n) => `world/${n}`));
+        expect(store.children(world).filter((n) => n.mimeType === FOLDER_MIME)).toHaveLength(6);
+        expect(snaps.some((s) => s.lanes.some((l) => l.kind === 'create-folder'))).toBe(true);
+    });
+
+    it('a retry after a lost answer finds the folder the first attempt made', async () => {
+        store.loseNextResponse('createFolder', 1);
+        const { engine } = makeEngine(store.as(ALICE));
+        const result = await engine.run('Creating folders', [folderJob('region')]);
+        expect(result.failed).toEqual([]);
+        const made = store.children(world).filter((n) => n.name === 'region');
+        expect(made).toHaveLength(1);
+        expect(result.done[0]).toEqual({ kind: 'create-folder', path: 'world/region', driveId: made[0].id });
+    });
+
+    it('calls onStart before a job\'s first request and onDone once it finished', async () => {
+        const order: string[] = [];
+        const drive = override(store.as(ALICE), {
+            createFolder: async (...args: Parameters<DriveApi['createFolder']>) => {
+                order.push(`request ${args[0]}`);
+                return store.as(ALICE).createFolder(...args);
+            },
+        });
+        const { engine } = makeEngine(drive);
+        await engine.run('Creating folders', [folderJob('x')], undefined, {
+            onStart: (job) => void order.push(`start ${job.path}`),
+            onDone: (o) => void order.push(`done ${o.path}`),
+        });
+        expect(order).toEqual(['start world/x', 'request x', 'done world/x']);
+    });
+});

@@ -65,8 +65,9 @@ export interface ManifestEntry {
 /** Drive appProperties the app puts on files. appProperties are private to this OAuth client, so every
  *  member's copy of the app sees them and other apps do not. */
 export const APP_PROPS = {
-    server: 'mdhServer',                // the server folder id, on every file the app creates
-    path: 'mdhPath',                    // the relative path at creation time
+    server: 'mdhServer',                // the server folder id, on every file and folder the app creates
+    path: 'mdhPath',                    // the relative path, only when it fits Drive's 124-byte limit per property
+    pathHash: 'mdhPathHash',            // sha1 of the relative path: identifies the file whatever its length
     tombstone: 'mdhTombstone',          // "1" on a placeholder: deleted, waiting for its owner to delete it for good
     deletedBy: 'mdhDeletedBy',
     deletedAt: 'mdhDeletedAt',
@@ -190,11 +191,43 @@ export interface SessionState {
     error: AppErrorInfo | null;         // set in "failed" and "upload-pending"
 }
 
+/** One line of the progress log. A task keeps its id: a later message with the same id replaces it, so a
+ *  "loading" line turns into "done" or "error" in place. */
 export interface StepMessage {
+    id: number;
     message: string;
     status: 'loading' | 'done' | 'error';
     importance: 'major' | 'minor';
     at: string;
+}
+
+/* ------------------------------------------------------------------ progress of a whole start or stop */
+
+export type ProgressStageKey =
+    | 'check' | 'claim' | 'scan' | 'download' | 'playit' | 'java' | 'watch'
+    | 'stop-java' | 'stop-playit' | 'folders' | 'files' | 'commit' | 'cleanup' | 'release';
+
+export interface ProgressStage {
+    key: ProgressStageKey;
+    label: string;
+    done: number;                       // units done; a transfer stage counts finished files plus the share of files in flight
+    total: number;                      // units: 1 for a single action, one per file or folder otherwise
+    state: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
+}
+
+/** The bar under the power button. Every action counts as one unit (one folder, one file, stopping Java,
+ *  committing...), so the bar covers the whole start or stop, not only the file transfer. */
+export interface SessionProgress {
+    active: boolean;
+    title: string;                      // "Starting Survival", "Stopping and uploading"
+    message: string;                    // what is happening now
+    unitsDone: number;
+    unitsTotal: number;
+    fraction: number;                   // 0..1, never goes back during one run
+    stages: ProgressStage[];
+    outcome: 'running' | 'done' | 'failed' | 'cancelled';
+    startedAt: string | null;
+    endedAt: string | null;
 }
 
 /* ------------------------------------------------------------------ transfers */
@@ -209,7 +242,7 @@ export interface LaneView {
     retryInMs: number | null;
 }
 
-export type TransferKind = 'download' | 'upload' | 'delete-remote' | 'delete-local';
+export type TransferKind = 'download' | 'upload' | 'delete-remote' | 'delete-local' | 'create-folder';
 
 export interface TransferFailure {
     path: string;
@@ -219,7 +252,7 @@ export interface TransferFailure {
 
 export interface TransferSnapshot {
     active: boolean;
-    label: string;                      // "Downloading", "Uploading", "Cleaning up"
+    label: string;                      // "Downloading", "Uploading", "Creating folders"
     filesTotal: number;
     filesDone: number;
     filesFailed: number;

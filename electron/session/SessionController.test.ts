@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { EventName, Events } from '../../shared/ipc';
 import { DEFAULT_JAVA_FLAGS } from '../../shared/types';
-import type { LockView, SessionPhase, SyncReport, UserInfo } from '../../shared/types';
+import type { LockView, SessionPhase, SessionProgress, SyncReport, UserInfo } from '../../shared/types';
 import { AppError } from '../errors';
 import { SessionController } from './SessionController';
 import type { SessionDeps } from './SessionController';
@@ -66,7 +66,7 @@ function setup(overrides: { report?: SyncReport; journal?: boolean } = {}) {
         baseRevision: vi.fn(() => 3),
         cleanupMyPlaceholders: vi.fn(async () => 0),
     };
-    const changes = { start: vi.fn(async () => undefined), stop: vi.fn(async () => undefined), clear: vi.fn() };
+    const changes = { start: vi.fn(async () => undefined), stop: vi.fn(async () => undefined), clear: vi.fn(), all: vi.fn(() => []) };
     const minecraft = {
         start: vi.fn<(opts: { signal?: AbortSignal }) => Promise<void>>(async () => {
             javaRunning = true;
@@ -294,5 +294,39 @@ describe('SessionController: startup and quit', () => {
         upload.resolve({ uploaded: 1, deleted: 0, revision: 4 });
         await done;
         expect(t.session.getState().phase).toBe('idle');
+    });
+});
+
+describe('SessionController: progress', () => {
+    function progressEvents(events: Array<[string, unknown]>): SessionProgress[] {
+        return events.filter(([name]) => name === 'session:progress').map(([, payload]) => payload as SessionProgress);
+    }
+
+    it('a start and a stop each fill the bar from 0 to 100 % and close every log line', async () => {
+        const t = setup();
+        await t.session.start('s1');
+        const start = progressEvents(t.events);
+        expect(start[0]).toMatchObject({ title: 'Starting the server', active: true, fraction: 0 });
+        expect(start.at(-1)).toMatchObject({ title: 'Starting the server', active: false, outcome: 'done', fraction: 1 });
+
+        await t.session.stop();
+        const stop = progressEvents(t.events).filter((p) => p.title === 'Stopping and uploading');
+        expect(stop.at(-1)).toMatchObject({ outcome: 'done', fraction: 1 });
+        const fractions = stop.map((p) => p.fraction);
+        expect(fractions).toEqual([...fractions].sort((a, b) => a - b));          // never backwards
+        expect(t.session.steps().filter((s) => s.status === 'loading')).toEqual([]);
+    });
+
+    it('a failed upload marks its stage as failed, and the retry says what it does', async () => {
+        const t = setup();
+        await t.session.start('s1');
+        t.sync.uploadSession.mockRejectedValueOnce(new AppError('UPLOAD_INCOMPLETE', '3 files could not be uploaded.'));
+        await t.session.stop();
+        expect(t.session.getProgress()).toMatchObject({ outcome: 'failed', active: false });
+        expect(t.session.steps().some((s) => s.status === 'error' && s.message === '3 files could not be uploaded.')).toBe(true);
+
+        await t.session.retryUpload();
+        expect(t.session.getProgress()).toMatchObject({ title: 'Retrying the failed uploads', outcome: 'done' });
+        expect(t.session.steps().some((s) => s.message.startsWith('Retrying'))).toBe(true);
     });
 });

@@ -23,12 +23,16 @@ export async function md5OfFile(absPath: string, signal?: AbortSignal): Promise<
 /**
  * Walks `root` (symlinks are not followed, ignored folders are not entered) and returns path -> entry,
  * sorted by path. A file that disappears during the scan is left out; a missing root gives an empty snapshot.
+ * onProgress(done, total) is called after every file once the folder walk has counted them.
  */
 export async function scanLocal(
     root: string, base: Snapshot, isIgnored: (rel: string) => boolean, signal?: AbortSignal,
+    onProgress?: (done: number, total: number) => void,
 ): Promise<Snapshot> {
     const files: Array<{ rel: string; abs: string }> = [];
     await walk(root, '', isIgnored, files, signal);
+    let scanned = 0;
+    onProgress?.(0, files.length);
 
     const entries = new Map<string, SnapshotEntry>();
     let next = 0;
@@ -40,6 +44,7 @@ export async function scanLocal(
                 signal?.throwIfAborted();
                 const entry = await scanFile(file.abs, file.rel, base.get(file.rel), signal);
                 if (entry) entries.set(file.rel, entry);
+                onProgress?.(++scanned, files.length);
             } catch (err) {
                 failed = true;              // stop the other workers; Promise.all rejects with this error
                 throw err;
@@ -93,7 +98,7 @@ async function scanFile(abs: string, rel: string, known: SnapshotEntry | undefin
         const md5 = await md5OfFile(abs, signal);
         return { size: st.size, md5, mtimeMs: st.mtimeMs };
     } catch (err) {
-        if (errnoCode(err) === 'ENOENT') return null;       // deleted between readdir and stat/hash (F35)
+        if (errnoCode(err) === 'ENOENT') return null;       // deleted between readdir and stat/hash
         if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) throw err;
         throw readError(rel, err);
     }

@@ -4,7 +4,7 @@
 // calls them with invoke() (src/api.ts). A renamed or mistyped channel is a compile error.
 import type {
     AppErrorInfo, AppSettings, ChangeBatch, ConflictChoice, LockView, MemberRole, ServerId,
-    ServerSettings, ServerSummary, SessionState, StepMessage, SyncReport, SyncRules,
+    ServerSettings, ServerSummary, SessionProgress, SessionState, StepMessage, SyncReport, SyncRules,
     TransferSnapshot, UserInfo,
 } from './types';
 
@@ -60,6 +60,7 @@ export interface Commands {
     'session:transfers': () => TransferSnapshot;
     'session:steps': () => StepMessage[];
     'session:console': () => string[];
+    'session:progress': () => SessionProgress;
 
     'settings:get': () => AppSettings;
     'settings:set': (patch: Partial<Omit<AppSettings, 'joinedServerIds'>>) => AppSettings;
@@ -81,6 +82,7 @@ export interface Commands {
 export interface Events {
     'session:state': SessionState;
     'session:step': StepMessage;
+    'session:progress': SessionProgress;
     'sync:report': SyncReport;
     'lock:update': { serverId: ServerId; view: LockView };
     'transfer:progress': TransferSnapshot;

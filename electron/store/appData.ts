@@ -3,6 +3,7 @@
 //   servers/<id>/settings.json            per-server settings (local path, Java flags)
 //   servers/<id>/base.json                what this PC and the cloud last agreed on
 //   servers/<id>/journal.json             exists only while an upload is unfinished
+//   servers/<id>/journal.log              what that upload has done so far, one JSON line per event
 //   servers/<id>/backups/<time>-<label>/  copies made before overwriting local files
 // The files are small, so synchronous fs is fine; every write is atomic (write *.tmp, fsync, rename).
 import fs from 'node:fs';
@@ -18,7 +19,17 @@ export interface UploadJournal {
     startedAt: string;
     baseRevision: number;
     sessionId: string;
+    /** true when journal.log records every job; journals from before the log existed lack it. */
+    logged?: boolean;
 }
+
+/** One line of journal.log. Appended as things happen, so after a crash the file says exactly what reached
+ *  Drive: a "start" without its "done" is the only case that has to be checked on Drive. */
+export type JournalEntry =
+    | { t: 'folder'; p: string; id: string }
+    | { t: 'start'; p: string }
+    | { t: 'done'; p: string; id: string; md5: string; size: number }
+    | { t: 'gone'; p: string };
 
 export const RAM_LIMITS = { min: 256, max: 65536 } as const;
 
@@ -119,6 +130,36 @@ export class AppData {
 
     deleteJournal(id: string): void {
         fs.rmSync(this.serverFile(id, 'journal.json'), { force: true });
+        fs.rmSync(this.serverFile(id, 'journal.log'), { force: true });
+    }
+
+    /** Appends entries to journal.log (append-only, so a crash can lose at most the line being written). */
+    appendJournalLog(id: string, entries: JournalEntry[]): void {
+        if (entries.length === 0) return;
+        const file = this.serverFile(id, 'journal.log');
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.appendFileSync(file, entries.map((e) => `${JSON.stringify(e)}\n`).join(''));
+    }
+
+    /** The log's entries in order; a torn last line (the app died while writing it) is skipped. */
+    readJournalLog(id: string): JournalEntry[] {
+        let text: string;
+        try {
+            text = fs.readFileSync(this.serverFile(id, 'journal.log'), 'utf8');
+        } catch {
+            return [];
+        }
+        const entries: JournalEntry[] = [];
+        for (const line of text.split('\n')) {
+            if (!line.trim()) continue;
+            try {
+                const entry = parseJournalEntry(JSON.parse(line));
+                if (entry) entries.push(entry);
+            } catch {
+                console.warn(`[appData] ${id}: skipping a damaged journal line`);
+            }
+        }
+        return entries;
     }
 
     serversWithJournal(): string[] {
@@ -173,7 +214,7 @@ export class AppData {
             settings.playitggPath = vars.playitggPath.trim();
         }
         const checklist = isRecord(vars.checklist) ? vars.checklist : {};
-        // The old default was "playit.gg on" with no path, which blocked every start (F41).
+        // The old default was "playit.gg on" with no path, which blocked every start.
         if (typeof checklist.playitgg === 'boolean') settings.usePlayitgg = checklist.playitgg && settings.playitggPath !== '';
         if (typeof checklist.serverConsole === 'boolean') settings.launchServer = checklist.serverConsole;
         this.writeSettings(settings);
@@ -320,7 +361,27 @@ function parseBase(raw: unknown, id: string): BaseSnapshot | null {
 function parseJournal(raw: unknown, id: string): UploadJournal | null {
     if (!isRecord(raw) || raw.format !== 1 || raw.serverId !== id) return null;
     if (typeof raw.startedAt !== 'string' || !isCount(raw.baseRevision) || typeof raw.sessionId !== 'string') return null;
-    return { format: 1, serverId: id, startedAt: raw.startedAt, baseRevision: raw.baseRevision, sessionId: raw.sessionId };
+    const journal: UploadJournal = { format: 1, serverId: id, startedAt: raw.startedAt, baseRevision: raw.baseRevision, sessionId: raw.sessionId };
+    if (raw.logged === true) journal.logged = true;
+    return journal;
+}
+
+function parseJournalEntry(raw: unknown): JournalEntry | null {
+    if (!isRecord(raw) || typeof raw.p !== 'string') return null;
+    switch (raw.t) {
+        case 'folder':
+            return typeof raw.id === 'string' ? { t: 'folder', p: raw.p, id: raw.id } : null;
+        case 'start':
+            return { t: 'start', p: raw.p };
+        case 'done':
+            return typeof raw.id === 'string' && typeof raw.md5 === 'string' && isCount(raw.size)
+                ? { t: 'done', p: raw.p, id: raw.id, md5: raw.md5, size: raw.size }
+                : null;
+        case 'gone':
+            return { t: 'gone', p: raw.p };
+        default:
+            return null;
+    }
 }
 
 function legacyPaths(legacy: Record<string, unknown>): Record<string, string> {

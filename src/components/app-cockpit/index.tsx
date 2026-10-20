@@ -11,7 +11,7 @@ import { createServer } from '../../stores/serverActions';
 import { selectSelectedServer, useServersStore } from '../../stores/serversStore';
 import { lockFor, reportFor, useSessionStore } from '../../stores/sessionStore';
 import { DirectoryMenu } from '../directory-menu';
-import FailedFiles from '../transfers-panel/failed-files';
+import FailedFiles from '../progress-card/failed-files';
 import JoinServer from '../join-server';
 import Modal from '../modal';
 
@@ -69,7 +69,7 @@ export default function AppCockpit() {
     const mode: PowerMode = readOnly && computed.kind === 'start'
         ? { kind: 'start', enabled: false, reason: 'You were invited as a reader, so you can watch this server but not host it.' }
         : computed;
-    // F33: what I may do comes from my role on the server, never from a constant.
+    // what I may do comes from my role on the server, never from a constant.
     const canEditRules = selected !== null && (selected.myRole === 'owner' || selected.myRole === 'writer' || selected.kind === 'owned');
 
     async function handleCreate() {

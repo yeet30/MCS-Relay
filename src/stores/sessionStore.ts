@@ -4,7 +4,8 @@
 import { create } from 'zustand';
 import type { QuitPrompt } from '../../shared/ipc';
 import type {
-    AppErrorInfo, ChangeBatch, ChangeKind, LockView, ServerId, SessionState, StepMessage, SyncReport, TransferSnapshot,
+    AppErrorInfo, ChangeBatch, ChangeKind, LockView, ServerId, SessionProgress, SessionState, StepMessage, SyncReport,
+    TransferSnapshot,
 } from '../../shared/types';
 import { invoke } from '../api';
 import { applyChangeBatch, mergeChange } from '../lib/changes';
@@ -30,6 +31,7 @@ interface ResyncBuffer {
     steps: StepMessage[];
     sawState: boolean;
     sawTransfer: boolean;
+    sawProgress: boolean;
 }
 
 export interface SessionStore {
@@ -43,6 +45,8 @@ export interface SessionStore {
     /** The newest lock view per server, from lock:update events and reports. */
     locks: Record<ServerId, LockView>;
     steps: StepMessage[];
+    /** The bar of the current (or last) start or stop. */
+    progress: SessionProgress | null;
     transfer: TransferSnapshot | null;
     changes: Map<string, ChangeKind>;
     console: string[];
@@ -54,6 +58,7 @@ export interface SessionStore {
     applyLock: (serverId: ServerId, view: LockView) => void;
     applyStep: (step: StepMessage) => void;
     applyTransfer: (snapshot: TransferSnapshot) => void;
+    applyProgress: (progress: SessionProgress) => void;
     applyChanges: (batch: ChangeBatch) => void;
     resetChanges: () => void;
     appendConsole: (lines: string[]) => void;
@@ -84,15 +89,16 @@ export const useSessionStore = create<SessionStore>()((set, get) => {
     let resyncInFlight: Promise<void> | null = null;
 
     async function runResync(): Promise<void> {
-        const [state, report, steps, transfer, changes, lines] = await Promise.all([
+        const [state, report, steps, transfer, changes, lines, progress] = await Promise.all([
             invoke('session:get'),
             invoke('session:lastReport'),
             invoke('session:steps'),
             invoke('session:transfers'),
             invoke('session:changes'),
             invoke('session:console'),
+            invoke('session:progress'),
         ]);
-        const buffered = buffer ?? { changeOps: [], lines: [], steps: [], sawState: false, sawTransfer: false };
+        const buffered = buffer ?? { changeOps: [], lines: [], steps: [], sawState: false, sawTransfer: false, sawProgress: false };
         buffer = null;
 
         const patch: Partial<SessionStore> = {};
@@ -103,6 +109,7 @@ export const useSessionStore = create<SessionStore>()((set, get) => {
         }
         if (steps.ok) patch.steps = mergeSteps(steps.value, buffered.steps);
         if (transfer.ok && !buffered.sawTransfer) patch.transfer = transfer.value;
+        if (progress.ok && !buffered.sawProgress) patch.progress = progress.value.startedAt ? progress.value : null;
         if (changes.ok) {
             const map = new Map<string, ChangeKind>(changes.value);
             for (const op of buffered.changeOps) {
@@ -114,7 +121,7 @@ export const useSessionStore = create<SessionStore>()((set, get) => {
         if (lines.ok) patch.console = mergeConsole(lines.value, buffered.lines);
         set(patch);
 
-        for (const res of [state, report, steps, transfer, changes, lines]) {
+        for (const res of [state, report, steps, transfer, changes, lines, progress]) {
             if (!res.ok && res.error.code !== 'NOT_SIGNED_IN') console.warn('[session] resync failed:', res.error.message, res.error.detail ?? '');
         }
     }
@@ -126,6 +133,7 @@ export const useSessionStore = create<SessionStore>()((set, get) => {
         checkError: null,
         locks: {},
         steps: [],
+        progress: null,
         transfer: null,
         changes: new Map(),
         console: [],
@@ -154,6 +162,11 @@ export const useSessionStore = create<SessionStore>()((set, get) => {
         applyTransfer: (snapshot) => {
             if (buffer) buffer.sawTransfer = true;
             set({ transfer: snapshot });
+        },
+
+        applyProgress: (progress) => {
+            if (buffer) buffer.sawProgress = true;
+            set({ progress });
         },
 
         applyChanges: (batch) => {
@@ -195,7 +208,7 @@ export const useSessionStore = create<SessionStore>()((set, get) => {
 
         resync: () => {
             if (resyncInFlight) return resyncInFlight;
-            buffer = { changeOps: [], lines: [], steps: [], sawState: false, sawTransfer: false };
+            buffer = { changeOps: [], lines: [], steps: [], sawState: false, sawTransfer: false, sawProgress: false };
             resyncInFlight = runResync().finally(() => {
                 buffer = null;
                 resyncInFlight = null;

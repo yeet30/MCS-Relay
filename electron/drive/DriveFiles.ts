@@ -182,10 +182,14 @@ export class DriveFiles implements DriveApi {
         return this.listFiles(clauses.join(' and '));
     }
 
-    async createFolder(name: string, parentId: string): Promise<DriveFileMeta> {
+    async createFolder(name: string, parentId: string, opts?: TransferOptions, appProperties?: Record<string, string>): Promise<DriveFileMeta> {
+        const json: Record<string, unknown> = { name, mimeType: FOLDER_MIME, parents: [parentId] };
+        if (appProperties && Object.keys(appProperties).length > 0) json.appProperties = appProperties;
         const { data } = await this.client.request('POST', `${DRIVE_API}/files`, {
             query: { fields: META_FIELDS, supportsAllDrives: true },
-            json: { name, mimeType: FOLDER_MIME, parents: [parentId] },
+            json,
+            retry: opts === undefined,
+            signal: opts?.signal,
         });
         return parseMeta(data);
     }
@@ -245,6 +249,14 @@ export class DriveFiles implements DriveApi {
             clauses.push(`appProperties has { key='${APP_PROPS.server}' and value='${escapeQueryValue(filter.serverId)}' }`);
         }
         return this.listFiles(clauses.join(' and '));
+    }
+
+    async listMyTagged(serverId: string): Promise<DriveFileMeta[]> {
+        return this.listFiles([
+            `appProperties has { key='${APP_PROPS.server}' and value='${escapeQueryValue(serverId)}' }`,
+            "'me' in owners",
+            'trashed = false',
+        ].join(' and '));
     }
 
     /* ------------------------------------------------------------------ content */

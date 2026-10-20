@@ -4,7 +4,6 @@ import { LoaderCircle } from 'lucide-react';
 import type { QuitPrompt } from '../../../shared/ipc';
 import { invoke } from '../../api';
 import { useConfirm } from '../../hooks/useConfirm';
-import { latestSteps } from '../../lib/steps';
 import { useSessionStore } from '../../stores/sessionStore';
 
 function quitMessage(prompt: QuitPrompt): string {
@@ -28,7 +27,7 @@ function quitMessage(prompt: QuitPrompt): string {
 export default function QuitGuard() {
     const prompt = useSessionStore((s) => s.quitPrompt);
     const quitting = useSessionStore((s) => s.quitting);
-    const steps = useSessionStore((s) => s.steps);
+    const message = useSessionStore((s) => (s.progress?.active ? s.progress.message : null));
     const { confirm, popup } = useConfirm();
     const asking = useRef(false);
 
@@ -43,8 +42,6 @@ export default function QuitGuard() {
         });
     }, [prompt, confirm]);
 
-    const { major } = latestSteps(steps);
-
     return (
         <>
             {popup}
@@ -52,7 +49,7 @@ export default function QuitGuard() {
                 <div className='quit-overlay'>
                     <LoaderCircle size={32} className='spinner' />
                     <p>Stopping the server and saving the world…</p>
-                    {major && <p className='quit-step'>{major.message}</p>}
+                    {message && <p className='quit-step'>{message}</p>}
                 </div>
             )}
         </>

@@ -1,5 +1,5 @@
 // The ONE place that subscribes to events from the main process. Called once from main.tsx; calling it again
-// does nothing, so the subscriptions cannot pile up (F37).
+// does nothing, so the subscriptions cannot pile up.
 import { on, onSignedOut } from '../api';
 import { useAuthStore } from './authStore';
 import { useServersStore } from './serversStore';
@@ -14,6 +14,7 @@ export function startEventSubscriptions(): void {
     unsubscribers = [
         on('session:state', (state) => session().applyState(state)),
         on('session:step', (step) => session().applyStep(step)),
+        on('session:progress', (progress) => session().applyProgress(progress)),
         on('sync:report', (report) => session().applyReport(report)),
         on('lock:update', ({ serverId, view }) => session().applyLock(serverId, view)),
         on('transfer:progress', (snapshot) => session().applyTransfer(snapshot)),

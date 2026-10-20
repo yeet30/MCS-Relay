@@ -8,15 +8,18 @@ interface IModal {
     items: IModalItems[];
     width?: number;
     height?: number;
+    /** The tab shown when the modal opens. */
+    initialTab?: number;
 }
 
-export default function Modal({ isOpen, onClose, items, width = 400, height = 300 }: IModal) {
+export default function Modal({ isOpen, onClose, items, width = 400, height = 300, initialTab = 0 }: IModal) {
     const [activeTab, setActiveTab] = useState(0);
 
     // Reset only when the modal opens: callers pass a new items array on every render, and the stores update
     // several times a second, so resetting on items would make the other tabs unreachable.
     useEffect(() => {
-        if (isOpen) setActiveTab(0);
+        if (isOpen) setActiveTab(initialTab);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
 
     if (!isOpen || items.length === 0) return null;

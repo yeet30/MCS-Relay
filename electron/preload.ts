@@ -1,4 +1,4 @@
-// The only bridge between the page and the main process: window.api (F31).
+// The only bridge between the page and the main process: window.api.
 // The page can call the channels of shared/ipc.ts and listen to its events, nothing else.
 import { contextBridge, ipcRenderer } from 'electron';
 import type { IpcRendererEvent } from 'electron';
@@ -6,7 +6,7 @@ import { COMMAND_PREFIXES } from '../shared/ipc';
 import type { BridgeApi, EventName } from '../shared/ipc';
 
 const EVENTS: Record<EventName, true> = {
-    'session:state': true, 'session:step': true, 'sync:report': true, 'lock:update': true,
+    'session:state': true, 'session:step': true, 'session:progress': true, 'sync:report': true, 'lock:update': true,
     'transfer:progress': true, 'changes:batch': true, 'changes:reset': true, 'console:output': true,
     'app:confirmQuit': true, 'app:quitting': true,
 };

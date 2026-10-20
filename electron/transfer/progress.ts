@@ -6,6 +6,11 @@ const SMOOTHING = 0.2;                  // speed = 0.8 * speed + 0.2 * sample
 const GAIN_WINDOW_MS = 10_000;
 const GAIN_THRESHOLD = 1.05;            // a new lane must add at least 5% bytes/s
 const MAX_FAILURES = 100;               // snapshots go over IPC four times a second; filesFailed keeps the real count
+// The smoothed speeds decay towards 0 while nothing moves but never reach it; below these floors they count as
+// "unknown", otherwise remaining / speed explodes (1e55 hours was seen in a stalled upload).
+const MIN_BYTES_PER_SEC = 1;
+const MIN_FILES_PER_SEC = 0.001;
+const MAX_ETA_SEC = 99 * 3600;
 
 type EntryState = 'queued' | 'active' | 'backoff' | 'done' | 'failed';
 
@@ -211,10 +216,11 @@ export class ProgressReporter {
         if (remainingFiles <= 0) return 0;
         const remainingBytes = Math.max(0, this.bytesTotal - bytesDone - this.failedBytes);
         const estimates: number[] = [];
-        if (remainingBytes > 0 && this.bytesPerSec > 0) estimates.push(remainingBytes / this.bytesPerSec);
-        if (this.filesPerSec > 0) estimates.push(remainingFiles / this.filesPerSec);
+        if (remainingBytes > 0 && this.bytesPerSec >= MIN_BYTES_PER_SEC) estimates.push(remainingBytes / this.bytesPerSec);
+        if (this.filesPerSec >= MIN_FILES_PER_SEC) estimates.push(remainingFiles / this.filesPerSec);
         if (estimates.length === 0) return null;
-        return Math.ceil(Math.max(...estimates));
+        const eta = Math.ceil(Math.max(...estimates));
+        return Number.isFinite(eta) ? Math.min(eta, MAX_ETA_SEC) : null;
     }
 
     private add(path: string, kind: TransferKind, size: number): Entry {

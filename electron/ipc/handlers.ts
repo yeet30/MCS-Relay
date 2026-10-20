@@ -21,7 +21,7 @@ export interface HandlerDeps {
         'list' | 'create' | 'delete' | 'rename' | 'invite' | 'removeMember' | 'leave' | 'join' | 'chooseLocalPath' | 'openFolder' | 'info'>;
     session: Pick<SessionController,
         'getState' | 'preflight' | 'lastReport' | 'start' | 'stop' | 'resolve' | 'retryUpload' | 'dismiss' | 'command'
-        | 'steps' | 'consoleLines' | 'select' | 'isBusy' | 'resumeUnfinishedUploads'>;
+        | 'steps' | 'consoleLines' | 'select' | 'isBusy' | 'resumeUnfinishedUploads' | 'getProgress'>;
     settings: Pick<SettingsService, 'get' | 'set' | 'getServer' | 'setServer' | 'choosePlayitPath'>;
     sync: Pick<SyncEngine, 'getRules' | 'setRules'>;
     transfers: Pick<TransferEngine, 'snapshot'>;
@@ -148,6 +148,7 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
     handle('session:transfers', () => d.transfers.snapshot());
     handle('session:steps', () => d.session.steps());
     handle('session:console', () => d.session.consoleLines());
+    handle('session:progress', () => d.session.getProgress());
 
     handle('settings:get', () => d.settings.get());
     handle('settings:set', (patch) => d.settings.set(object(patch, 'settings change')));

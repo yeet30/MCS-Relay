@@ -52,6 +52,11 @@ describe('formatEta', () => {
         expect(formatEta(2 * 3600 + 5 * 60)).toBe('about 2 h 5 min left');
         expect(formatEta(2 * 3600 + 59.8 * 60)).toBe('about 3 h left');
     });
+
+    test('very long estimates stay short', () => {
+        expect(formatEta(99 * 3600)).toBe('more than 99 h left');
+        expect(formatEta(1.6933391617028115e55)).toBe('more than 99 h left');
+    });
 });
 
 test('formatUptime', () => {

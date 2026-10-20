@@ -7,6 +7,7 @@ import path from 'node:path';
 import Bottleneck from 'bottleneck';
 import { APP_PROPS } from '../../shared/types';
 import type { AppErrorInfo, TransferSnapshot, UserInfo } from '../../shared/types';
+import { taggedAs } from '../sync/tags';
 import { ChecksumError, DriveError, FOLDER_MIME, isRateLimit, isRetryable } from '../drive/types';
 import type { DriveApi, DriveFileMeta, TransferOptions, UploadResult, UploadSource } from '../drive/types';
 import { AppError, toAppError } from '../errors';
@@ -17,13 +18,22 @@ export type TransferJob =
     | { kind: 'download'; path: string; driveId: string; size: number; md5: string; dest: string }
     | { kind: 'upload'; path: string; name: string; size: number; md5: string; source: string; driveId?: string; parentId?: string; appProperties?: Record<string, string> }
     | { kind: 'delete-remote'; path: string; driveId: string; serverId: string; pendingFolderId: string | null }
-    | { kind: 'delete-local'; path: string; target: string };
+    | { kind: 'delete-local'; path: string; target: string }
+    | { kind: 'create-folder'; path: string; name: string; parentId: string; serverId: string; appProperties: Record<string, string> };
 
 export type JobOutcome =
     | { kind: 'download'; path: string; driveId: string; md5: string; size: number; mtimeMs: number }
     | { kind: 'upload'; path: string; driveId: string; md5: string; size: number }
     | { kind: 'delete-remote'; path: string; method: 'trashed' | 'placeholder' | 'already-gone' }
-    | { kind: 'delete-local'; path: string };
+    | { kind: 'delete-local'; path: string }
+    | { kind: 'create-folder'; path: string; driveId: string };
+
+/** Called as jobs start and finish, so the caller can write them to its upload journal as they happen. */
+export interface RunHooks {
+    /** Before the first request of a job is sent. */
+    onStart?: (job: TransferJob) => void;
+    onDone?: (outcome: JobOutcome) => void;
+}
 
 export interface TransferResult {
     done: JobOutcome[];
@@ -45,6 +55,7 @@ type DownloadJob = Extract<TransferJob, { kind: 'download' }>;
 type UploadJob = Extract<TransferJob, { kind: 'upload' }>;
 type DeleteRemoteJob = Extract<TransferJob, { kind: 'delete-remote' }>;
 type DeleteLocalJob = Extract<TransferJob, { kind: 'delete-local' }>;
+type CreateFolderJob = Extract<TransferJob, { kind: 'create-folder' }>;
 
 interface RunContext {
     signal?: AbortSignal;
@@ -53,6 +64,7 @@ interface RunContext {
     /** Files created by an earlier attempt of the same job: a retry updates them instead of creating a duplicate. */
     createdIds: Map<TransferJob, string>;
     inflight: Set<Promise<JobOutcome>>;
+    hooks: RunHooks;
 }
 
 const DEFAULT_LANES = { start: 4, min: 1, max: 12 };
@@ -79,8 +91,8 @@ export class TransferEngine {
 
     /** Never rejects because of failed jobs (they are listed in the result); rejects only when `signal` aborts.
      *  Runs are serialized: a second call waits for the first to finish. */
-    run(label: string, jobs: TransferJob[], signal?: AbortSignal): Promise<TransferResult> {
-        const result = this.queue.then(() => this.runNow(label, jobs, signal));
+    run(label: string, jobs: TransferJob[], signal?: AbortSignal, hooks: RunHooks = {}): Promise<TransferResult> {
+        const result = this.queue.then(() => this.runNow(label, jobs, signal, hooks));
         this.queue = result.then(() => undefined, () => undefined);
         return result;
     }
@@ -89,10 +101,11 @@ export class TransferEngine {
         return this.progress.snapshot();
     }
 
-    private async runNow(label: string, jobs: TransferJob[], signal?: AbortSignal): Promise<TransferResult> {
+    private async runNow(label: string, jobs: TransferJob[], signal: AbortSignal | undefined, hooks: RunHooks): Promise<TransferResult> {
         throwIfAborted(signal);
         const now = this.deps.now ?? Date.now;
-        const maxAttempts = Math.max(1, this.deps.maxAttempts ?? 5);
+        // Seven attempts wait 1 + 2 + 4 + 8 + 16 + 32 s: about a minute, Google's advice for 500s and 503s.
+        const maxAttempts = Math.max(1, this.deps.maxAttempts ?? 7);
         const backoffMs = this.deps.backoffMs ?? defaultBackoffMs;
         const progress = new ProgressReporter({ now });
         this.progress = progress;
@@ -102,7 +115,7 @@ export class TransferEngine {
         // prints a "possible memory leak" warning above 10 listeners on one signal.
         const runAbort = new AbortController();
         setMaxListeners(MAX_SIGNAL_LISTENERS, runAbort.signal);
-        const ctx: RunContext = { signal: runAbort.signal, progress, attempts: new Map(), createdIds: new Map(), inflight: new Set() };
+        const ctx: RunContext = { signal: runAbort.signal, progress, attempts: new Map(), createdIds: new Map(), inflight: new Set(), hooks };
         const result: TransferResult = { done: [], failed: [] };
         const byId = new Map<string, TransferJob>();
         const timers = new Set<ReturnType<typeof setTimeout>>();
@@ -155,6 +168,11 @@ export class TransferEngine {
                     if (job.kind !== 'delete-local') lanes.onSuccess();
                     progress.jobDone(job.path);
                     result.done.push(outcome);
+                    try {
+                        hooks.onDone?.(outcome);
+                    } catch (hookErr) {
+                        console.error('[transfer] onDone hook failed:', hookErr);
+                    }
                 },
                 (err: unknown) => {
                     if (finished || signal?.aborted) return;
@@ -226,6 +244,8 @@ export class TransferEngine {
         const attempt = ctx.attempts.get(job) ?? 0;
         ctx.attempts.set(job, attempt + 1);
         ctx.progress.jobStarted(job.path);
+        // Synchronous, so the journal knows about a create before its request can reach Drive.
+        if (attempt === 0) ctx.hooks.onStart?.(job);
         const task = this.perform(job, ctx, attempt).catch(async (err: unknown) => {
             if (err instanceof DriveError && err.quotaFull) throw await this.quotaError(job, err, ctx);
             throw err;
@@ -244,6 +264,7 @@ export class TransferEngine {
             case 'upload': return this.upload(job, ctx, attempt);
             case 'delete-remote': return this.deleteRemote(job);
             case 'delete-local': return this.deleteLocal(job);
+            case 'create-folder': return this.createFolder(job, ctx, attempt);
         }
     }
 
@@ -292,16 +313,23 @@ export class TransferEngine {
 
     /** A file this app created for the same path in an earlier attempt (recognised by its appProperties). */
     private async findOwnCopy(job: UploadJob): Promise<string | undefined> {
-        const props = job.appProperties;
-        const relPath = props?.[APP_PROPS.path];
-        if (!job.parentId || !props || !relPath) return undefined;
+        const serverId = job.appProperties?.[APP_PROPS.server];
+        if (!job.parentId || !serverId) return undefined;
         const matches = (await this.deps.drive.listChildren(job.parentId, { name: job.name })).filter((m) =>
-            m.ownedByMe === true
-            && m.mimeType !== FOLDER_MIME
-            && m.appProperties?.[APP_PROPS.path] === relPath
-            && m.appProperties[APP_PROPS.server] === props[APP_PROPS.server]
-            && m.appProperties[APP_PROPS.tombstone] !== '1');
+            m.ownedByMe === true && m.mimeType !== FOLDER_MIME && taggedAs(m.appProperties, serverId, job.path));
         return matches.length > 0 ? matches[matches.length - 1].id : undefined;
+    }
+
+    /** Creating is not idempotent: when an attempt fails, Drive may still have made the folder before the answer
+     *  got lost. A retry therefore looks for that folder first instead of making a second one. */
+    private async createFolder(job: CreateFolderJob, ctx: RunContext, attempt: number): Promise<JobOutcome> {
+        if (attempt > 0) {
+            const made = (await this.deps.drive.listChildren(job.parentId, { name: job.name, foldersOnly: true }))
+                .find((m) => m.ownedByMe === true && taggedAs(m.appProperties, job.serverId, job.path));
+            if (made) return { kind: 'create-folder', path: job.path, driveId: made.id };
+        }
+        const folder = await this.deps.drive.createFolder(job.name, job.parentId, { signal: ctx.signal }, job.appProperties);
+        return { kind: 'create-folder', path: job.path, driveId: folder.id };
     }
 
     /** Owners trash their own files; anyone else turns the file into a 0-byte placeholder for its owner. */
@@ -373,7 +401,7 @@ export class TransferEngine {
     /** Storage is charged to a file's owner, so the message names the person who has to free up space. */
     private async quotaError(job: TransferJob, err: DriveError, ctx: RunContext): Promise<AppError> {
         const detail = toAppError(err).detail;
-        const fileId = job.kind === 'delete-local' ? undefined
+        const fileId = job.kind === 'delete-local' || job.kind === 'create-folder' ? undefined
             : job.kind === 'upload' ? job.driveId ?? ctx.createdIds.get(job)
                 : job.driveId;
         if (!fileId) {

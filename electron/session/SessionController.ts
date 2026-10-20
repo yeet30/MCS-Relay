@@ -1,9 +1,11 @@
-// The one place that knows what phase a hosting session is in (Part 2, Figure 3).
-// Every decision is taken from this.state.phase, never from a UI flag (F8).
+// The one place that knows what phase a hosting session is in.
+// Every decision is taken from this.state.phase, never from a UI flag.
 import type { EventName, Events } from '../../shared/ipc';
 import type {
-    AppErrorInfo, ConflictChoice, LockPhase, LockView, SessionPhase, SessionState, StepMessage, SyncReport, UserInfo,
+    AppErrorInfo, ConflictChoice, LockPhase, LockView, SessionPhase, SessionProgress, SessionState, StepMessage,
+    SyncReport, TransferSnapshot, UserInfo,
 } from '../../shared/types';
+import { ancestorsOf, parentOf } from '../../shared/paths';
 import { AppError, toAppError } from '../errors';
 import type { LockService } from '../lock/LockService';
 import type { MinecraftProcess } from '../processes/MinecraftProcess';
@@ -11,6 +13,8 @@ import type { PlayitProcess } from '../processes/PlayitProcess';
 import type { SettingsService } from '../settings/SettingsService';
 import type { ChangeTracker } from '../sync/changeTracker';
 import type { SyncEngine } from '../sync/SyncEngine';
+import { OrchestrationProgress } from './progress';
+import type { StagePlan } from './progress';
 
 export interface EventSink {
     emit<E extends EventName>(event: E, payload: Events[E]): void;
@@ -21,7 +25,7 @@ export interface SessionDeps {
     sync: Pick<SyncEngine,
         'preflight' | 'resolve' | 'download' | 'uploadSession' | 'loadRules' | 'hasJournal' | 'serversWithJournal'
         | 'discardJournal' | 'baseRevision' | 'cleanupMyPlaceholders'>;
-    changes: Pick<ChangeTracker, 'start' | 'stop' | 'clear'>;
+    changes: Pick<ChangeTracker, 'start' | 'stop' | 'clear' | 'all'>;
     minecraft: Pick<MinecraftProcess, 'start' | 'stopAndWait' | 'isRunning' | 'send'>;
     playit: Pick<PlayitProcess, 'start' | 'stop'>;
     settings: Pick<SettingsService, 'get' | 'set' | 'getServer'>;
@@ -33,7 +37,7 @@ export interface SessionDeps {
     timeouts?: { playitMs?: number; minecraftMs?: number; stopMs?: number };
 }
 
-const MAX_STEPS = 50;
+const MAX_STEPS = 100;
 const MAX_CONSOLE = 1000;
 const LOCK_PHASES = new Set<SessionPhase>(['downloading', 'launching', 'running', 'stopping', 'uploading']);
 const IDLE_PHASES = new Set<SessionPhase>(['idle', 'failed']);
@@ -45,6 +49,13 @@ const IDLE: SessionState = {
 
 function isCode(err: unknown, code: AppErrorInfo['code']): boolean {
     return err instanceof AppError && err.code === code;
+}
+
+/** Files a start will download according to the last check (an estimate until the download plans again). */
+function downloadCount(report: SyncReport): number {
+    const plan = report.plan;
+    const mirror = report.pendingChoice === 'keep-cloud' ? plan.conflicts.length + plan.upload.length : 0;
+    return plan.download.length + plan.deleteLocal.length + mirror;
 }
 
 export class SessionController {
@@ -59,12 +70,23 @@ export class SessionController {
     private lockLost = false;
     private cancelled = false;
     private pollTimer: ReturnType<typeof setTimeout> | null = null;
+    private nextStepId = 1;
+    private lastTransfer: TransferSnapshot | null = null;
+    private readonly progress: OrchestrationProgress;
     private readonly now: () => number;
     private readonly sleep: (ms: number) => Promise<void>;
 
     constructor(private readonly d: SessionDeps) {
         this.now = d.now ?? Date.now;
         this.sleep = d.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+        this.progress = new OrchestrationProgress({
+            emit: (progress) => this.d.events.emit('session:progress', progress),
+            log: {
+                open: (message, importance) => this.openTask(message, importance),
+                update: (id, message, status) => this.updateTask(id, message, status),
+            },
+            now: this.now,
+        });
     }
 
     /* ------------------------------------------------------------------ queries */
@@ -83,6 +105,16 @@ export class SessionController {
 
     consoleLines(): string[] {
         return [...this.consoleLog];
+    }
+
+    getProgress(): SessionProgress {
+        return this.progress.snapshot();
+    }
+
+    /** Every transfer snapshot (wired by main.ts): moves the bar of the stage that is transferring. */
+    onTransfer(snapshot: TransferSnapshot): void {
+        this.lastTransfer = snapshot;
+        this.progress.applyTransfer(snapshot);
     }
 
     isBusy(): boolean {
@@ -107,8 +139,8 @@ export class SessionController {
         this.schedulePoll();
     }
 
-    async preflight(serverId: string): Promise<SyncReport> {
-        const report = await this.d.sync.preflight(serverId);
+    async preflight(serverId: string, progress?: OrchestrationProgress): Promise<SyncReport> {
+        const report = await this.d.sync.preflight(serverId, undefined, progress);
         if (serverId === this.selected || serverId === this.state.serverId) this.report = report;
         this.d.events.emit('sync:report', report);
         this.d.events.emit('lock:update', { serverId, view: report.lock });
@@ -146,14 +178,30 @@ export class SessionController {
         this.abort = new AbortController();
         const signal = this.abort.signal;
         this.setState({ ...IDLE, phase: 'checking', serverId });
-        this.step('Checking the server', 'loading', 'major');
+        const settings = this.d.settings.get();
+        const usePlayit = settings.usePlayitgg && Boolean(settings.playitggPath);
+        const known = this.report?.serverId === serverId ? this.report : null;
+        this.progress.begin('Starting the server', [
+            { key: 'check', label: 'Checking the server', total: 1 },
+            { key: 'claim', label: 'Reserving the server', total: 1 },
+            { key: 'scan', label: 'Checking your files', total: 1 },
+            { key: 'download', label: 'Downloading files', total: known ? downloadCount(known) : 0 },
+            { key: 'playit', label: 'Starting playit.gg', total: usePlayit ? 1 : 0 },
+            { key: 'java', label: 'Starting the Minecraft server', total: settings.launchServer ? 1 : 0 },
+            { key: 'watch', label: 'Watching the folder for changes', total: 1 },
+        ]);
+        if (!usePlayit) this.progress.skip('playit');
+        if (!settings.launchServer) this.progress.skip('java');
 
         let report: SyncReport;
         try {
-            report = await this.preflight(serverId);
+            this.progress.enter('check', 'Checking the server');
+            report = await this.preflight(serverId, this.progress);
             this.checkReport(report);
+            this.progress.setTotal('download', downloadCount(report));
+            this.progress.complete('check', 'Checked the server');
         } catch (err) {
-            this.step(toAppError(err).message, 'error', 'major');
+            this.progress.finish('failed', toAppError(err).message);
             this.setState({ ...IDLE });
             this.schedulePoll();
             throw err;
@@ -161,55 +209,56 @@ export class SessionController {
 
         try {
             this.setState({ phase: 'claiming' });
+            this.progress.enter('claim', 'Reserving the server');
             await this.claim(serverId, report);
-            this.step('The server is yours for this session', 'done', 'minor');
+            this.progress.complete('claim', 'The server is reserved for you');
 
             await this.enter('downloading');
-            await this.d.sync.download(serverId, report, signal);
+            await this.d.sync.download(serverId, report, signal, this.progress);
             this.throwIfLost();
 
             await this.enter('launching');
-            const settings = this.d.settings.get();
             const server = this.d.settings.getServer(serverId);
             let address: string | null = null;
-            if (settings.usePlayitgg && settings.playitggPath) {
-                this.step('Starting playit.gg', 'loading', 'minor');
+            if (usePlayit) {
+                this.progress.enter('playit', 'Starting playit.gg');
                 address = await this.d.playit.start(settings.playitggPath, this.d.timeouts?.playitMs ?? 60_000, signal);
                 this.setState({ address });
-                this.step(`playit.gg is ready: ${address}`, 'done', 'minor');
+                this.progress.complete('playit', `playit.gg is ready: ${address}`);
             }
             if (settings.launchServer) {
-                this.step('Starting the Minecraft server', 'loading', 'major');
+                this.progress.enter('java', 'Starting the Minecraft server');
                 this.onMinecraftOutput([`[System] Starting the Minecraft server (${new Date(this.now()).toLocaleTimeString()})`]);
                 await this.d.minecraft.start({
                     serverPath: server.localPath ?? '', javaFlags: server.javaFlags,
                     readyTimeoutMs: this.d.timeouts?.minecraftMs ?? 180_000, signal,
                 });
                 this.setState({ javaRunning: true });
-                this.step('The Minecraft server is ready', 'done', 'major');
+                this.progress.complete('java', 'The Minecraft server is ready');
             }
             this.throwIfLost();
 
+            this.progress.enter('watch', 'Watching the folder for changes');
             const startedAt = new Date(this.now()).toISOString();
             this.setState({ phase: 'running', startedAt });
             await this.d.lock.update(serverId, { phase: 'running', startedAt, address });
             this.d.changes.clear();
             if (server.localPath) await this.d.changes.start(server.localPath, await this.d.sync.loadRules(serverId));
-            this.step('Hosting', 'done', 'major');
+            this.progress.complete('watch', 'Hosting');
+            this.progress.finish('done');
         } catch (err) {
             const info = this.lockLost ? this.lostInfo() : toAppError(err);
             this.abort?.abort();
+            this.progress.finish(this.cancelled ? 'cancelled' : 'failed', this.cancelled ? 'The start was cancelled' : info.message);
             await this.stopProcesses();
             await this.d.changes.stop();
             await this.d.lock.releaseIfMine(serverId);
             if (this.cancelled) {
-                this.step('The start was cancelled', 'done', 'major');
                 this.setState({ ...IDLE });
                 void this.refreshAfterSession(serverId);
                 return;
             }
             console.warn('[session] start failed:', info.detail ?? info.message);
-            this.step(info.message, 'error', 'major');
             this.setState({ ...IDLE, phase: 'failed', serverId, error: info });
             throw new AppError(info.code, info.message, info.detail);
         }
@@ -244,7 +293,7 @@ export class SessionController {
             const me = await this.d.me();
             if (view.state !== 'held' || view.lock.host.email.toLowerCase() !== me.email.toLowerCase()) throw err;
             const waitSeconds = Math.max(1, Math.ceil(view.lock.leaseSeconds - view.ageSeconds) + 2);
-            this.step(`Waiting ${waitSeconds} s for this PC's previous session to expire`, 'loading', 'minor');
+            this.progress.enter('claim', `Waiting ${waitSeconds} s for this PC's previous session to expire`);
             await this.sleep(waitSeconds * 1000);
             this.abort?.signal.throwIfAborted();
         }
@@ -268,25 +317,67 @@ export class SessionController {
 
     private async runStop(): Promise<void> {
         const serverId = this.state.serverId!;
+        const javaRunning = this.state.javaRunning || this.d.minecraft.isRunning();
+        const playitRunning = this.state.address !== null;
+        this.progress.begin('Stopping and uploading', this.uploadPlan({
+            stopJava: javaRunning, stopPlayit: playitRunning, ...this.estimateUpload(serverId),
+        }));
         await this.enter('stopping');
-        this.step('Stopping the server', 'loading', 'major');
         await this.d.changes.stop();
+        if (javaRunning) this.progress.enter('stop-java', 'Stopping the Minecraft server (it saves the world first)');
         try {
             await this.d.minecraft.stopAndWait(this.d.timeouts?.stopMs ?? 60_000);
         } catch (err) {
             // Java is still writing the world: uploading now could save a half-written region file.
             const info = toAppError(err);
-            this.step(info.message, 'error', 'major');
+            this.progress.finish('failed', info.message);
             await this.d.playit.stop();
             this.setState({ phase: 'upload-pending', javaRunning: this.d.minecraft.isRunning(), error: info });
             return;
         }
         this.setState({ javaRunning: false, players: [] });
+        if (javaRunning) this.progress.complete('stop-java', 'The Minecraft server has stopped');
+        if (playitRunning) this.progress.enter('stop-playit', 'Stopping playit.gg');
         await this.d.playit.stop();
         this.setState({ address: null });
-        this.step('The server has stopped', 'done', 'major');
+        if (playitRunning) this.progress.complete('stop-playit', 'playit.gg has stopped');
         if (this.lockLost) return;
         await this.upload(serverId);
+    }
+
+    /** The stages of an upload. Folder and file counts are estimates until the scan has run. */
+    private uploadPlan(o: { claim?: boolean; stopJava?: boolean; stopPlayit?: boolean; files: number; folders: number }): StagePlan[] {
+        const plan: StagePlan[] = [];
+        if (o.claim) plan.push({ key: 'claim', label: 'Reserving the server', total: 1 });
+        if (o.stopJava) plan.push({ key: 'stop-java', label: 'Stopping the Minecraft server', total: 1 });
+        if (o.stopPlayit) plan.push({ key: 'stop-playit', label: 'Stopping playit.gg', total: 1 });
+        plan.push(
+            { key: 'scan', label: 'Checking your files', total: 1 },
+            { key: 'folders', label: 'Creating folders on Google Drive', total: o.folders },
+            { key: 'files', label: 'Uploading files', total: o.files },
+            { key: 'commit', label: 'Saving the new version', total: 1 },
+            { key: 'cleanup', label: 'Cleaning up on Google Drive', total: 1 },
+            { key: 'release', label: 'Releasing the server', total: 1 },
+        );
+        return plan;
+    }
+
+    /** Before the scan: the files the last check planned to upload plus everything that changed during the
+     *  session; for a new server, every folder of those files has to be created. */
+    private estimateUpload(serverId: string): { files: number; folders: number } {
+        const report = this.report?.serverId === serverId ? this.report : null;
+        const paths = new Set<string>([...(report?.plan.upload ?? []), ...(report?.plan.deleteRemote ?? [])]);
+        for (const [p] of this.d.changes.all()) paths.add(p);
+        let folders = 0;
+        if (report?.status === 'new-server') {
+            const dirs = new Set<string>();
+            for (const p of paths) {
+                const dir = parentOf(p);
+                if (dir) for (const ancestor of ancestorsOf(dir)) dirs.add(ancestor);
+            }
+            folders = dirs.size;
+        }
+        return { files: paths.size, folders };
     }
 
     retryUpload(): Promise<void> {
@@ -305,11 +396,18 @@ export class SessionController {
         this.lockLost = false;
         this.abort = new AbortController();
         this.setState({ javaRunning: false, error: null });
-        if (!this.d.lock.isHolding(serverId)) {
+        const holding = this.d.lock.isHolding(serverId);
+        const failed = this.lastTransfer?.filesFailed ?? 0;
+        this.progress.begin('Retrying the failed uploads', this.uploadPlan({ claim: !holding, files: failed, folders: 0 }));
+        this.step(failed > 0 ? `Retrying the ${failed === 1 ? 'file' : `${failed} files`} that failed to upload` : 'Retrying the upload', 'done', 'major');
+        if (!holding) {
             try {
+                this.progress.enter('claim', 'Reserving the server again');
                 await this.d.lock.claim(serverId, this.d.sync.baseRevision(serverId), { phase: 'uploading', allowStaleFromMe: true });
+                this.progress.complete('claim', 'The server is reserved for you');
             } catch (err) {
                 const info = toAppError(err);
+                this.progress.finish('failed', info.message);
                 this.setState({ phase: 'upload-pending', error: info });
                 throw err;
             }
@@ -321,27 +419,28 @@ export class SessionController {
     private async upload(serverId: string): Promise<void> {
         await this.enter('uploading');
         try {
-            await this.d.sync.uploadSession(serverId, this.abort?.signal);
+            await this.d.sync.uploadSession(serverId, this.abort?.signal, this.progress);
         } catch (err) {
             if (this.lockLost) return;
             const info = toAppError(err);
+            this.progress.finish('failed', info.message);
             if (info.code === 'CONFLICT') {
                 // Someone committed while we were not holding the lock: keep the files, let the user choose.
                 this.d.sync.discardJournal(serverId);
                 await this.d.lock.releaseIfMine(serverId);
-                this.step(info.message, 'error', 'major');
                 this.setState({ ...IDLE, phase: 'failed', serverId, error: info });
                 void this.refreshAfterSession(serverId);
                 return;
             }
-            this.step(info.message, 'error', 'major');
             this.setState({ phase: 'upload-pending', error: info });
             return;
         }
         this.setState({ phase: 'releasing' });
+        this.progress.enter('release', 'Releasing the server');
         await this.d.lock.releaseIfMine(serverId);
+        this.progress.complete('release', 'The server is free for the others');
+        this.progress.finish('done');
         this.setState({ ...IDLE, serverId: null });
-        this.step('Session finished', 'done', 'major');
         void this.refreshAfterSession(serverId);
     }
 
@@ -372,6 +471,7 @@ export class SessionController {
     }
 
     onMinecraftOutput(lines: string[]): void {
+        if (lines.length === 0) return;
         this.consoleLog.push(...lines);
         if (this.consoleLog.length > MAX_CONSOLE) this.consoleLog.splice(0, this.consoleLog.length - MAX_CONSOLE);
         this.d.events.emit('console:output', lines);
@@ -380,7 +480,6 @@ export class SessionController {
     onMinecraftExit(code: number | null, expected: boolean): void {
         this.setState({ javaRunning: false, players: [] });
         this.onMinecraftOutput([`[System] The server stopped (exit code ${code ?? 'unknown'})`]);
-        this.onMinecraftOutput([]);
         if (this.state.phase === 'running' && !expected) {
             this.step(`The Minecraft server stopped unexpectedly (exit code ${code ?? 'unknown'}); saving the world`, 'error', 'major');
             void this.stop().catch((err: unknown) => console.error('[session] stop after a crash failed:', err));
@@ -403,6 +502,7 @@ export class SessionController {
         this.lockLost = true;
         this.abort?.abort();
         const info = this.lostInfo(reason);
+        this.progress.finish('failed', info.message);
         this.step(info.message, 'error', 'major');
         void (async () => {
             await this.d.changes.stop();
@@ -441,14 +541,16 @@ export class SessionController {
     /** true when there is no unfinished upload left for this server. */
     private async finishUnfinishedUpload(serverId: string): Promise<boolean> {
         if (!this.d.settings.getServer(serverId).localPath) return false;
-        this.step('Finishing your last upload', 'loading', 'major');
         this.setState({ error: null });
+        this.progress.begin('Finishing your last upload', this.uploadPlan({ claim: true, files: 0, folders: 0 }));
         try {
+            this.progress.enter('claim', 'Reserving the server');
             await this.d.lock.claim(serverId, this.d.sync.baseRevision(serverId), { phase: 'uploading', allowStaleFromMe: true });
+            this.progress.complete('claim', 'The server is reserved for you');
         } catch (err) {
             const info = toAppError(err);
             console.warn(`[session] cannot resume the upload of ${serverId} yet:`, info.message);
-            this.step(`Your last upload will be finished when the server is free (${info.message})`, 'error', 'minor');
+            this.progress.finish('failed', `Your last upload will be finished when the server is free (${info.message})`);
             return false;
         }
         this.lockLost = false;
@@ -502,8 +604,29 @@ export class SessionController {
         this.d.events.emit('session:state', this.getState());
     }
 
-    step(message: string, status: StepMessage['status'] = 'loading', importance: StepMessage['importance'] = 'minor'): void {
-        const entry: StepMessage = { message, status, importance, at: new Date(this.now()).toISOString() };
+    /** A one-off line in the progress log (a finished fact or an error); stages log themselves. */
+    step(message: string, status: StepMessage['status'] = 'done', importance: StepMessage['importance'] = 'minor'): void {
+        this.pushStep({ id: this.nextStepId++, message, status, importance, at: new Date(this.now()).toISOString() });
+    }
+
+    private openTask(message: string, importance: StepMessage['importance']): number {
+        const id = this.nextStepId++;
+        this.pushStep({ id, message, status: 'loading', importance, at: new Date(this.now()).toISOString() });
+        return id;
+    }
+
+    /** The same log line with a new text or status: the UI replaces it in place. */
+    private updateTask(id: number, message: string, status: StepMessage['status']): void {
+        const index = this.stepLog.findIndex((s) => s.id === id);
+        if (index === -1) return;
+        const before = this.stepLog[index];
+        if (before.message === message && before.status === status) return;
+        const entry: StepMessage = { ...before, message, status };
+        this.stepLog[index] = entry;
+        this.d.events.emit('session:step', entry);
+    }
+
+    private pushStep(entry: StepMessage): void {
         this.stepLog.push(entry);
         if (this.stepLog.length > MAX_STEPS) this.stepLog.splice(0, this.stepLog.length - MAX_STEPS);
         this.d.events.emit('session:step', entry);
@@ -547,6 +670,7 @@ export class SessionController {
     /** Stops the idle poll timer (for tests and logout). */
     dispose(): void {
         this.stopPolling();
+        this.progress.dispose();
         this.selected = null;
     }
 }

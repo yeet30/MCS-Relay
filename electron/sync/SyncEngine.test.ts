@@ -13,7 +13,9 @@ import { AppData } from '../store/appData';
 import { TransferEngine } from '../transfer/TransferEngine';
 import { LauncherFiles } from './launcherFiles';
 import { readManifest } from './manifest';
+import type { ProgressSink } from './progressSink';
 import { SyncEngine, windowsPathProblem } from './SyncEngine';
+import { pathHash } from './tags';
 
 const ALICE: UserInfo = { name: 'Alice', email: 'alice@example.com', picture: '' };
 const BOB: UserInfo = { name: 'Bob', email: 'bob@example.com', picture: '' };
@@ -115,7 +117,9 @@ describe('a new server', () => {
         expect(manifest?.author.email).toBe(ALICE.email);
         expect(Object.keys(manifest?.files ?? {}).sort()).toEqual(['server.properties', 'world/level.dat', 'world/region/r.0.0.mca']);
         const region = store.findPath(serverId, 'world/region/r.0.0.mca');
-        expect(region?.appProperties).toEqual({ [APP_PROPS.server]: serverId, [APP_PROPS.path]: 'world/region/r.0.0.mca' });
+        expect(region?.appProperties).toEqual({
+            [APP_PROPS.server]: serverId, [APP_PROPS.path]: 'world/region/r.0.0.mca', [APP_PROPS.pathHash]: pathHash('world/region/r.0.0.mca'),
+        });
         expect(manifest?.files['world/region/r.0.0.mca'].driveId).toBe(region?.id);
         expect(manifest?.folders).toMatchObject({ world: store.findPath(serverId, 'world')?.id });
         expect(store.findPath(serverId, 'logs')).toBeUndefined();
@@ -373,6 +377,170 @@ describe('failures and resuming', () => {
         expect((await alice.sync.preflight(serverId)).status).toBe('unfinished-upload');
         alice.lockView = stale(ALICE.email);
         expect((await alice.sync.preflight(serverId)).status).toBe('in-sync');
+    });
+});
+
+/** Drive calls by operation while `run` runs. */
+async function callsDuring(run: () => Promise<unknown>): Promise<Array<{ op: string; args: unknown[] }>> {
+    const before = store.calls.length;
+    await run();
+    return store.calls.slice(before);
+}
+
+function countOf(calls: Array<{ op: string; args: unknown[] }>, op: string, when: (args: unknown[]) => boolean = () => true): number {
+    return calls.filter((c) => c.op === op && when(c.args)).length;
+}
+
+/** listChildren without a name filter: a folder listed to look inside it, not a lookup of one .launcher file. */
+const unnamedListing = (args: unknown[]): boolean => (args[1] as { name?: string } | undefined)?.name === undefined;
+
+function recorder(): { sink: ProgressSink; events: string[]; totals: Map<string, number> } {
+    const events: string[] = [];
+    const totals = new Map<string, number>();
+    const sink: ProgressSink = {
+        enter: (key, message) => void events.push(`enter ${key}: ${message}`),
+        setTotal: (key, units) => void totals.set(key, units),
+        report: () => undefined,
+        settle: () => undefined,
+        complete: (key, message) => void events.push(`complete ${key}: ${message ?? ''}`),
+        skip: (key) => void events.push(`skip ${key}`),
+    };
+    return { sink, events, totals };
+}
+
+function journalFile(pc: Pc, name: string): string {
+    return path.join(path.dirname(pc.root), 'userData', 'servers', serverId, name);
+}
+
+describe('big first uploads', () => {
+    it('creates every folder once, level by level, tagged with its path, and reports every stage', async () => {
+        for (let i = 0; i < 12; i++) await put(alice, `mods/pack-${i}/textures/block/a.png`, `png-${i}`);
+        const report = await alice.sync.preflight(serverId);
+        await alice.sync.download(serverId, report);
+        const progress = recorder();
+        const calls = await callsDuring(() => alice.sync.uploadSession(serverId, undefined, progress.sink));
+
+        // mods + 12 packs + 12 textures + 12 block folders, each made once, without looking inside new folders
+        expect(countOf(calls, 'createFolder')).toBe(37);
+        expect(countOf(calls, 'listChildren', unnamedListing)).toBe(1);
+        expect(progress.totals.get('folders')).toBe(37);
+        expect(progress.totals.get('files')).toBe(12);
+        expect(store.findPath(serverId, 'mods/pack-3/textures/block')?.appProperties).toMatchObject({
+            [APP_PROPS.server]: serverId, [APP_PROPS.pathHash]: pathHash('mods/pack-3/textures/block'),
+        });
+        expect(progress.events).toEqual(expect.arrayContaining([
+            'complete scan: Checked 12 files',
+            'complete folders: Created 37 folders on Google Drive',
+            'complete files: Uploaded 12 files',
+            'complete commit: Saved revision 1',
+        ]));
+    });
+
+    it('a create whose answer got lost is not made a second time', async () => {
+        await put(alice, 'world/region/r.0.0.mca', 'region');
+        await put(alice, 'world/level.dat', 'level');
+        store.loseNextResponse('createFolder', 1, (args) => args[0] === 'region');
+        store.loseNextResponse('createFile', 1, (args) => args[0] === 'level.dat');
+        await session(alice);
+        const world = store.findPath(serverId, 'world')!;
+        expect(store.children(world.id).filter((n) => n.name === 'region')).toHaveLength(1);
+        expect(store.children(world.id).filter((n) => n.name === 'level.dat')).toHaveLength(1);
+        expect((await readManifest(alice.launcher, serverId))?.revision).toBe(1);
+    });
+
+    it('paths too long for a Drive property are tagged by their hash instead of failing', async () => {
+        const deep = `resourcepacks/${'Liminal Resources/'.repeat(4)}assets/kubejs/textures/block/unused/reality_frame5.png`;
+        expect(Buffer.byteLength(`${APP_PROPS.path}${deep}`)).toBeGreaterThan(124);
+        await put(alice, deep, 'png');
+        await session(alice);
+        const file = store.findPath(serverId, deep)!;
+        expect(file.appProperties[APP_PROPS.path]).toBeUndefined();
+        expect(file.appProperties[APP_PROPS.pathHash]).toBe(pathHash(deep));
+    });
+});
+
+describe('retrying and resuming an upload', () => {
+    async function firstAttemptFails(): Promise<void> {
+        for (let i = 0; i < 20; i++) await put(alice, `world/dim-${i % 4}/region/r.${i}.mca`, `r-${i}`);
+        const report = await alice.sync.preflight(serverId);
+        await alice.sync.download(serverId, report);
+        store.failNext('createFile', 1, () => new DriveError('Forbidden', 403, 'forbidden'), (args) => args[0] === 'r.7.mca');
+        await expect(alice.sync.uploadSession(serverId)).rejects.toMatchObject({ code: 'UPLOAD_INCOMPLETE' });
+    }
+
+    function sameNameTwice(): string[] {
+        const seen = new Set<string>();
+        const twice: string[] = [];
+        for (const node of store.nodes.values()) {
+            if (node.trashed) continue;
+            const key = `${node.parentId}/${node.name}`;
+            if (seen.has(key)) twice.push(node.name);
+            seen.add(key);
+        }
+        return twice;
+    }
+
+    it('a retry sends only the failed file and does not look through the folders again', async () => {
+        await firstAttemptFails();
+        const calls = await callsDuring(() => alice.sync.uploadSession(serverId));
+        expect(countOf(calls, 'createFile', (args) => args[0] !== 'manifest.json')).toBe(1);
+        expect(countOf(calls, 'createFolder')).toBe(0);
+        expect(countOf(calls, 'listChildren', unnamedListing)).toBe(0);
+        // one search for what the failed attempt may have made, one for leftovers after the commit
+        expect(countOf(calls, 'listMyTagged')).toBe(2);
+        expect(sameNameTwice()).toEqual([]);
+        expect((await readManifest(alice.launcher, serverId))?.revision).toBe(1);
+    });
+
+    it('after a crash, a file whose upload started but was never logged as done is found, not uploaded twice', async () => {
+        await put(alice, 'world/level.dat', 'level');
+        await put(alice, 'world/region/r.0.0.mca', 'region');
+        const report = await alice.sync.preflight(serverId);
+        await alice.sync.download(serverId, report);
+        // Everything reaches Drive but the commit fails, as if the app had died right before it.
+        store.failNext('createFile', 1, () => new DriveError('Forbidden', 403, 'forbidden'), (args) => args[0] === 'manifest.json');
+        await expect(alice.sync.uploadSession(serverId)).rejects.toThrow('Forbidden');
+        // ...and the "done" line of level.dat never made it to disk.
+        const log = journalFile(alice, 'journal.log');
+        const lines = (await readFile(log, 'utf8')).split('\n').filter((line) => !(line.includes('"done"') && line.includes('world/level.dat')));
+        await writeFile(log, lines.join('\n'));
+
+        const calls = await callsDuring(() => alice.sync.uploadSession(serverId));
+        expect(countOf(calls, 'createFile', (args) => args[0] === 'level.dat' || args[0] === 'r.0.0.mca')).toBe(0);
+        expect(sameNameTwice()).toEqual([]);
+        const manifest = await readManifest(alice.launcher, serverId);
+        expect(Object.keys(manifest?.files ?? {}).sort()).toEqual(['world/level.dat', 'world/region/r.0.0.mca']);
+    });
+
+    it('a journal written before the log existed is resumed without duplicates', async () => {
+        await firstAttemptFails();
+        const journalPath = journalFile(alice, 'journal.json');
+        const journal = JSON.parse(await readFile(journalPath, 'utf8')) as Record<string, unknown>;
+        delete journal.logged;
+        await writeFile(journalPath, JSON.stringify(journal));
+        await rm(journalFile(alice, 'journal.log'));
+
+        const calls = await callsDuring(() => alice.sync.uploadSession(serverId));
+        expect(countOf(calls, 'createFile', (args) => args[0] !== 'manifest.json')).toBe(1);
+        expect(countOf(calls, 'createFolder')).toBe(0);
+        expect(sameNameTwice()).toEqual([]);
+    });
+
+    it('after the commit, files of mine the manifest does not use go to the trash, nobody else\'s', async () => {
+        await put(alice, 'a.txt', 'a');
+        await session(alice);
+        const tags = (p: string) => ({ [APP_PROPS.server]: serverId, [APP_PROPS.pathHash]: pathHash(p) });
+        const leftover = store.addNode({ name: 'a.txt', mimeType: 'text/plain', parentId: serverId, ownerEmail: ALICE.email, appProperties: tags('a.txt') });
+        const bobs = store.addNode({ name: 'b.txt', mimeType: 'text/plain', parentId: serverId, ownerEmail: BOB.email, appProperties: tags('b.txt') });
+        const used = store.findPath(serverId, 'a.txt')!;
+
+        const progress = recorder();
+        await put(alice, 'a.txt', 'a-2');
+        await alice.sync.uploadSession(serverId, undefined, progress.sink);
+        expect(store.node(leftover.id).trashed).toBe(true);
+        expect(store.node(bobs.id).trashed).toBe(false);
+        expect(store.node(used.id).trashed).toBe(false);
+        expect(progress.events).toContain('complete cleanup: Moved 1 leftover file to the trash');
     });
 });
 

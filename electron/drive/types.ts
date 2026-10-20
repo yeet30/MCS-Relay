@@ -65,7 +65,9 @@ export interface DriveApi {
     getMeta(fileId: string): Promise<MetaWithClock>;
     /** Non-trashed children across all pages, oldest createdTime first. Optional exact-name and folder-only filters. */
     listChildren(folderId: string, filter?: { name?: string; foldersOnly?: boolean }): Promise<DriveFileMeta[]>;
-    createFolder(name: string, parentId: string): Promise<DriveFileMeta>;
+    /** With opts (from the TransferEngine) the request is not retried by the client: a create is not
+     *  idempotent, so the engine checks for a copy made by the lost attempt before it tries again. */
+    createFolder(name: string, parentId: string, opts?: TransferOptions, appProperties?: Record<string, string>): Promise<DriveFileMeta>;
     /** Creates a file. Files of 5 MB or less use one multipart request, larger ones a chunked resumable upload.
      *  appProperties are stored with the file (see APP_PROPS in shared/types.ts). */
     createFile(name: string, parentId: string, source: UploadSource, opts?: TransferOptions, appProperties?: Record<string, string>): Promise<UploadResult>;
@@ -85,6 +87,8 @@ export interface DriveApi {
     /** Placeholders (appProperties mdhTombstone = "1"), not trashed. mineOnly adds "'me' in owners";
      *  serverId adds mdhServer = serverId. Results include owners and appProperties. */
     listTombstones(filter: { mineOnly: boolean; serverId?: string }): Promise<DriveFileMeta[]>;
+    /** Files and folders I own that this app tagged with mdhServer = serverId (placeholders included), not trashed. */
+    listMyTagged(serverId: string): Promise<DriveFileMeta[]>;
 }
 
 const RATE_LIMIT_REASONS = new Set(['rateLimitExceeded', 'userRateLimitExceeded']);
