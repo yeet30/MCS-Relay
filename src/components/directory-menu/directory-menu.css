@@ -10,9 +10,9 @@
         align-items: center;
         justify-content: center;
         border-radius: 50%;
-        color: var(--muted);
+        color: var(--text-2);
         background: var(--panel);
-        border: 1px solid var(--line);
+        border: 1px solid var(--line-strong);
         transition: color 0.15s ease, border-color 0.15s ease;
     }
 

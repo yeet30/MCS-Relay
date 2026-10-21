@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import './popup.css';
+import { createPortal } from 'react-dom';
 import { useScrollLock } from '../../hooks/useScrollLock';
 
 interface PopupProps {
@@ -15,7 +16,8 @@ export default function Popup({ isOpen, onClose, onAccept, confirmingOption, dec
     useScrollLock(isOpen);
     if (!isOpen) return null;
 
-    return (
+    // At the end of <body>, above everything, wherever the component that asks sits (see Modal).
+    return createPortal(
         <div className='popup-wrapper'>
             <div id='popup-overlay' onClick={(e) => { e.stopPropagation(); onClose(); }} />
             <div id='popup' onClick={(e) => e.stopPropagation()}>
@@ -26,6 +28,7 @@ export default function Popup({ isOpen, onClose, onAccept, confirmingOption, dec
                 </span>
                 <button id='popup-close' onClick={onClose}>✕</button>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }

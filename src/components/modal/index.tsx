@@ -1,5 +1,6 @@
 import './modal.css';
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useScrollLock } from '../../hooks/useScrollLock';
 import type { IModalItems } from '../../lib/ui-types';
 
@@ -28,7 +29,9 @@ export default function Modal({ isOpen, onClose, items, width = 400, height = 30
 
     const safeIndex = activeTab < items.length ? activeTab : 0;
 
-    return (
+    // Rendered at the end of <body>: a modal opened from inside a small component (the folder button, a card) is
+    // otherwise caught in that component's stacking layer and can end up under other parts of the page.
+    return createPortal(
         <div className='modal-wrapper'>
             <div id='modal-overlay' onClick={onClose} />
             <div id='modal' style={{ width, height }}>
@@ -49,6 +52,7 @@ export default function Modal({ isOpen, onClose, items, width = 400, height = 30
                 </div>
                 <div id='children'>{items[safeIndex].content}</div>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }
