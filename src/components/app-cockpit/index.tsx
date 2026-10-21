@@ -1,76 +1,19 @@
 import './app-cockpit.css';
 import { useState } from 'react';
-import { Ban, CloudUpload, LoaderCircle, LogIn, Play, Plus, Power, Square } from 'lucide-react';
+import { LoaderCircle, LogIn, Plus, Power, Square } from 'lucide-react';
 import { invoke } from '../../api';
 import { useConfirm } from '../../hooks/useConfirm';
 import { incompleteStartQuestion, powerMode } from '../../lib/sync';
 import type { PowerMode } from '../../lib/sync';
 import { useNoticeStore } from '../../stores/noticeStore';
-import { request } from '../../stores/request';
 import { createServer } from '../../stores/serverActions';
 import { selectSelectedServer, useServersStore } from '../../stores/serversStore';
 import { lockFor, reportFor, useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useAuthStore } from '../../stores/authStore';
-import CancelUploadDialog from '../cancel-upload-dialog';
 import { DirectoryMenu, TransferMenu } from '../directory-menu';
-import FailedFiles from '../progress-card/failed-files';
 import JoinServer from '../join-server';
 import Modal from '../modal';
-
-/** The box under the power button: a failed start (Dismiss), an upload that has to be retried, or one the user
- *  paused (an upload-pending without an error). */
-function PowerMessage({ mode }: { mode: Extract<PowerMode, { kind: 'failed' | 'upload-pending' }> }) {
-    const failures = useSessionStore((s) => s.transfer?.failures);
-    const repairing = useSessionStore((s) => s.progress?.kind === 'repair');
-    const [busy, setBusy] = useState(false);
-    const [cancelOpen, setCancelOpen] = useState(false);
-    const error = mode.error;
-    const transferError = error?.code === 'UPLOAD_INCOMPLETE' || error?.code === 'DOWNLOAD_INCOMPLETE';
-    const paused = mode.kind === 'upload-pending' && error === null;
-    const what = repairing ? 'repair' : 'upload';
-
-    async function run(action: 'session:dismiss' | 'session:retryUpload') {
-        setBusy(true);
-        await request(action);
-        setBusy(false);
-    }
-
-    return (
-        <div className={`power-message ${paused ? 'paused' : mode.kind}`}>
-            <p className='power-message-title'>
-                {mode.kind === 'failed'
-                    ? 'The session could not start.'
-                    : paused
-                        ? `The ${what} is paused. The server stays reserved for you until it finishes.`
-                        : `The ${what} did not finish. The server stays reserved for you until it does.`}
-            </p>
-            {paused && (
-                <p className='power-message-text'>
-                    What is already uploaded stays on Google Drive, so continuing only sends the rest. If you close MCS-Relay, it continues the next time you open it.
-                </p>
-            )}
-            {error && <p className='power-message-text'>{error.message}</p>}
-            {transferError && failures && failures.length > 0 && <FailedFiles failures={failures} />}
-            <CancelUploadDialog isOpen={cancelOpen} running={false} onClose={() => setCancelOpen(false)} />
-            <div className='power-message-buttons'>
-                {mode.kind === 'upload-pending' && !repairing && (
-                    <button className='text-button' disabled={busy} title='Stop for good and save what was sent' onClick={() => setCancelOpen(true)}>
-                        <Ban size={12} /> Cancel upload…
-                    </button>
-                )}
-                {mode.kind === 'failed'
-                    ? <button className='text-button' disabled={busy} onClick={() => run('session:dismiss')}>Dismiss</button>
-                    : (
-                        <button className='text-button primary' disabled={busy} onClick={() => run('session:retryUpload')}>
-                            {busy ? <LoaderCircle size={12} className='spinner' /> : paused ? <Play size={12} /> : <CloudUpload size={12} />}
-                            {paused ? `Continue ${what}` : `Retry ${what}`}
-                        </button>
-                    )}
-            </div>
-        </div>
-    );
-}
 
 export default function AppCockpit() {
     const servers = useServersStore((s) => s.servers);
@@ -233,7 +176,6 @@ export default function AppCockpit() {
                 <div className='side-slot right'><DirectoryMenu server={selected} canWrite={canWrite} /></div>
             </div>
             {mode.kind === 'start' && !mode.enabled && mode.reason && report && <p className='power-reason'>{mode.reason}</p>}
-            {(mode.kind === 'failed' || mode.kind === 'upload-pending') && <PowerMessage mode={mode} />}
         </div>
     );
 }

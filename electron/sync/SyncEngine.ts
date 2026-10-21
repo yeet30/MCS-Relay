@@ -851,6 +851,7 @@ export class SyncEngine {
         progress.enter('folders', 'Looking up folders on Google Drive');
         const stale = [...needed].filter((dir) => folders[dir] !== undefined && verify.has(dir));
         await eachLimited(stale, LOOKUP_CONCURRENCY, async (dir) => {
+            signal?.throwIfAborted();
             if (!(await this.fileAlive(folders[dir]))) delete folders[dir];
         });
 
@@ -870,6 +871,7 @@ export class SyncEngine {
             const parentsToList = [...new Set(level.map(parentOf))].filter((dir) => !createdNow.has(dir));
             const existing = new Map<string, Map<string, string>>();
             await eachLimited(parentsToList, LOOKUP_CONCURRENCY, async (dir) => {
+                signal?.throwIfAborted();                           // a pause takes effect between listings
                 const names = new Map<string, string>();
                 for (const child of await this.d.drive.listChildren(dir ? folders[dir] : serverId, { foldersOnly: true })) {
                     if (!names.has(child.name)) names.set(child.name, child.id);           // oldest wins

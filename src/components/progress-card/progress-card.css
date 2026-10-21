@@ -101,6 +101,12 @@
     }
 
     /* Size, speed and time left, spread over the line; a very long time left is cut, never wrapped. */
+    .progress-hint {
+        margin: 0;
+        font-size: 0.78rem;
+        color: var(--muted);
+    }
+
     .progress-meta {
         margin: 0;
         display: flex;

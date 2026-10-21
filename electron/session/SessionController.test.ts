@@ -544,3 +544,42 @@ describe('SessionController: cancelling an upload for good', () => {
         await expect(t.session.abandonUpload()).rejects.toThrow(/repair/);
     });
 });
+
+describe('SessionController: pause or cancel while the Minecraft server saves the world', () => {
+    async function stopping() {
+        const t = setup();
+        await t.session.start('s1');
+        const java = deferred();
+        t.minecraft.stopAndWait.mockImplementationOnce(async () => {
+            await java.promise;
+            t.setJava(false);
+        });
+        const run = t.session.stop();
+        await vi.waitFor(() => expect(t.session.getState().phase).toBe('stopping'));
+        return { t, run, java };
+    }
+
+    it('pause: Java finishes saving, then no upload starts and the server stays reserved', async () => {
+        const { t, run, java } = await stopping();
+        const paused = t.session.cancel();
+        java.resolve();
+        await Promise.all([run, paused]);
+        expect(t.sync.uploadSession).not.toHaveBeenCalled();
+        expect(t.session.getState()).toMatchObject({ phase: 'upload-pending', error: null });
+        expect(t.lock.releaseIfMine).not.toHaveBeenCalled();
+        // Continue then uploads everything.
+        await t.session.retryUpload();
+        expect(t.sync.uploadSession).toHaveBeenCalledTimes(1);
+        expect(t.session.getState().phase).toBe('idle');
+    });
+
+    it('cancel: nothing is sent and the server is freed', async () => {
+        const { t, run, java } = await stopping();
+        const cancelled = t.session.abandonUpload();
+        java.resolve();
+        await Promise.all([run, cancelled]);
+        expect(t.sync.uploadSession).not.toHaveBeenCalled();
+        expect(t.session.getState().phase).toBe('idle');
+        expect(t.lock.releaseIfMine).toHaveBeenCalledWith('s1');
+    });
+});

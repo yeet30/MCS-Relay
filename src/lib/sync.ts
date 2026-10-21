@@ -129,6 +129,8 @@ const PAUSING_KINDS = new Set<RunKind>(['stop', 'retry', 'resume']);
 /** The stop button of the progress card, shown for the whole run: Pause for an upload, Cancel otherwise, and
  *  why it does not work at the moment (null when it does). */
 export function stopControl(kind: RunKind | null, phase: SessionPhase): { label: 'Pause' | 'Cancel'; reason: string | null } {
+    // Pressed while Java saves the world, it is acted on once the server has stopped: no upload starts.
+    if (phase === 'stopping' && kind === 'stop') return { label: 'Pause', reason: null };
     const mode = cancelMode(phase);
     const pauses = mode === 'pause' || (kind !== null && PAUSING_KINDS.has(kind)) || (mode === null && (kind === 'up' || kind === 'repair'));
     const label = pauses ? 'Pause' : 'Cancel';
@@ -193,6 +195,13 @@ export function incompleteStartQuestion(report: SyncReport | null, myEmail: stri
 /** Asked before cancelling or pausing, so the user knows what happens to their files and to the server. */
 export function cancelQuestion(kind: RunKind | null, phase: SessionPhase): Question {
     const cancelText = 'Keep going';
+    if (phase === 'stopping') {
+        return {
+            message: 'Pause before the upload starts?\n\nThe Minecraft server is saving the world first. Once it has stopped, nothing is uploaded and the server stays reserved for you. Press "Continue upload" when you are ready to send your changes.',
+            confirmText: 'Pause upload',
+            cancelText,
+        };
+    }
     if (stopControl(kind, phase).label === 'Pause') {
         const what = kind === 'repair' ? 'repair' : 'upload';
         return {

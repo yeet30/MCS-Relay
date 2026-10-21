@@ -1,8 +1,8 @@
 import './progress-card.css';
 import { useEffect, useState } from 'react';
-import { Ban, Check, ChevronRight, CirclePause, Clock, Info, Loader2, Play, X } from 'lucide-react';
+import { Ban, Check, ChevronRight, CirclePause, Clock, CloudUpload, Info, Loader2, Play, X } from 'lucide-react';
 import type {
-    LaneView, ServerId, SessionPhase, SessionProgress, StepMessage, TransferKind, TransferSnapshot,
+    LaneView, RunKind, ServerId, SessionPhase, SessionProgress, StepMessage, TransferKind, TransferSnapshot,
 } from '../../../shared/types';
 import { invoke } from '../../api';
 import { useConfirm } from '../../hooks/useConfirm';
@@ -186,6 +186,51 @@ function AbandonButton({ progress, phase }: { progress: SessionProgress; phase: 
     );
 }
 
+/** After a run that left work waiting: continue or retry the upload (or cancel it for good), or dismiss a start
+ *  that failed. In the card itself, so nothing is pushed down the page. */
+function WaitingActions({ kind, phase }: { kind: RunKind | null; phase: SessionPhase }) {
+    const error = useSessionStore((s) => s.state.error);
+    const [busy, setBusy] = useState(false);
+    const [cancelOpen, setCancelOpen] = useState(false);
+    if (phase !== 'failed' && phase !== 'upload-pending') return null;
+    const repairing = kind === 'repair';
+    const what = repairing ? 'repair' : 'upload';
+    const paused = phase === 'upload-pending' && error === null;
+
+    async function run(action: 'session:dismiss' | 'session:retryUpload') {
+        setBusy(true);
+        await request(action);
+        setBusy(false);
+    }
+
+    return (
+        <>
+            <CancelUploadDialog isOpen={cancelOpen} running={false} onClose={() => setCancelOpen(false)} />
+            {phase === 'upload-pending' && !repairing && (
+                <button className='text-button' disabled={busy} title='Stop for good and save what was sent' onClick={() => setCancelOpen(true)}>
+                    <Ban size={12} /> Cancel…
+                </button>
+            )}
+            {phase === 'failed'
+                ? <button className='text-button' disabled={busy} onClick={() => void run('session:dismiss')}>Dismiss</button>
+                : (
+                    <button className='text-button primary' disabled={busy} onClick={() => void run('session:retryUpload')}>
+                        {busy ? <Loader2 size={12} className='spinner' /> : paused ? <Play size={12} /> : <CloudUpload size={12} />}
+                        {paused ? `Continue ${what}` : `Retry ${what}`}
+                    </button>
+                )}
+        </>
+    );
+}
+
+/** Under the message of a waiting upload: what pausing kept, and that the server is still reserved. */
+function waitingHint(phase: SessionPhase, paused: boolean): string | null {
+    if (phase !== 'upload-pending') return null;
+    return paused
+        ? 'Continuing sends only what is not on Google Drive yet. Closing the app keeps the reservation.'
+        : 'The server stays reserved for you until the upload finishes.';
+}
+
 /** Runs a cancelled run again; what was already done (downloaded files, the upload journal) is not redone. */
 async function continueRun(action: NonNullable<ReturnType<typeof continueAction>>, serverId: ServerId): Promise<void> {
     let result;
@@ -204,11 +249,24 @@ export default function ProgressCard({ compact = false }: { compact?: boolean })
     const progress = useSessionStore((s) => s.progress);
     const transfer = useSessionStore((s) => s.transfer);
     const phase = useSessionStore((s) => s.state.phase);
+    const sessionError = useSessionStore((s) => s.state.error);
     const selectedId = useServersStore((s) => s.selectedId);
     const [modalTab, setModalTab] = useState<number | null>(null);
     const [continuing, setContinuing] = useState(false);
     const now = useNow(Boolean(progress?.active));
-    if (!progress) return null;
+    if (!progress) {
+        // No run in memory (the window was reloaded) but work is waiting: still offer what to do about it.
+        if (phase !== 'failed' && phase !== 'upload-pending') return null;
+        return (
+            <div className='progress-card failed'>
+                <p className='progress-message'><X size={12} /><span>{sessionError?.message ?? 'The last upload did not finish.'}</span></p>
+                <div className='progress-foot'>
+                    <span />
+                    <span className='progress-buttons'><WaitingActions kind={null} phase={phase} /></span>
+                </div>
+            </div>
+        );
+    }
 
     const transferring = Boolean(transfer?.active);
     const tabs: IModalItems[] = [{ title: 'Progress log', content: <ProgressLog /> }];
@@ -275,6 +333,9 @@ export default function ProgressCard({ compact = false }: { compact?: boolean })
             </p>
             {transfer && <TransferMeta transfer={transfer} />}
             {progress.note && progress.active && <p className='progress-note'><Info size={12} /> <span>{progress.note}</span></p>}
+            {!progress.active && waitingHint(phase, sessionError === null) && (
+                <p className='progress-hint'>{waitingHint(phase, sessionError === null)}</p>
+            )}
             {transfer && transfer.failures.length > 0 && <FailedFiles failures={transfer.failures} />}
             <div className='progress-foot'>
                 <span className='progress-steps'>
@@ -284,6 +345,7 @@ export default function ProgressCard({ compact = false }: { compact?: boolean })
                 <span className='progress-buttons'>
                     {progress.active && <StopButton progress={progress} phase={phase} />}
                     {progress.active && <AbandonButton progress={progress} phase={phase} />}
+                    {!progress.active && <WaitingActions kind={progress.kind} phase={phase} />}
                     <button className='text-button' onClick={openDetails}>
                         Details <ChevronRight size={12} />
                     </button>

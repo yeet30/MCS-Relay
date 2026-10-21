@@ -381,6 +381,12 @@ export class SessionController {
      *  already arrived stay). An upload pauses: the server stays reserved and Continue picks it up where it
      *  stopped, from the journal. Stopping the Minecraft server and releasing the server cannot be cancelled. */
     cancel(): Promise<void> {
+        // While Java saves the world nothing is interrupted: the request is kept, and no upload starts afterwards.
+        if (this.state.phase === 'stopping' && this.progress.snapshot().kind === 'stop') {
+            if (!this.cancelled) console.log('[session] stop asked while the Minecraft server saves the world: no upload will start');
+            this.cancelled = true;
+            return this.current ?? Promise.resolve();
+        }
         if (!CANCELLABLE_PHASES.has(this.state.phase) || !this.abort) {
             return Promise.reject(new AppError('INVALID', 'There is nothing to cancel right now.'));
         }
@@ -400,6 +406,8 @@ export class SessionController {
 
     private async runStop(): Promise<void> {
         const serverId = this.state.serverId!;
+        this.cancelled = false;
+        this.abandoning = false;
         const javaRunning = this.state.javaRunning || this.d.minecraft.isRunning();
         const playitRunning = this.state.address !== null;
         this.progress.begin('Stopping and uploading', this.uploadPlan({
@@ -425,6 +433,18 @@ export class SessionController {
         this.setState({ address: null });
         if (playitRunning) this.progress.complete('stop-playit', 'playit.gg has stopped');
         if (this.lockLost) return;
+        if (this.cancelled) {
+            // Pause or Cancel was pressed while the Minecraft server saved the world: nothing has been sent.
+            if (this.abandoning) {
+                this.progress.finish('cancelled', 'The upload was cancelled before it started');
+                await this.finishPartial(serverId);
+            } else {
+                await this.enter('uploading');                // the lock keeps the server reserved for it
+                this.progress.finish('cancelled', 'Upload paused before it started. The server stays reserved for you until you continue.');
+                this.setState({ phase: 'upload-pending', error: null });
+            }
+            return;
+        }
         await this.upload(serverId, 'stop');
     }
 
@@ -583,7 +603,8 @@ export class SessionController {
         const phase = this.state.phase;
         const kind = this.progress.snapshot().kind;
         const uploading = kind === 'stop' || kind === 'retry' || kind === 'resume' || kind === 'up';
-        if (uploading && (phase === 'uploading' || phase === 'claiming') && this.abort && !this.cancelled) {
+        const startedPause = phase === 'stopping' && kind === 'stop';
+        if (uploading && (phase === 'uploading' || phase === 'claiming' || startedPause) && this.abort && (!this.cancelled || startedPause)) {
             this.abandoning = true;
             return this.cancel();
         }

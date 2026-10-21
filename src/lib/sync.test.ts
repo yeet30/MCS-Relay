@@ -226,8 +226,8 @@ describe('cancel, pause and continue', () => {
         for (const phase of ['idle', 'running', 'stopping', 'releasing', 'failed', 'upload-pending'] as const) expect(cancelMode(phase)).toBeNull();
     });
 
-    test('the button is there for the whole run, and says why it cannot act while Java saves the world', () => {
-        expect(stopControl('stop', 'stopping')).toEqual({ label: 'Pause', reason: expect.stringContaining('saving the world') });
+    test('the button is there for the whole run, also while Java saves the world', () => {
+        expect(stopControl('stop', 'stopping')).toEqual({ label: 'Pause', reason: null });
         expect(stopControl('stop', 'uploading')).toEqual({ label: 'Pause', reason: null });
         expect(stopControl('resume', 'claiming')).toEqual({ label: 'Pause', reason: null });
         expect(stopControl('up', 'checking')).toEqual({ label: 'Cancel', reason: null });
@@ -302,9 +302,10 @@ describe('a revision saved from a cancelled upload', () => {
     const inc = { by: { name: 'Alex', email: 'alex@example.com' }, at: new Date(2026, 9, 14, 19, 0).toISOString(), sent: 812, planned: 2310 };
     const ctx = { myEmail: 'steve@example.com', nameFor: (email: string) => email, now: NOW };
 
-    test('Cancel… shows next to Pause for uploads only, and works when Pause does', () => {
+    test('Cancel… shows next to Pause for uploads only, and works whenever Pause does', () => {
         expect(abandonControl('stop', 'uploading')).toEqual({ show: true, reason: null });
-        expect(abandonControl('stop', 'stopping')).toMatchObject({ show: true, reason: expect.stringContaining('saving the world') });
+        expect(abandonControl('stop', 'stopping')).toEqual({ show: true, reason: null });
+        expect(abandonControl('stop', 'releasing').reason).toContain('released');
         expect(abandonControl('up', 'checking').show).toBe(false);
         expect(abandonControl('start', 'downloading').show).toBe(false);
         expect(abandonControl('repair', 'uploading').show).toBe(false);
