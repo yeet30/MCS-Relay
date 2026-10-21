@@ -986,21 +986,37 @@ export class SyncEngine {
     }
 
     /** Before an owner trashes a whole server: hand every file someone else owns back to its owner for deletion. */
-    async markForeignFilesDeleted(serverId: string): Promise<number> {
+    /** Before the owner deletes a whole server, every file another member owns is handed back to them (emptied
+     *  into a placeholder their app deletes for good). One search finds the files the app tagged; only older
+     *  files without the tag are looked up one by one. onProgress(done, total) counts the files handed back. */
+    async markForeignFilesDeleted(serverId: string, onProgress?: (done: number, total: number) => void): Promise<number> {
         const m = await readManifest(this.d.launcher, serverId);
         if (!m) return 0;
         const me = await this.d.me();
         const deletedAt = this.iso();
-        let marked = 0;
-        await eachLimited(Object.values(m.files), LOOKUP_CONCURRENCY, async (entry) => {
+        const known = new Map((await this.d.drive.listTagged(serverId)).map((meta) => [meta.id, meta]));
+        const untagged = Object.values(m.files).filter((entry) => !known.has(entry.driveId));
+        await eachLimited(untagged, LOOKUP_CONCURRENCY, async (entry) => {
             try {
-                const meta = await this.d.drive.getMeta(entry.driveId);
-                if (meta.ownedByMe || meta.trashed || !meta.capabilities?.canModifyContent) return;
-                await this.d.drive.markDeleted(entry.driveId, {
+                known.set(entry.driveId, await this.d.drive.getMeta(entry.driveId));
+            } catch (err) {
+                if (!isNotFound(err)) console.warn('[sync] could not look up a file before deleting the server:', toAppError(err).detail);
+            }
+        });
+        const foreign = Object.values(m.files)
+            .map((entry) => known.get(entry.driveId))
+            .filter((meta): meta is DriveFileMeta => meta !== undefined && !meta.ownedByMe && !meta.trashed
+                && meta.capabilities?.canModifyContent === true && meta.appProperties?.[APP_PROPS.tombstone] !== '1');
+        let marked = 0;
+        onProgress?.(0, foreign.length);
+        await eachLimited(foreign, LOOKUP_CONCURRENCY, async (meta) => {
+            try {
+                await this.d.drive.markDeleted(meta.id, {
                     [APP_PROPS.tombstone]: '1', [APP_PROPS.server]: serverId,
                     [APP_PROPS.deletedBy]: me.email, [APP_PROPS.deletedAt]: deletedAt,
                 });
                 marked += 1;
+                onProgress?.(marked, foreign.length);
             } catch (err) {
                 if (!isNotFound(err)) console.warn('[sync] could not hand a file back to its owner:', toAppError(err).detail);
             }

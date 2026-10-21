@@ -91,6 +91,8 @@ export interface Events {
     'session:progress': SessionProgress;
     'sync:report': SyncReport;
     'lock:update': { serverId: ServerId; view: LockView };
+    /** A server is being deleted: `done` of `total` files of other members handed back to them. */
+    'servers:deleting': { serverId: ServerId; done: number; total: number };
     /** A check outside a run is going through the folder: `done` of `total` files (hashing a big world takes a while). */
     'sync:checking': { serverId: ServerId; done: number; total: number };
     'transfer:progress': TransferSnapshot;

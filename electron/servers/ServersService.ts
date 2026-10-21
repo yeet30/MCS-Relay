@@ -55,6 +55,8 @@ export class ServersService {
     private readonly names = new Map<string, string>();
     /** The servers of the last successful listing; null before the first one. */
     private listed: Set<string> | null = null;
+    /** Deletions in progress, so a repeated request joins the running one. */
+    private readonly deleting = new Map<string, Promise<void>>();
     private readonly drive: ServersDrive;
     private readonly launcher: LauncherFiles;
     private readonly auth: { me(): Promise<UserInfo> };
@@ -133,8 +135,17 @@ export class ServersService {
         return this.summarize(folder, 'owned', me, 'owner');
     }
 
-    async delete(id: string): Promise<void> {
+    /** Deletes a server I own. A second request while one runs (a double click) joins it instead of starting another. */
+    delete(id: string): Promise<void> {
         requireId(id);
+        const running = this.deleting.get(id);
+        if (running) return running;
+        const run = this.runDelete(id).finally(() => this.deleting.delete(id));
+        this.deleting.set(id, run);
+        return run;
+    }
+
+    private async runDelete(id: string): Promise<void> {
         let meta: DriveFileMeta;
         try {
             meta = await this.drive.getMeta(id);

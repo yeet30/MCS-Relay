@@ -27,7 +27,9 @@ export default function ServerSlot({ server }: { server: ServerSummary }) {
     const inputRef = useRef<HTMLInputElement>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [nameBuffer, setNameBuffer] = useState(server.name);
-    const [loading, setLoading] = useState<'edit' | 'delete' | null>(null);
+    const [loading, setLoading] = useState<'edit' | null>(null);
+    const leaving = useServersStore((s) => server.id in s.leaving);
+    const leaveProgress = useServersStore((s) => s.leaving[server.id] ?? null);
     const renameId = useUiStore((s) => s.renameId);
     const cardRef = useRef<HTMLDivElement>(null);
 
@@ -61,10 +63,11 @@ World files you uploaded stay in the server, because the others still need them,
                 confirmText: 'Leave',
                 cancelText: 'Stay',
             });
-        if (!accepted) return;
-        setLoading('delete');
+        if (!accepted || server.id in useServersStore.getState().leaving) return;
+        const servers = useServersStore.getState();
+        servers.setLeaving(server.id, null);
         const res = isOwner ? await request('servers:delete', server.id) : await request('servers:leave', server.id);
-        setLoading(null);
+        servers.setLeaving(server.id, undefined);
         if (!res.ok) return;
         useNoticeStore.getState().success(isOwner ? `"${server.name}" was deleted.` : `You left "${server.name}".`);
         await useServersStore.getState().reload();
@@ -83,7 +86,7 @@ World files you uploaded stay in the server, because the others still need them,
     }, [renameId, server.id]);
 
     return (
-        <div className={`server-card ${isEditing ? 'renaming' : ''}`} ref={cardRef}>
+        <div className={`server-card ${isEditing ? 'renaming' : ''} ${leaving ? 'leaving' : ''}`} ref={cardRef} aria-busy={leaving}>
             {popup}
             <div className='server-card-head'>
                 <span className='server-initial' aria-hidden>{server.name.charAt(0).toUpperCase() || '?'}</span>
@@ -110,10 +113,10 @@ World files you uploaded stay in the server, because the others still need them,
                 <button
                     className='icon-button danger'
                     title={inUse ? 'Stop the session first' : isOwner ? 'Delete this server' : 'Leave this server'}
-                    disabled={loading === 'delete' || inUse}
+                    disabled={leaving || inUse}
                     onClick={handleDelete}
                 >
-                    {loading === 'delete'
+                    {leaving
                         ? <Loader2 size={14} className='spinner' />
                         : isOwner ? <Trash2 size={15} /> : <LogOut size={15} />}
                 </button>
@@ -141,6 +144,16 @@ World files you uploaded stay in the server, because the others still need them,
                         : checkProgress && checkProgress.total > 0
                             ? `Checking the files in this folder (${formatCount(checkProgress.done)} of ${formatCount(checkProgress.total)})…`
                             : 'Looking through the folder…'}
+                </p>
+            )}
+            {leaving && (
+                <p className='server-checking leaving-line'>
+                    <Loader2 size={12} className='spinner' />
+                    {!isOwner
+                        ? 'Leaving the server…'
+                        : leaveProgress && leaveProgress.total > 0
+                            ? `Deleting: handing the other members' files back to them (${formatCount(leaveProgress.done)} of ${formatCount(leaveProgress.total)})…`
+                            : 'Deleting the server…'}
                 </p>
             )}
             <PermissionsList server={server} />

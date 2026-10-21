@@ -670,7 +670,14 @@ describe('deleting a whole server', () => {
         await put(alice, 'a.txt', 'a');
         await session(alice);
         await session(bob, () => put(bob, 'bob.txt', 'b'));
-        expect(await alice.sync.markForeignFilesDeleted(serverId)).toBe(1);
+        const progress: Array<[number, number]> = [];
+        const calls = await callsDuring(async () => {
+            expect(await alice.sync.markForeignFilesDeleted(serverId, (done, total) => progress.push([done, total]))).toBe(1);
+        });
+        // One search for the tagged files instead of a lookup per file.
+        expect(countOf(calls, 'listTagged')).toBe(1);
+        expect(countOf(calls, 'getMeta')).toBe(0);
+        expect(progress).toEqual([[0, 1], [1, 1]]);
         const bobs = store.findPath(serverId, 'bob.txt')!;
         expect(bobs.appProperties[APP_PROPS.tombstone]).toBe('1');
         expect(bobs.content.length).toBe(0);

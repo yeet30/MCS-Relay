@@ -102,7 +102,7 @@ const servers = new ServersService({
         if (view.state === 'held' || view.state === 'mine') {
             throw new AppError('LOCK_HELD', `${view.lock.host.name} is using this server right now. Delete it when they have finished.`);
         }
-        return sync.markForeignFilesDeleted(serverId);
+        return sync.markForeignFilesDeleted(serverId, (done, total) => events.emit('servers:deleting', { serverId, done, total }));
     },
 });
 

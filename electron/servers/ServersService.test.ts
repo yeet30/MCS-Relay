@@ -394,6 +394,21 @@ describe('delete and rename', () => {
         expect(alice.settings.getServer(s1.id).localPath).toBeNull();
     });
 
+    test('a second delete while one runs joins it instead of starting another', async () => {
+        const s1 = await alice.servers.create();
+        let release: () => void = () => undefined;
+        alice.beforeDelete.mockImplementation(() => new Promise((resolve) => {
+            release = () => resolve(0);
+        }));
+        const first = alice.servers.delete(s1.id);
+        const second = alice.servers.delete(s1.id);
+        await vi.waitFor(() => expect(alice.beforeDelete).toHaveBeenCalledTimes(1));
+        release();
+        await Promise.all([first, second]);
+        expect(alice.beforeDelete).toHaveBeenCalledTimes(1);
+        expect(store.node(s1.id).trashed).toBe(true);
+    });
+
     test('a member cannot delete, and nothing is marked', async () => {
         const s1 = await alice.servers.create();
         await alice.servers.invite(s1.id, BOB.email, 'writer', '');

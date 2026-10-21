@@ -14,6 +14,12 @@
         border-color: rgba(var(--accent-rgb), 0.6);
     }
 
+    /* Being deleted or left: nothing on the card can be used meanwhile. */
+    &.leaving > :not(.leaving-line) {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+
     .server-card-head {
         display: flex;
         align-items: center;

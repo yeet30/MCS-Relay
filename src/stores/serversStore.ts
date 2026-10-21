@@ -13,6 +13,10 @@ interface ServersStore {
     loaded: boolean;
     error: string | null;
     selectedId: ServerId | null;
+    /** Servers being deleted or left: kept here, not in the card, so reopening Drive Folders still shows it and the
+     *  button stays off. For a deletion, how many of the other members' files went back to them so far. */
+    leaving: Record<ServerId, { done: number; total: number } | null>;
+    setLeaving: (serverId: ServerId, progress: { done: number; total: number } | null | undefined) => void;
     /** A server whose folder is being chosen (the picker is open) or checked (its files are read). */
     pathBusy: { serverId: ServerId; step: 'choosing' | 'checking' } | null;
 
@@ -40,6 +44,7 @@ export const useServersStore = create<ServersStore>()((set, get) => ({
     error: null,
     selectedId: null,
     pathBusy: null,
+    leaving: {},
 
     load: async () => {
         set({ loading: true });
@@ -51,6 +56,13 @@ export const useServersStore = create<ServersStore>()((set, get) => ({
         set({ servers: res.value, loading: false, loaded: true, error: null });
         return true;
     },
+
+    setLeaving: (serverId, progress) => set((s) => {
+        const leaving = { ...s.leaving };
+        if (progress === undefined) delete leaving[serverId];
+        else leaving[serverId] = progress;
+        return { leaving };
+    }),
 
     setLocalPath: (serverId, localPath) => set((s) => ({
         servers: s.servers.map((server) => (server.id === serverId ? { ...server, localPath } : server)),
@@ -89,5 +101,5 @@ export const useServersStore = create<ServersStore>()((set, get) => ({
         await get().select(servers[0]?.id ?? null);
     },
 
-    reset: () => set({ servers: [], loading: false, loaded: false, error: null, selectedId: null, pathBusy: null }),
+    reset: () => set({ servers: [], loading: false, loaded: false, error: null, selectedId: null, pathBusy: null, leaving: {} }),
 }));

@@ -307,6 +307,14 @@ class FakeDriveView implements DriveApi {
             .map((n) => this.meta(n));
     }
 
+    async listTagged(serverId: string): Promise<DriveFileMeta[]> {
+        this.enter('listTagged', [serverId]);
+        return [...this.store.nodes.values()]
+            .filter((n) => !n.trashed && n.appProperties.mdhServer === serverId)
+            .sort((a, b) => a.createdTime - b.createdTime)
+            .map((n) => this.meta(n));
+    }
+
     async listTombstones(filter: { mineOnly: boolean; serverId?: string }): Promise<DriveFileMeta[]> {
         this.enter('listTombstones', [filter]);
         return [...this.store.nodes.values()]

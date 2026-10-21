@@ -259,6 +259,13 @@ export class DriveFiles implements DriveApi {
         ].join(' and '));
     }
 
+    async listTagged(serverId: string): Promise<DriveFileMeta[]> {
+        return this.listFiles([
+            `appProperties has { key='${APP_PROPS.server}' and value='${escapeQueryValue(serverId)}' }`,
+            'trashed = false',
+        ].join(' and '));
+    }
+
     /* ------------------------------------------------------------------ content */
 
     async createFile(

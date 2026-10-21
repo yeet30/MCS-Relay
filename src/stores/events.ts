@@ -19,6 +19,9 @@ export function startEventSubscriptions(): void {
         on('sync:report', (report) => session().applyReport(report)),
         on('lock:update', ({ serverId, view }) => session().applyLock(serverId, view)),
         on('sync:checking', (progress) => session().applyCheckProgress(progress)),
+        on('servers:deleting', ({ serverId, done, total }) => {
+            if (serverId in useServersStore.getState().leaving) useServersStore.getState().setLeaving(serverId, { done, total });
+        }),
         on('transfer:progress', (snapshot) => session().applyTransfer(snapshot)),
         on('changes:batch', (batch) => session().applyChanges(batch)),
         on('changes:reset', () => session().resetChanges()),

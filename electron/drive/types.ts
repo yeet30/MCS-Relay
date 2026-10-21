@@ -89,6 +89,8 @@ export interface DriveApi {
     listTombstones(filter: { mineOnly: boolean; serverId?: string }): Promise<DriveFileMeta[]>;
     /** Files and folders I own that this app tagged with mdhServer = serverId (placeholders included), not trashed. */
     listMyTagged(serverId: string): Promise<DriveFileMeta[]>;
+    /** Everything this app tagged with mdhServer = serverId that I can see, whoever owns it, not trashed. */
+    listTagged(serverId: string): Promise<DriveFileMeta[]>;
 }
 
 const RATE_LIMIT_REASONS = new Set(['rateLimitExceeded', 'userRateLimitExceeded']);
