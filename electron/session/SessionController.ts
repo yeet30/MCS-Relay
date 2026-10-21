@@ -505,6 +505,7 @@ export class SessionController {
             'done', 'major',
         );
         if (!holding) {
+            this.setState({ phase: 'claiming' });
             try {
                 this.progress.enter('claim', 'Reserving the server again');
                 await this.d.lock.claim(serverId, this.d.sync.baseRevision(serverId), { phase: 'uploading', allowStaleFromMe: true });
@@ -903,6 +904,8 @@ export class SessionController {
         this.progress.begin(repair ? 'Finishing your repair' : 'Finishing your last upload',
             this.uploadPlan({ claim: true, verify: repair ? 0 : undefined, files: 0, folders: 0 }),
             { note: repair ? REPAIR_NOTE : this.uploadNote(serverId), kind: repair ? 'repair' : 'resume', serverId });
+        // A phase of its own while reserving, so the run shows (and can be paused) from its first second.
+        this.setState({ phase: 'claiming', serverId });
         try {
             this.progress.enter('claim', 'Reserving the server');
             await this.d.lock.claim(serverId, this.d.sync.baseRevision(serverId), { phase: 'uploading', allowStaleFromMe: true });
@@ -911,6 +914,7 @@ export class SessionController {
             const info = toAppError(err);
             console.warn(`[session] cannot resume the upload of ${serverId} yet:`, info.message);
             this.progress.finish('failed', `Your last upload will be finished when the server is free (${info.message})`);
+            this.setState({ ...IDLE });
             return false;
         }
         this.lockLost = false;

@@ -13,14 +13,14 @@
     color: var(--text);
     background-color: var(--bg);
 
-    /* Dark greys with a hint of green; panels sit a little darker than the page. */
-    --bg: #1f2421;
-    --panel: #181c1a;
-    --panel-2: #252b28;
-    --panel-3: #2e3531;
-    --line: #343c38;
-    --text: #e4e9e6;
-    --muted: #949f99;
+    /* Flat, dark greens: cards sit one step lighter than the page, nothing has depth or gradients. */
+    --bg: #111613;
+    --panel: #171d1a;
+    --panel-2: #1e2521;
+    --panel-3: #27302b;
+    --line: #29322d;
+    --text: #e3e8e5;
+    --muted: #8c9791;
     --good: #98c379;
     --bad: #e06c75;
     --warn: #e5c07b;
@@ -56,9 +56,16 @@ body {
     min-width: 320px;
     min-height: 100vh;
     background-color: var(--bg);
-    /* A soft light from the top keeps the page from looking flat. */
-    background-image: radial-gradient(ellipse 80% 45% at 50% -10%, rgba(var(--accent-rgb), 0.07), transparent 70%);
-    background-attachment: fixed;
+}
+
+/* Modals and dialogs are neutral grey: the green belongs to the page behind them. */
+.modal-wrapper,
+.popup-wrapper {
+    --panel: #1b1b1b;
+    --panel-2: #232323;
+    --panel-3: #2c2c2c;
+    --line: #333333;
+    --muted: #969696;
 }
 
 h1, h2, h3 {

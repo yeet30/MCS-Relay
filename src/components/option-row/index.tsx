@@ -1,38 +1,25 @@
-import './options-row.css'
-import { ReactNode } from 'react'
+import './options-row.css';
+import type { ReactNode } from 'react';
 
 type OptionProps = {
-    title: string,
-    enable: boolean,
-    onChange: (newValue: boolean ) => void;
-    children: ReactNode
-}
+    title: string;
+    enable: boolean;
+    onChange: (newValue: boolean) => void;
+    children: ReactNode;
+};
 
-export default function OptionRow({title, enable, onChange, children}: OptionProps){
-
+/** A setting that can be switched off as a whole; its details fade while it is off. */
+export default function OptionRow({ title, enable, onChange, children }: OptionProps) {
     return (
-        <div className='option-row-wrapper'>
-
-            <label  htmlFor={`enable-check-${title}`} className={`enable-label ${enable ? "enabled" : ""}`}>
-                Enabled
-                <input 
-                type="checkbox"
-                name="enable-check" 
-                id={`enable-check-${title}`}
-                checked={enable}
-                onChange={(e) => onChange(e.target.checked)}/>
-            </label>
-
-            <div className='contents'>
-                <span className='title-row'>
-                    <h3>{title}</h3>
-                </span>
-                <div>
-                    {children}
-                </div>
+        <div className={`option-card ${enable ? '' : 'off'}`}>
+            <div className='option-head'>
+                <h3>{title}</h3>
+                <label className='switch' title={enable ? 'On' : 'Off'}>
+                    <input type='checkbox' checked={enable} onChange={(e) => onChange(e.target.checked)} />
+                    <span className='switch-track'><span className='switch-thumb' /></span>
+                </label>
             </div>
-
-            {!enable && <div className='overlay'></div>}
+            <div className='option-body' aria-disabled={!enable}>{children}</div>
         </div>
-    )
+    );
 }

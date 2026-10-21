@@ -1,59 +1,92 @@
-.option-row-wrapper{
+.option-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    text-align: left;
 
-    position: relative;
-    margin: 5px;
-    padding: 5px 10px;
-    border-radius: 10px;
-    box-shadow: -5px 5px 5px rgba(0, 0, 0, 0.35);
-
-    .contents {
-        position: relative;
-        z-index: 300;
-    }
-
-    .overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: rgba(0, 0, 0, 0.3);
-        border-radius: 10px;
-        z-index: 301;
-
-        pointer-events: all;
-        cursor: not-allowed;
-    }
-
-    .title-row{
+    .option-head {
         display: flex;
+        align-items: center;
         justify-content: space-between;
+        gap: 12px;
     }
 
     h3 {
         margin: 0;
+        font-size: 1rem;
+        font-weight: 600;
     }
 
-    .enable-label {
-        position: absolute;
+    .option-body {
         display: flex;
-        align-items: center;
-        padding: 5px 15px;
-        right: 10px;
-        background-color: var(--panel-3);
-        border-radius: 10px;
-        z-index: 302;
-        cursor: pointer;
+        flex-direction: column;
+        gap: 10px;
+        transition: opacity 0.2s ease;
+
+        p {
+            margin: 0;
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
     }
 
-    .enable-label.enabled{
-        background-color: var(--panel);
+    &.off .option-body {
+        opacity: 0.4;
+        pointer-events: none;
     }
-
-    .enable-label input{
-        margin-top: 6px;
-    }
-
 }
 
+/* An on/off switch around a real checkbox (keyboard and screen readers keep working). */
+.switch {
+    position: relative;
+    flex: none;
+    cursor: pointer;
 
+    input {
+        position: absolute;
+        opacity: 0;
+        width: 1px;
+        height: 1px;
+    }
+
+    .switch-track {
+        display: block;
+        width: 38px;
+        height: 22px;
+        border-radius: 999px;
+        background: var(--panel-3);
+        border: 1px solid var(--line);
+        box-sizing: border-box;
+        transition: background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .switch-thumb {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--muted);
+        transition: transform 0.2s ease, background 0.2s ease;
+    }
+
+    input:checked + .switch-track {
+        background: rgba(var(--accent-rgb), 0.25);
+        border-color: rgba(var(--accent-rgb), 0.7);
+    }
+
+    input:checked + .switch-track .switch-thumb {
+        transform: translateX(16px);
+        background: var(--accent);
+    }
+
+    input:focus-visible + .switch-track {
+        outline: 2px solid rgba(var(--accent-rgb), 0.7);
+        outline-offset: 2px;
+    }
+}

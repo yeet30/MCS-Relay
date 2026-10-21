@@ -3,30 +3,38 @@
     height: 100%;
     position: relative;
 
+    /* Built like the settings pill on the other side: an outlined 44px shape on a plate 5px wider all round,
+       16px from the top. */
     .refresh-button{
         position: relative;
-        top: 15px;
-        left: 15px;
+        top: 16px;
+        left: 10px;
 
-        width: 55px;
-        height: 50px;
+        width: 44px;
+        height: 44px;
 
         display: flex;
         align-items: center;
         justify-content: center;
 
         padding: 0;
-        border: 1px solid var(--line);
-        border-radius: 14px;
+        border: 1px solid currentColor;
+        border-radius: 50%;
 
         box-sizing: border-box;
         background-color: var(--panel);
-        color: var(--muted);
+        box-shadow: 0 0 0 5px var(--panel);
+        color: var(--text);
+        transition: box-shadow 0.3s ease;
+    }
+
+    .refresh-button:disabled {
+        opacity: 1;
     }
 
     .refresh-button:hover {
-        border-color: rgba(var(--accent-rgb), 0.6);
-        color: var(--text);
+        border-color: currentColor;
+        box-shadow: 0 0 0 9px var(--panel);
     }
 
     .refresh-svg {
@@ -50,14 +58,13 @@
         top: 12px;
 
         margin: 12px;
-        margin-top: 1.1rem;
+        margin-top: 1.9rem;
         padding: 12px 14px;
         min-width: 140px;
 
         background: var(--panel);
         border: 1px solid var(--line);
         border-radius: 14px;
-        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
     }
 
     .members-div h3 {

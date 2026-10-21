@@ -9,7 +9,7 @@ import { useConfirm } from '../../hooks/useConfirm';
 import {
     durationBetween, formatBytes, formatBytesPair, formatClock, formatCount, formatDuration, formatEta, formatSpeed, formatWhen,
 } from '../../lib/format';
-import { cancelMode, cancelQuestion, continueAction } from '../../lib/sync';
+import { cancelQuestion, continueAction, stopControl } from '../../lib/sync';
 import type { IModalItems } from '../../lib/ui-types';
 import { useNoticeStore } from '../../stores/noticeStore';
 import { request } from '../../stores/request';
@@ -145,12 +145,12 @@ function outcomeWord(progress: SessionProgress, phase: SessionPhase): string {
     return progress.outcome === 'cancelled' && phase === 'upload-pending' ? 'paused' : OUTCOME_WORDS[progress.outcome];
 }
 
-/** Cancel (a start, a download) or Pause (an upload), after saying what that means for the files. */
+/** Cancel (a start, a download) or Pause (an upload), after saying what that means for the files. Shown for the
+ *  whole run; while it cannot act (Java is saving the world, the server is being released) it says why. */
 function StopButton({ progress, phase }: { progress: SessionProgress; phase: SessionPhase }) {
     const { confirm, popup } = useConfirm();
     const [stopping, setStopping] = useState(false);
-    const mode = cancelMode(phase);
-    if (!mode && !stopping) return popup;
+    const { label, reason } = stopControl(progress.kind, phase);
 
     async function handleClick() {
         if (!(await confirm(cancelQuestion(progress.kind, phase)))) return;
@@ -162,9 +162,9 @@ function StopButton({ progress, phase }: { progress: SessionProgress; phase: Ses
     return (
         <>
             {popup}
-            <button className='text-button' disabled={stopping} onClick={handleClick}>
+            <button className='text-button' disabled={stopping || reason !== null} title={reason ?? undefined} onClick={handleClick}>
                 {stopping ? <Loader2 size={12} className='spinner' /> : <CirclePause size={12} />}
-                {stopping ? (mode === 'pause' ? 'Pausing…' : 'Cancelling…') : mode === 'pause' ? 'Pause' : 'Cancel'}
+                {stopping ? (label === 'Pause' ? 'Pausing…' : 'Cancelling…') : label}
             </button>
         </>
     );

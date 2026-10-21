@@ -45,7 +45,7 @@ export default function BurgerMenu() {
                 onClose={() => setModalItems(null)}
                 items={modalItems ?? []}
                 width={wide ? 500 : 460}
-                height={wide ? 470 : 380}
+                height={wide ? 450 : 380}
             />
             <div id='menu-clicker' onClick={() => setIsMenuOpen(!isMenuOpen)} className={state}>
                 {user?.picture
@@ -63,7 +63,7 @@ export default function BurgerMenu() {
                         </div>
                     )}
                     <ul>
-                        <li onClick={() => open([{ title: 'Script Options', content: <ScriptsOptions /> }])}>
+                        <li onClick={() => open([{ title: 'Scripts', content: <ScriptsOptions /> }], true)}>
                             <Terminal size={15} /> Scripts
                         </li>
                         <li onClick={() => open([

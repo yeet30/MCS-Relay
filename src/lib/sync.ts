@@ -123,10 +123,30 @@ export interface Question {
     cancelText: string;
 }
 
+/** Runs that finish an upload of this PC: stopping them keeps what was sent, so they pause. */
+const PAUSING_KINDS = new Set<RunKind>(['stop', 'retry', 'resume']);
+
+/** The stop button of the progress card, shown for the whole run: Pause for an upload, Cancel otherwise, and
+ *  why it does not work at the moment (null when it does). */
+export function stopControl(kind: RunKind | null, phase: SessionPhase): { label: 'Pause' | 'Cancel'; reason: string | null } {
+    const mode = cancelMode(phase);
+    const pauses = mode === 'pause' || (kind !== null && PAUSING_KINDS.has(kind)) || (mode === null && (kind === 'up' || kind === 'repair'));
+    const label = pauses ? 'Pause' : 'Cancel';
+    if (mode !== null) return { label, reason: null };
+    switch (phase) {
+        case 'stopping':
+            return { label, reason: 'The Minecraft server is saving the world first. You can pause as soon as the upload starts.' };
+        case 'releasing':
+            return { label, reason: 'Almost done: the server is being released for the others.' };
+        default:
+            return { label, reason: 'Not possible at this moment.' };
+    }
+}
+
 /** Asked before cancelling or pausing, so the user knows what happens to their files and to the server. */
 export function cancelQuestion(kind: RunKind | null, phase: SessionPhase): Question {
     const cancelText = 'Keep going';
-    if (cancelMode(phase) === 'pause') {
+    if (stopControl(kind, phase).label === 'Pause') {
         const what = kind === 'repair' ? 'repair' : 'upload';
         return {
             message: `Pause the ${what}?\n\nWhat is already uploaded stays on Google Drive, and the server stays reserved for you: nobody else can start it until the ${what} is finished.\n\nUse this to switch to another network, for example. Press "Continue ${what}" when you are ready. If you close Drive Launcher meanwhile, it continues the next time you open it.`,

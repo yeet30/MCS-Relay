@@ -52,7 +52,7 @@ export default function MembersSection() {
     return (
         <section className='members-section'>
             <button className='refresh-button' title='Check again' onClick={handleRefresh} disabled={spinning}>
-                <RotateCcw className={`refresh-svg ${spinning ? 'spin' : ''}`} size={24} />
+                <RotateCcw className={`refresh-svg ${spinning ? 'spin' : ''}`} size={20} />
             </button>
             {presence && (
                 <div className='members-div'>

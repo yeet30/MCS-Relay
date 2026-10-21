@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import type { LockContent, LockView, SessionState, SyncPlan, SyncReport, TransferSnapshot } from '../../shared/types';
 import {
     cancelMode, cancelQuestion, canStart, cleanupLines, continueAction, describeReport, hostingMessage, isSessionBusy, livePresence,
-    manualSyncBlockers, planHasFiles, powerMode, repairBlocker, startBlocker, transferFraction,
+    manualSyncBlockers, planHasFiles, powerMode, repairBlocker, startBlocker, stopControl, transferFraction,
 } from './sync';
 
 const NOW = new Date(2026, 9, 14, 20, 0).getTime();
@@ -226,7 +226,18 @@ describe('cancel, pause and continue', () => {
         for (const phase of ['idle', 'running', 'stopping', 'releasing', 'failed', 'upload-pending'] as const) expect(cancelMode(phase)).toBeNull();
     });
 
+    test('the button is there for the whole run, and says why it cannot act while Java saves the world', () => {
+        expect(stopControl('stop', 'stopping')).toEqual({ label: 'Pause', reason: expect.stringContaining('saving the world') });
+        expect(stopControl('stop', 'uploading')).toEqual({ label: 'Pause', reason: null });
+        expect(stopControl('resume', 'claiming')).toEqual({ label: 'Pause', reason: null });
+        expect(stopControl('up', 'checking')).toEqual({ label: 'Cancel', reason: null });
+        expect(stopControl('up', 'uploading').label).toBe('Pause');
+        expect(stopControl('start', 'downloading')).toEqual({ label: 'Cancel', reason: null });
+        expect(stopControl('stop', 'releasing').reason).toContain('released');
+    });
+
     test('the question says what happens to the files and the server', () => {
+        expect(cancelQuestion('resume', 'claiming').confirmText).toBe('Pause upload');
         expect(cancelQuestion('stop', 'uploading')).toMatchObject({ confirmText: 'Pause upload', message: expect.stringContaining('stays reserved for you') });
         expect(cancelQuestion('repair', 'uploading').confirmText).toBe('Pause repair');
         expect(cancelQuestion('start', 'downloading').message).toContain('only downloads the rest');
