@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import type { LockContent, LockView, SessionState, SyncPlan, SyncReport, TransferSnapshot } from '../../shared/types';
 import {
     cancelMode, cancelQuestion, canStart, cleanupLines, continueAction, describeReport, hostingMessage, isSessionBusy, livePresence,
-    planHasFiles, powerMode, repairBlocker, startBlocker, transferFraction,
+    manualSyncBlockers, planHasFiles, powerMode, repairBlocker, startBlocker, transferFraction,
 } from './sync';
 
 const NOW = new Date(2026, 9, 14, 20, 0).getTime();
@@ -251,5 +251,38 @@ describe('repairBlocker', () => {
         expect(repairBlocker(unfinished({ baseRevision: null }))).toMatch(/never synced/);
         expect(repairBlocker(unfinished({ remoteRevision: null, baseRevision: null }))).toMatch(/no saved version/);
         expect(repairBlocker(report())).toMatch(/no unfinished upload/);
+    });
+});
+
+describe('an unfinished upload of this PC', () => {
+    const leftover: LockView = { state: 'stale', lock: lockContent({ phase: 'uploading' }), ageSeconds: 5, leftByThisPc: true };
+
+    test('does not block Start, which finishes it first', () => {
+        expect(startBlocker(report({ lock: leftover }), null)).toBeNull();
+        expect(startBlocker(report({ lock: stale({ phase: 'uploading' }), unfinishedHere: true }), null)).toBeNull();
+        expect(startBlocker(report({ lock: stale({ phase: 'uploading' }) }), null)).toBe('Alex\'s upload did not finish.');
+    });
+
+    test('is named as this PC\'s, not another PC\'s', () => {
+        expect(hostingMessage(leftover, 'alex@example.com')).toBe('has an unfinished upload from this PC.');
+        expect(hostingMessage({ ...leftover, lock: lockContent({ phase: 'running' }) }, 'alex@example.com'))
+            .toBe('was still reserved by this PC when Drive Launcher closed.');
+    });
+
+    test('the card says how to finish it', () => {
+        const ctx = { myEmail: 'me@example.com', nameFor: (email: string) => email, now: NOW };
+        expect(describeReport(report({ status: 'new-server', unfinishedHere: true }), ctx))
+            .toMatchObject({ tone: 'warn', pill: 'Unfinished upload', title: 'Your last upload didn\'t finish' });
+    });
+});
+
+describe('manualSyncBlockers', () => {
+    test('offers only the transfer that would do something', () => {
+        expect(manualSyncBlockers(report())).toEqual({ down: 'Already up to date', up: 'Nothing changed on this PC' });
+        expect(manualSyncBlockers(report({ status: 'cloud-newer' }))).toEqual({ down: null, up: 'Download the newer version first' });
+        expect(manualSyncBlockers(report({ status: 'local-changes' }))).toEqual({ down: 'Nothing new in the cloud', up: null });
+        expect(manualSyncBlockers(report({ status: 'diverged', pendingChoice: 'keep-cloud' })).down).toBeNull();
+        expect(manualSyncBlockers(report({ unfinishedHere: true })).up).toBeNull();
+        expect(manualSyncBlockers(null)).toEqual({ down: null, up: null });
     });
 });

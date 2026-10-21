@@ -20,6 +20,9 @@ export interface LockServiceDeps {
     renewEveryMs?: number;                     // 15000
     leaseSeconds?: number;                     // 45
     claimSettleMs?: number;                    // 3000
+    /** The session this PC holds per server, kept on disk, so a lock left behind by a crash of this app is
+     *  recognised after a restart instead of looking like someone else's. */
+    remember?: { read(serverId: string): string | null; write(serverId: string, sessionId: string | null): void };
 }
 
 export type LockPatch = Partial<Pick<LockContent, 'phase' | 'address' | 'players' | 'startedAt' | 'baseRevision'>>;
@@ -162,6 +165,7 @@ export class LockService {
     private readonly renewEveryMs: number;
     private readonly leaseSeconds: number;
     private readonly claimSettleMs: number;
+    private readonly remember: LockServiceDeps['remember'];
     private readonly claims = new Map<string, Claim>();
     private latestSessionId = randomUUID();
 
@@ -174,6 +178,7 @@ export class LockService {
         this.renewEveryMs = deps.renewEveryMs ?? 15_000;
         this.leaseSeconds = deps.leaseSeconds ?? 45;
         this.claimSettleMs = deps.claimSettleMs ?? 3_000;
+        this.remember = deps.remember;
     }
 
     /** The session id of the most recent claim (a new one per claim). */
@@ -198,6 +203,8 @@ export class LockService {
         const ageSeconds = Number.isFinite(modified) ? Math.max(0, (file.serverNow - modified) / 1000) : 0;
         const claim = this.claims.get(serverId);
         if (claim && lock.sessionId === claim.sessionId) return { state: 'mine', lock, ageSeconds };
+        // Left behind by this PC's previous run: nobody renews it, so there is no lease to wait for.
+        if (!claim && this.remembered(serverId) === lock.sessionId) return { state: 'stale', lock, ageSeconds, leftByThisPc: true };
         // The holder's own lease decides, so a version with a different lease is judged by its own rule.
         return { state: ageSeconds > lock.leaseSeconds ? 'stale' : 'held', lock, ageSeconds };
     }
@@ -216,7 +223,9 @@ export class LockService {
         }
         if (before.state === 'stale' && before.lock.phase === 'uploading') {
             const fromMe = sameEmail(before.lock.host.email, me.email);
-            if (!opts.takeOverUnfinished && !(opts.allowStaleFromMe && fromMe)) throw unfinishedUpload(before.lock, fromMe);
+            // This PC's own leftover is fine: the session finishes its journal before anything else.
+            const allowed = opts.takeOverUnfinished || before.leftByThisPc || (opts.allowStaleFromMe && fromMe);
+            if (!allowed) throw unfinishedUpload(before.lock, fromMe);
         }
 
         const previous = this.claims.get(serverId);
@@ -243,6 +252,7 @@ export class LockService {
         // Registered before writing: if the read-back fails after our write landed, inspect() still
         // recognises the lock as ours and releaseIfMine() can free it.
         this.claims.set(serverId, claim);
+        this.rememberSession(serverId, sessionId);
         await this.write(serverId, claim.content);
         await this.sleep(this.claimSettleMs);
         const after = await this.inspect(serverId);
@@ -374,7 +384,28 @@ export class LockService {
 
     private dropClaim(claim: Claim): void {
         claim.active = false;
-        if (this.claims.get(claim.serverId) === claim) this.claims.delete(claim.serverId);
+        if (this.claims.get(claim.serverId) === claim) {
+            this.claims.delete(claim.serverId);
+            this.rememberSession(claim.serverId, null);
+        }
+    }
+
+    private remembered(serverId: string): string | null {
+        try {
+            return this.remember?.read(serverId) ?? null;
+        } catch (err) {
+            console.warn(`[lock] ${serverId}: could not read the remembered session:`, err);
+            return null;
+        }
+    }
+
+    /** Best effort: without it a crash only means waiting for the lease, as before. */
+    private rememberSession(serverId: string, sessionId: string | null): void {
+        try {
+            this.remember?.write(serverId, sessionId);
+        } catch (err) {
+            console.warn(`[lock] ${serverId}: could not remember the session on disk:`, err);
+        }
     }
 
     private enqueue<T>(claim: Claim, task: () => Promise<T>): Promise<T> {

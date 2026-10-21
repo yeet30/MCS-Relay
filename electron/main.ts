@@ -55,7 +55,15 @@ const launcher = new LauncherFiles(drive);
 const me = () => auth.me();
 
 // The callbacks below use `session`, declared further down; services call them later, never in constructors.
-const lock = new LockService({ drive, launcher, me, onLost: (serverId, reason) => session.onLockLost(serverId, reason) });
+const lock = new LockService({
+    drive, launcher, me,
+    onLost: (serverId, reason) => session.onLockLost(serverId, reason),
+    remember: {
+        // An upload journal names its session too, which covers journals written before lock-session.json existed.
+        read: (serverId) => appData.readLockSession(serverId) ?? appData.readJournal(serverId)?.sessionId ?? null,
+        write: (serverId, sessionId) => appData.writeLockSession(serverId, sessionId),
+    },
+});
 const transfers = new TransferEngine({
     drive, me,
     emit: (snapshot) => {

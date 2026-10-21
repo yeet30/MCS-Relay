@@ -132,7 +132,7 @@ export class SyncEngine {
             baseRevision: null, remoteRevision: null, remoteAuthor: null, remoteCreatedAt: null,
             plan: emptyPlan(), downloadBytes: 0, uploadBytes: 0, allowedChoices: [],
             pendingChoice: this.choices.get(serverId) ?? null, cleanup: { mine: 0, others: [] },
-            lock: FREE_LOCK, checkedAt,
+            lock: FREE_LOCK, checkedAt, unfinishedHere: this.hasJournal(serverId),
         };
         try {
             report.lock = await this.d.lock.inspect(serverId);
@@ -929,7 +929,9 @@ export class SyncEngine {
         const remote = await readManifest(this.d.launcher, serverId);
         const isIgnored = await this.loadRules(serverId, createRules);
         const baseSnap = baseToSnapshot(base);
-        const local = await this.scan(serverId, root, baseSnap, isIgnored, signal, progress, stage);
+        // Nothing in the cloud yet: everything will be uploaded, so only the sizes matter now. Hashing a big world
+        // takes a while and happens at the upload anyway.
+        const local = await this.scan(serverId, root, baseSnap, isIgnored, signal, progress, stage, remote !== null);
         const remoteSnap = manifestToSnapshot(remote);
 
         let plan: SyncPlan;
@@ -943,7 +945,9 @@ export class SyncEngine {
         }
         // Someone else's upload stopped half way: their app must finish it before anyone plays. My own is
         // resumed by the session instead, when this PC has its journal (otherwise it ran on another PC).
-        if (lock.state === 'stale' && lock.lock.phase === 'uploading'
+        // A lock this PC left behind is its own business either way: with a journal Start finishes it, without one
+        // nothing had been sent yet.
+        if (lock.state === 'stale' && lock.lock.phase === 'uploading' && !lock.leftByThisPc
             && (lock.lock.host.email.toLowerCase() !== me.email.toLowerCase() || this.d.appData.readJournal(serverId) === null)) {
             status = 'unfinished-upload';
         }
@@ -953,15 +957,15 @@ export class SyncEngine {
     /** Hashes only files whose size or modification time changed since the base or the last scan. */
     private async scan(
         serverId: string, root: string, base: Snapshot, isIgnored: (rel: string) => boolean, signal: AbortSignal | undefined,
-        progress: ProgressSink = NO_PROGRESS, stage: ProgressStageKey = 'scan',
+        progress: ProgressSink = NO_PROGRESS, stage: ProgressStageKey = 'scan', hash = true,
     ): Promise<Snapshot> {
         const key = `${serverId}|${root}`;
         const last = this.lastScan.get(key);
         const known = last ? new Map([...base, ...last]) : base;
         const local = await scanLocal(root, known, isIgnored, signal, (done, total) => {
             progress.report(stage, done, total, `Checking your files (${count(done)} of ${count(total)})`);
-        });
-        this.lastScan.set(key, local);
+        }, { hash });
+        if (hash) this.lastScan.set(key, local);                    // a sizes-only scan has no md5s to reuse
         return local;
     }
 

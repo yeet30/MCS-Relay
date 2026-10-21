@@ -342,6 +342,29 @@ describe('claim', () => {
         expect(restarted.lock.isHolding(h.serverId)).toBe(true);
     });
 
+    it('recognises at once a lock this PC left behind when the app was killed, even in the middle of an upload', async () => {
+        const disk = new Map<string, string>();
+        const remember = {
+            read: (id: string) => disk.get(id) ?? null,
+            write: (id: string, session: string | null) => void (session === null ? disk.delete(id) : disk.set(id, session)),
+        };
+        const before = h.member(ALICE, { remember });
+        await before.lock.claim(h.serverId, 3, { phase: 'uploading' });
+        before.lock.dispose();                                  // killed: no release, no more renewals
+
+        // Another PC of the same person sees it as held until the lease runs out...
+        expect((await h.member(ALICE).lock.inspect(h.serverId)).state).toBe('held');
+        // ...but this PC knows it is its own leftover and does not wait.
+        const restarted = h.member(ALICE, { remember });
+        expect(await restarted.lock.inspect(h.serverId)).toMatchObject({ state: 'stale', leftByThisPc: true });
+        await restarted.lock.claim(h.serverId, 3, { phase: 'uploading' });
+        expect(h.lockContent().sessionId).toBe(restarted.lock.sessionId);
+        expect(disk.get(h.serverId)).toBe(restarted.lock.sessionId);
+
+        await restarted.lock.release(h.serverId);
+        expect(disk.has(h.serverId)).toBe(false);
+    });
+
     it('lets exactly one of two members win when both claim at the same moment', async () => {
         h.seedLock(lockOf(ALICE, '', 'free'));
         const bothWriting = barrier(2);                          // both saw "free" before either wrote

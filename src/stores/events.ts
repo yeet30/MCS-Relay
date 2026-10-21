@@ -18,6 +18,7 @@ export function startEventSubscriptions(): void {
         on('session:progress', (progress) => session().applyProgress(progress)),
         on('sync:report', (report) => session().applyReport(report)),
         on('lock:update', ({ serverId, view }) => session().applyLock(serverId, view)),
+        on('sync:checking', (progress) => session().applyCheckProgress(progress)),
         on('transfer:progress', (snapshot) => session().applyTransfer(snapshot)),
         on('changes:batch', (batch) => session().applyChanges(batch)),
         on('changes:reset', () => session().resetChanges()),

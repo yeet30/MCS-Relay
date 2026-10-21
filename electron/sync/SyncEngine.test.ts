@@ -379,7 +379,11 @@ describe('failures and resuming', () => {
         // Mine, but from another PC: this one cannot resume it.
         expect((await alice.sync.preflight(serverId)).status).toBe('unfinished-upload');
         alice.appData.writeJournal(serverId, { format: 1, serverId, startedAt: '2026-10-21T10:00:00Z', baseRevision: 1, sessionId: 'x', logged: true });
-        expect((await alice.sync.preflight(serverId)).status).toBe('in-sync');
+        expect(await alice.sync.preflight(serverId)).toMatchObject({ status: 'in-sync', unfinishedHere: true });
+        // Left behind by this PC before its journal was written: nothing had been sent.
+        alice.appData.deleteJournal(serverId);
+        alice.lockView = { ...stale(ALICE.email), leftByThisPc: true } as LockView;
+        expect(await alice.sync.preflight(serverId)).toMatchObject({ status: 'in-sync', unfinishedHere: false });
     });
 });
 

@@ -14,6 +14,8 @@ import type { PlayitProcess } from '../processes/PlayitProcess';
 import type { SettingsService } from '../settings/SettingsService';
 import type { ChangeTracker } from '../sync/changeTracker';
 import type { SyncEngine } from '../sync/SyncEngine';
+import { NO_PROGRESS } from '../sync/progressSink';
+import type { ProgressSink } from '../sync/progressSink';
 import { OrchestrationProgress } from './progress';
 import type { RunInfo, StagePlan } from './progress';
 
@@ -50,6 +52,7 @@ const STARTING_PHASES = new Set<SessionPhase>(['checking', 'claiming', 'download
 const CANCELLABLE_PHASES = new Set<SessionPhase>([...STARTING_PHASES, 'uploading']);
 const FIRST_UPLOAD_NOTE = 'First upload of this server: every folder and file has to be created on Google Drive, so this takes much longer than later uploads.';
 const REPAIR_NOTE = 'Every file of the last saved version is checked on Google Drive first, so a repair takes a while even when little is broken.';
+const CHECK_EMIT_MS = 200;
 const KEPT_DOWNLOADS = 'Files that already arrived are kept, so the next run downloads only the rest.';
 
 type UploadKind = Extract<RunKind, 'stop' | 'retry' | 'resume' | 'up' | 'repair'>;
@@ -167,12 +170,26 @@ export class SessionController {
         this.schedulePoll();
     }
 
-    async preflight(serverId: string, progress?: OrchestrationProgress, signal?: AbortSignal): Promise<SyncReport> {
-        const report = await this.d.sync.preflight(serverId, signal, progress);
+    async preflight(serverId: string, progress?: ProgressSink, signal?: AbortSignal): Promise<SyncReport> {
+        const report = await this.d.sync.preflight(serverId, signal, progress ?? this.checkProgress(serverId));
         if (serverId === this.selected || serverId === this.state.serverId) this.report = report;
         this.d.events.emit('sync:report', report);
         this.d.events.emit('lock:update', { serverId, view: report.lock });
         return report;
+    }
+
+    /** Outside a run a check has no progress bar: how far it got goes to the status card (sync:checking). */
+    private checkProgress(serverId: string): ProgressSink {
+        let last = 0;
+        return {
+            ...NO_PROGRESS,
+            report: (_key, done, total) => {
+                const now = this.now();
+                if (done > 0 && done < total && now - last < CHECK_EMIT_MS) return;
+                last = now;
+                this.d.events.emit('sync:checking', { serverId, done, total });
+            },
+        };
     }
 
     async resolve(serverId: string, choice: ConflictChoice): Promise<SyncReport> {
@@ -660,9 +677,17 @@ export class SessionController {
     }
 
     private async runSyncUp(serverId: string): Promise<void> {
+        const hadUnfinished = this.d.sync.hasJournal(serverId);
         const report = await this.checkForSync(serverId, 'Uploading your changes',
             this.uploadPlan({ check: true, claim: true, ...this.estimateUpload(serverId) }), { note: this.uploadNote(serverId), kind: 'up', serverId });
         if (!report) return;
+        if (hadUnfinished && report.status === 'in-sync') {
+            // Finishing the upload that had stopped was all there was to send.
+            this.progress.finish('done');
+            this.setState({ ...IDLE });
+            this.schedulePoll();
+            return;
+        }
         const refuse = (message: string): never => {
             this.progress.finish('failed', message);
             this.setState({ ...IDLE });

@@ -177,6 +177,19 @@ export class AppData {
         writeJsonAtomic(this.serverFile(id, 'base.json'), b);
     }
 
+    /** The lock session this PC holds for a server, written at each claim and removed at the release: one still
+     *  here after a restart means the app stopped while holding the lock. */
+    readLockSession(id: string): string | null {
+        const raw = this.readJson(this.serverFile(id, 'lock-session.json'));
+        return isRecord(raw) && typeof raw.sessionId === 'string' ? raw.sessionId : null;
+    }
+
+    writeLockSession(id: string, sessionId: string | null): void {
+        const file = this.serverFile(id, 'lock-session.json');
+        if (sessionId === null) fs.rmSync(file, { force: true });
+        else writeJsonAtomic(file, { sessionId });
+    }
+
     readJournal(id: string): UploadJournal | null {
         const file = this.serverFile(id, 'journal.json');
         const raw = this.readJson(file);

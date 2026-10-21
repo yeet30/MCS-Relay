@@ -13,8 +13,12 @@ interface ServersStore {
     loaded: boolean;
     error: string | null;
     selectedId: ServerId | null;
+    /** A server whose folder is being chosen (the picker is open) or checked (its files are read). */
+    pathBusy: { serverId: ServerId; step: 'choosing' | 'checking' } | null;
 
     load: () => Promise<boolean>;
+    /** Shows a newly chosen folder at once, without listing every server from Drive again. */
+    setLocalPath: (serverId: ServerId, localPath: string) => void;
     /** Selects a server: the main process remembers it, checks it (sync:report) and watches its lock. */
     select: (serverId: ServerId | null) => Promise<void>;
     /** After the first load: the server of a running session, else the remembered one, else the first. */
@@ -35,6 +39,7 @@ export const useServersStore = create<ServersStore>()((set, get) => ({
     loaded: false,
     error: null,
     selectedId: null,
+    pathBusy: null,
 
     load: async () => {
         set({ loading: true });
@@ -46,6 +51,10 @@ export const useServersStore = create<ServersStore>()((set, get) => ({
         set({ servers: res.value, loading: false, loaded: true, error: null });
         return true;
     },
+
+    setLocalPath: (serverId, localPath) => set((s) => ({
+        servers: s.servers.map((server) => (server.id === serverId ? { ...server, localPath } : server)),
+    })),
 
     select: async (serverId) => {
         set({ selectedId: serverId });
@@ -80,5 +89,5 @@ export const useServersStore = create<ServersStore>()((set, get) => ({
         await get().select(servers[0]?.id ?? null);
     },
 
-    reset: () => set({ servers: [], loading: false, loaded: false, error: null, selectedId: null }),
+    reset: () => set({ servers: [], loading: false, loaded: false, error: null, selectedId: null, pathBusy: null }),
 }));

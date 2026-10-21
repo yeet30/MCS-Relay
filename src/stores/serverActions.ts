@@ -1,17 +1,30 @@
 // Multi-step server actions shared by several components (the empty-state buttons and the Drive Folders lists).
 import type { ServerId, ServerSummary } from '../../shared/types';
+import { isSessionBusy } from '../lib/sync';
 import { useNoticeStore } from './noticeStore';
 import { request } from './request';
 import { useServersStore } from './serversStore';
+import { useSessionStore } from './sessionStore';
 
 export type ConfirmFn = (options: { message: string; confirmText?: string; cancelText?: string }) => Promise<boolean>;
 
-/** Opens the folder picker for a server's local copy, then refreshes the list and re-checks the server. */
+/** Asks for the server's folder on this PC. The new path shows at once; the check of the files in it (a while
+ *  for a big world) follows, and its progress shows on the status card and in Drive Folders. */
 export async function chooseLocalPath(serverId: ServerId): Promise<string | null> {
-    const res = await request('servers:chooseLocalPath', serverId);
-    if (!res.ok || res.value === null) return null;
-    await useServersStore.getState().reload({ recheck: true });
-    return res.value;
+    useServersStore.setState({ pathBusy: { serverId, step: 'choosing' } });
+    try {
+        const res = await request('servers:chooseLocalPath', serverId);
+        if (!res.ok || res.value === null) return null;
+        const servers = useServersStore.getState();
+        servers.setLocalPath(serverId, res.value);
+        if (servers.selectedId === serverId && !isSessionBusy(useSessionStore.getState().state.phase)) {
+            useServersStore.setState({ pathBusy: { serverId, step: 'checking' } });
+            await useSessionStore.getState().preflight(serverId);
+        }
+        return res.value;
+    } finally {
+        useServersStore.setState({ pathBusy: null });
+    }
 }
 
 async function offerLocalPath(server: ServerSummary, confirm: ConfirmFn, what: string): Promise<void> {

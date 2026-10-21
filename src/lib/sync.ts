@@ -70,7 +70,10 @@ export function startBlocker(report: SyncReport | null, lock: LockView | null): 
     }
     const view = lock ?? report.lock;
     if (view.state === 'held') return `${view.lock.host.name} is ${lockPhaseWords(view.lock.phase)}.`;
-    if (view.state === 'stale' && view.lock.phase === 'uploading') return `${view.lock.host.name}'s upload did not finish.`;
+    // This PC's own unfinished upload does not block: Start finishes it first.
+    if (view.state === 'stale' && view.lock.phase === 'uploading' && !view.leftByThisPc && !report.unfinishedHere) {
+        return `${view.lock.host.name}'s upload did not finish.`;
+    }
     // 'free', 'stale' (not uploading: the holder vanished) and 'mine' (left over from this PC) can be claimed.
     return null;
 }
@@ -170,6 +173,31 @@ export function continueAction(kind: RunKind | null): 'start' | 'down' | 'up' | 
     }
 }
 
+/** Why "Download latest" and "Upload my changes" would do nothing right now (null when they would). The main
+ *  process checks again; this only spares a click that ends in an error. */
+export function manualSyncBlockers(report: SyncReport | null): { down: string | null; up: string | null } {
+    if (!report) return { down: null, up: null };
+    if (report.unfinishedHere) return { down: 'Finish your unfinished upload first', up: null };
+    switch (report.status) {
+        case 'in-sync':
+            return { down: 'Already up to date', up: 'Nothing changed on this PC' };
+        case 'new-server':
+            return { down: 'Nothing in the cloud yet', up: null };
+        case 'cloud-newer':
+            return { down: null, up: 'Download the newer version first' };
+        case 'local-changes':
+            return { down: 'Nothing new in the cloud', up: null };
+        case 'diverged':
+            return { down: report.pendingChoice ? null : 'Choose which version to keep first', up: 'Choose which version to keep first' };
+        case 'unfinished-upload':
+            return { down: 'The last upload did not finish', up: 'The last upload did not finish' };
+        case 'no-local-path':
+            return { down: 'Choose a folder first', up: 'Choose a folder first' };
+        default:
+            return { down: null, up: null };
+    }
+}
+
 /** Why this PC cannot repair the server, or null when it can. The main process checks the same rules. */
 export function repairBlocker(report: SyncReport): string | null {
     if (report.status !== 'unfinished-upload') return 'There is no unfinished upload to repair.';
@@ -209,9 +237,10 @@ export function hostingMessage(view: LockView | null, myEmail: string | null): s
     if (!view || view.state === 'free') return 'is not being hosted right now.';
     const { host, phase, address } = view.lock;
     const isMe = myEmail !== null && host.email === myEmail;
-    const who = view.state === 'mine' ? 'you' : isMe ? 'you on another PC' : host.name;
+    const who = view.state === 'mine' ? 'you' : view.leftByThisPc ? 'this PC' : isMe ? 'you on another PC' : host.name;
     if (view.state === 'stale') {
         if (phase === 'uploading') return `has an unfinished upload from ${who}.`;
+        if (view.leftByThisPc) return 'was still reserved by this PC when Drive Launcher closed.';
         return `was last used by ${who}, whose app stopped responding ${formatAgo(view.ageSeconds)} ago.`;
     }
     switch (phase) {
@@ -317,6 +346,12 @@ export function stoppedAt(report: SyncReport): string | null {
 }
 
 export function describeReport(report: SyncReport, ctx: CopyContext): CardCopy {
+    if (report.unfinishedHere && report.status !== 'no-local-path' && report.status !== 'error' && report.status !== 'unfinished-upload') {
+        return {
+            tone: 'warn', pill: 'Unfinished upload', title: 'Your last upload didn\'t finish',
+            body: 'It stopped before everything was sent, for example because Drive Launcher was closed. Press Start or "Upload my changes" to finish it; until then nobody else can start this server.',
+        };
+    }
     const { tone, pill } = PILLS[report.status];
     const plan = report.plan;
     const revision = report.remoteRevision;

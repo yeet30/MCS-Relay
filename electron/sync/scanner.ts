@@ -24,11 +24,13 @@ export async function md5OfFile(absPath: string, signal?: AbortSignal): Promise<
  * Walks `root` (symlinks are not followed, ignored folders are not entered) and returns path -> entry,
  * sorted by path. A file that disappears during the scan is left out; a missing root gives an empty snapshot.
  * onProgress(done, total) is called after every file once the folder walk has counted them.
+ * With `hash: false` only sizes are read: a file the base does not vouch for gets md5 "" (not hashed).
  */
 export async function scanLocal(
     root: string, base: Snapshot, isIgnored: (rel: string) => boolean, signal?: AbortSignal,
-    onProgress?: (done: number, total: number) => void,
+    onProgress?: (done: number, total: number) => void, opts: { hash?: boolean } = {},
 ): Promise<Snapshot> {
+    const hash = opts.hash ?? true;
     const files: Array<{ rel: string; abs: string }> = [];
     await walk(root, '', isIgnored, files, signal);
     let scanned = 0;
@@ -42,7 +44,7 @@ export async function scanLocal(
             const file = files[next++];
             try {
                 signal?.throwIfAborted();
-                const entry = await scanFile(file.abs, file.rel, base.get(file.rel), signal);
+                const entry = await scanFile(file.abs, file.rel, base.get(file.rel), hash, signal);
                 if (entry) entries.set(file.rel, entry);
                 onProgress?.(++scanned, files.length);
             } catch (err) {
@@ -86,7 +88,9 @@ async function walk(
     }
 }
 
-async function scanFile(abs: string, rel: string, known: SnapshotEntry | undefined, signal?: AbortSignal): Promise<SnapshotEntry | null> {
+async function scanFile(
+    abs: string, rel: string, known: SnapshotEntry | undefined, hash: boolean, signal?: AbortSignal,
+): Promise<SnapshotEntry | null> {
     try {
         const st = await stat(abs);
         if (!st.isFile()) return null;
@@ -95,7 +99,7 @@ async function scanFile(abs: string, rel: string, known: SnapshotEntry | undefin
             if (known.driveId !== undefined) entry.driveId = known.driveId;
             return entry;
         }
-        const md5 = await md5OfFile(abs, signal);
+        const md5 = hash ? await md5OfFile(abs, signal) : '';
         return { size: st.size, md5, mtimeMs: st.mtimeMs };
     } catch (err) {
         if (errnoCode(err) === 'ENOENT') return null;       // deleted between readdir and stat/hash

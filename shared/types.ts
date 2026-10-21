@@ -154,6 +154,8 @@ export interface SyncReport {
     lock: LockView;
     checkedAt: string;
     error?: string;
+    /** This PC has an upload of this server that did not finish; Start (or an upload) finishes it first. */
+    unfinishedHere?: boolean;
 }
 
 /* ------------------------------------------------------------------ lock */
@@ -174,9 +176,11 @@ export interface LockContent {
     players: string[];
 }
 
+/** `leftByThisPc`: a stale lock this PC claimed in an earlier run of the app that crashed or was killed (only one
+ *  copy of the app runs at a time, so nobody renews it any more, whatever its age says). */
 export type LockView =
     | { state: 'free'; lock: LockContent | null }
-    | { state: 'mine' | 'held' | 'stale'; lock: LockContent; ageSeconds: number };
+    | { state: 'mine' | 'held' | 'stale'; lock: LockContent; ageSeconds: number; leftByThisPc?: boolean };
 
 /* ------------------------------------------------------------------ session */
 

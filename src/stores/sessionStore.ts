@@ -42,6 +42,8 @@ export interface SessionStore {
     checkingId: ServerId | null;
     /** A check that failed before it could produce a report. */
     checkError: { serverId: ServerId; error: AppErrorInfo } | null;
+    /** How far a check outside a run has gone through the server folder. */
+    checkProgress: { serverId: ServerId; done: number; total: number } | null;
     /** The newest lock view per server, from lock:update events and reports. */
     locks: Record<ServerId, LockView>;
     steps: StepMessage[];
@@ -56,6 +58,7 @@ export interface SessionStore {
     applyState: (state: SessionState) => void;
     applyReport: (report: SyncReport) => void;
     applyLock: (serverId: ServerId, view: LockView) => void;
+    applyCheckProgress: (progress: { serverId: ServerId; done: number; total: number }) => void;
     applyStep: (step: StepMessage) => void;
     applyTransfer: (snapshot: TransferSnapshot) => void;
     applyProgress: (progress: SessionProgress) => void;
@@ -131,6 +134,7 @@ export const useSessionStore = create<SessionStore>()((set, get) => {
         report: null,
         checkingId: null,
         checkError: null,
+        checkProgress: null,
         locks: {},
         steps: [],
         progress: null,
@@ -150,9 +154,12 @@ export const useSessionStore = create<SessionStore>()((set, get) => {
             locks: { ...s.locks, [report.serverId]: report.lock },
             checkingId: s.checkingId === report.serverId ? null : s.checkingId,
             checkError: s.checkError?.serverId === report.serverId ? null : s.checkError,
+            checkProgress: s.checkProgress?.serverId === report.serverId ? null : s.checkProgress,
         })),
 
         applyLock: (serverId, view) => set((s) => ({ locks: { ...s.locks, [serverId]: view } })),
+
+        applyCheckProgress: (progress) => set({ checkProgress: progress }),
 
         applyStep: (step) => {
             buffer?.steps.push(step);
@@ -194,6 +201,7 @@ export const useSessionStore = create<SessionStore>()((set, get) => {
 
         endCheck: (serverId, error) => set((s) => ({
             checkingId: s.checkingId === serverId ? null : s.checkingId,
+            checkProgress: s.checkProgress?.serverId === serverId ? null : s.checkProgress,
             checkError: error ? { serverId, error } : s.checkError?.serverId === serverId ? null : s.checkError,
         })),
 

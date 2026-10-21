@@ -397,6 +397,14 @@ describe('SessionController: EULA, notifications and syncing without playing', (
         await expect(idle.session.syncNow('s1', 'up')).rejects.toThrow(/nothing to upload/);
         expect(idle.lock.claim).not.toHaveBeenCalled();
     });
+
+    it('"Upload my changes" that only had to finish a stopped upload ends without an error', async () => {
+        const t = setup({ journal: true });
+        await t.session.syncNow('s1', 'up');
+        expect(t.sync.uploadSession).toHaveBeenCalledTimes(1);
+        expect(t.session.getState().phase).toBe('idle');
+        expect(t.session.getProgress().outcome).toBe('done');
+    });
 });
 
 describe('SessionController: cancel and continue', () => {
