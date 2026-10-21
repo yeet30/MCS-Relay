@@ -1,6 +1,6 @@
 import './permissions-list.css';
 import { useState } from 'react';
-import { ChevronsDown, ChevronsLeft, Trash2 } from 'lucide-react';
+import { ChevronDown, Loader2, Trash2, UserPlus, Users } from 'lucide-react';
 import type { ServerMember, ServerSummary } from '../../../shared/types';
 import { useConfirm } from '../../hooks/useConfirm';
 import { useAuthStore } from '../../stores/authStore';
@@ -11,9 +11,17 @@ import InvitationInterface from '../invitation-interface';
 import Modal from '../modal';
 
 const ROLE_WORDS: Record<ServerMember['role'], string> = {
-    owner: 'owner', writer: 'can play', reader: 'can view', commenter: 'can view', organizer: 'manager', fileOrganizer: 'manager',
+    owner: 'Owner', writer: 'Can play', reader: 'Can view', commenter: 'Can view', organizer: 'Manager', fileOrganizer: 'Manager',
 };
 
+/** A steady colour per person, so the same member looks the same in every server. */
+function avatarHue(email: string): number {
+    let hash = 0;
+    for (const char of email.toLowerCase()) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+    return hash % 360;
+}
+
+/** The members of a server, folded away under a "Members" row; the owner can invite and remove. */
 export default function PermissionsList({ server }: { server: ServerSummary }) {
     const myEmail = useAuthStore((s) => s.user?.email ?? null);
     const { confirm, popup } = useConfirm();
@@ -38,43 +46,60 @@ export default function PermissionsList({ server }: { server: ServerSummary }) {
     }
 
     return (
-        <div className='permission-list-wrapper'>
+        <div className='members'>
             {popup}
             <Modal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
-                width={450}
-                height={350}
-                items={[{ title: 'Invite User', content: <InvitationInterface serverId={server.id} onDone={() => setIsModalOpen(false)} /> }]}
+                width={460}
+                height={420}
+                items={[{ title: 'Invite someone', content: <InvitationInterface serverId={server.id} serverName={server.name} onDone={() => setIsModalOpen(false)} /> }]}
             />
-            <div id='permissions-dropdown'>
-                <button id='permissions-button' className={isListOpen ? 'open' : ''} onClick={() => setIsListOpen(!isListOpen)}>
-                    <span id='permissions-title' className={isListOpen ? 'open' : ''}>Members</span>
-                    <span id='permissions-chevrons'>{isListOpen ? <ChevronsDown size={18} /> : <ChevronsLeft size={18} />}</span>
-                </button>
-                <div id='permissions-drawer' className={isListOpen ? 'open' : ''}>
-                    <span id='members-titles'>
-                        <span>Username</span>
-                        <span>Role</span>
-                    </span>
-                    {server.members.map((member) => (
-                        <span id='members-item' key={member.permissionId}>
-                            <span id='member-span'>
-                                <span id='member-username' title={member.email}>{member.name || member.email}</span>
-                                <span id='member-role'>({ROLE_WORDS[member.role]})</span>
-                                <span id='member-remove'>
-                                    {isOwner && member.email !== myEmail && member.role !== 'owner' && (
-                                        <button id='remove-button' title='Remove' disabled={removing === member.permissionId} onClick={() => handleRemove(member)}>
-                                            <Trash2 size={16} />
-                                        </button>
-                                    )}
+            <button className={`members-toggle ${isListOpen ? 'open' : ''}`} onClick={() => setIsListOpen(!isListOpen)}>
+                <Users size={14} />
+                <span>Members</span>
+                <span className='members-count'>{server.members.length}</span>
+                <ChevronDown size={15} className='members-chevron' />
+            </button>
+            {isListOpen && (
+                <ul className='member-list'>
+                    {server.members.map((member) => {
+                        const name = member.name || member.email;
+                        const removable = isOwner && member.email !== myEmail && member.role !== 'owner';
+                        return (
+                            <li className='member-row' key={member.permissionId}>
+                                <span className='member-avatar' style={{ background: `hsl(${avatarHue(member.email)} 32% 30%)` }} aria-hidden>
+                                    {name.charAt(0).toUpperCase()}
                                 </span>
-                            </span>
-                        </span>
-                    ))}
-                    {isOwner && <span id='invite-member'><button onClick={() => setIsModalOpen(true)}>Invite Member</button></span>}
-                </div>
-            </div>
+                                <span className='member-name' title={member.email}>
+                                    {name}
+                                    {member.name && <small>{member.email}</small>}
+                                </span>
+                                <span className={`member-role ${member.role}`}>{ROLE_WORDS[member.role]}</span>
+                                {removable
+                                    ? (
+                                        <button
+                                            className='icon-button danger'
+                                            title={`Remove ${name}`}
+                                            disabled={removing === member.permissionId}
+                                            onClick={() => handleRemove(member)}
+                                        >
+                                            {removing === member.permissionId ? <Loader2 size={14} className='spinner' /> : <Trash2 size={14} />}
+                                        </button>
+                                    )
+                                    : <span className='member-spacer' />}
+                            </li>
+                        );
+                    })}
+                    {isOwner && (
+                        <li className='member-invite'>
+                            <button className='text-button primary' onClick={() => setIsModalOpen(true)}>
+                                <UserPlus size={13} /> Invite someone
+                            </button>
+                        </li>
+                    )}
+                </ul>
+            )}
         </div>
     );
 }

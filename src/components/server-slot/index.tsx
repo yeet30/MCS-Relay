@@ -1,8 +1,9 @@
 import './server-slot.css';
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, LogOut, Pencil, Save, Trash2 } from 'lucide-react';
+import { Check, FolderInput, HardDrive, Loader2, LogOut, Pencil, Trash2 } from 'lucide-react';
 import type { ServerSummary } from '../../../shared/types';
 import { useConfirm } from '../../hooks/useConfirm';
+import { formatCount } from '../../lib/format';
 import { isMySession } from '../../lib/sync';
 import { useNoticeStore } from '../../stores/noticeStore';
 import { request } from '../../stores/request';
@@ -13,15 +14,19 @@ import PermissionsList from '../permissions-list';
 
 const MAX_NAME = 60;
 
-/** One server in Settings > Drive Folders. Downloading and uploading happen only through a session. */
+/** One server in Settings > Drive Folders: its name, its folder on this PC and its members. Downloading and
+ *  uploading happen only through a session. */
 export default function ServerSlot({ server }: { server: ServerSummary }) {
     const { confirm, popup } = useConfirm();
     const inUse = useSessionStore((s) => isMySession(s.state, server.id) && s.state.phase !== 'failed');
+    const pathStep = useServersStore((s) => (s.pathBusy?.serverId === server.id ? s.pathBusy.step : null));
+    const pathBusy = pathStep !== null;
+    const checkProgress = useSessionStore((s) => (s.checkProgress?.serverId === server.id ? s.checkProgress : null));
     const isOwner = server.myRole === 'owner';
     const inputRef = useRef<HTMLInputElement>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [nameBuffer, setNameBuffer] = useState(server.name);
-    const [loading, setLoading] = useState<'edit' | 'delete' | 'path' | null>(null);
+    const [loading, setLoading] = useState<'edit' | 'delete' | null>(null);
 
     useEffect(() => {
         if (!isEditing) setNameBuffer(server.name);
@@ -62,79 +67,73 @@ World files you uploaded stay in the server, because the others still need them,
         await useServersStore.getState().reload();
     }
 
-    async function handlePath() {
-        setLoading('path');
-        await chooseLocalPath(server.id);
-        setLoading(null);
+    function startEditing() {
+        setIsEditing(true);
+        setTimeout(() => inputRef.current?.select(), 0);
     }
 
     return (
-        <div className='server-slot'>
+        <div className='server-card'>
             {popup}
-            <span className='first-row'>
-                <span className='list-text'>
-                    <input
-                        type='text'
-                        ref={inputRef}
-                        className='name-input'
-                        value={nameBuffer}
-                        readOnly={!isEditing}
-                        maxLength={MAX_NAME}
-                        onChange={(e) => setNameBuffer(e.currentTarget.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') void handleSave();
-                            if (e.key === 'Escape') setIsEditing(false);
-                        }}
-                        style={{ width: `${Math.max(nameBuffer.length, 4)}ch` }}
-                    />
-                    {isOwner && (isEditing
-                        ? (
-                            <button className='edit-button' title='Save the name' onClick={handleSave} disabled={loading === 'edit'}>
-                                {loading === 'edit' ? <Loader2 size={12} className='spinner' /> : <Save size={12} />}
-                            </button>
-                        )
-                        : (
-                            <button
-                                className='edit-button'
-                                title='Rename'
-                                onClick={() => {
-                                    setIsEditing(true);
-                                    setTimeout(() => inputRef.current?.focus(), 0);
-                                }}
-                            >
-                                <Pencil size={12} />
-                            </button>
-                        ))}
-                </span>
-                <span className='button-span'>
-                    <button
-                        className='list-button'
-                        title={inUse ? 'Stop the session first' : isOwner ? 'Delete this server' : 'Leave this server'}
-                        style={{ backgroundColor: 'rgb(50, 0, 0)' }}
-                        disabled={loading === 'delete' || inUse}
-                        onClick={handleDelete}
-                    >
-                        {loading === 'delete' && <Loader2 size={12} className='spinner' />}
-                        {isOwner ? <Trash2 size={16} /> : <LogOut size={16} />}
-                    </button>
-                </span>
-            </span>
-            <span className='second-row'>
-                {server.localPath ?? 'No folder on this PC yet'}
+            <div className='server-card-head'>
+                <span className='server-initial' aria-hidden>{server.name.charAt(0).toUpperCase() || '?'}</span>
+                <input
+                    type='text'
+                    ref={inputRef}
+                    className={`name-input ${isEditing ? 'editing' : ''}`}
+                    value={nameBuffer}
+                    readOnly={!isEditing}
+                    maxLength={MAX_NAME}
+                    onChange={(e) => setNameBuffer(e.currentTarget.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') void handleSave();
+                        if (e.key === 'Escape') setIsEditing(false);
+                    }}
+                />
+                {isOwner && (isEditing
+                    ? (
+                        <button className='icon-button' title='Save the name' onClick={handleSave} disabled={loading === 'edit'}>
+                            {loading === 'edit' ? <Loader2 size={14} className='spinner' /> : <Check size={14} />}
+                        </button>
+                    )
+                    : <button className='icon-button' title='Rename' onClick={startEditing}><Pencil size={14} /></button>)}
                 <button
-                    className='list-button'
-                    disabled={loading === 'path' || inUse}
-                    title={inUse ? 'The folder cannot change during a session' : 'Choose the folder on this PC'}
-                    style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-                    onClick={handlePath}
+                    className='icon-button danger'
+                    title={inUse ? 'Stop the session first' : isOwner ? 'Delete this server' : 'Leave this server'}
+                    disabled={loading === 'delete' || inUse}
+                    onClick={handleDelete}
                 >
-                    {loading === 'path' && <Loader2 size={12} className='spinner' />}
-                    Path <Pencil size={12} style={{ borderBottom: 'solid', borderWidth: '1px' }} />
+                    {loading === 'delete'
+                        ? <Loader2 size={14} className='spinner' />
+                        : isOwner ? <Trash2 size={15} /> : <LogOut size={15} />}
                 </button>
-            </span>
-            <span className='third-row'>
-                <PermissionsList server={server} />
-            </span>
+            </div>
+            <div className='server-path'>
+                <HardDrive size={14} />
+                <span className={`path-text ${server.localPath ? '' : 'missing'}`} title={server.localPath ?? undefined}>
+                    {server.localPath ?? 'No folder on this PC yet'}
+                </span>
+                <button
+                    className='text-button'
+                    disabled={pathBusy || inUse}
+                    title={inUse ? 'The folder cannot change during a session' : 'Choose the folder on this PC'}
+                    onClick={() => void chooseLocalPath(server.id)}
+                >
+                    {pathBusy ? <Loader2 size={12} className='spinner' /> : <FolderInput size={12} />}
+                    {server.localPath ? 'Change' : 'Choose folder'}
+                </button>
+            </div>
+            {pathBusy && (
+                <p className='server-checking'>
+                    <Loader2 size={12} className='spinner' />
+                    {pathStep === 'choosing'
+                        ? 'Waiting for you to choose a folder…'
+                        : checkProgress && checkProgress.total > 0
+                            ? `Checking the files in this folder (${formatCount(checkProgress.done)} of ${formatCount(checkProgress.total)})…`
+                            : 'Looking through the folder…'}
+                </p>
+            )}
+            <PermissionsList server={server} />
         </div>
     );
 }

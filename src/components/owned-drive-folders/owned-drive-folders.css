@@ -1,85 +1,42 @@
-.owned-drive-wrapper {
+/* Both Drive Folders tabs: a column of server cards. */
+.folders-tab {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-bottom: 4px;
+    text-align: left;
 
-    padding-top: 1rem;
-    h3 {
+    .folders-intro {
         margin: 0;
-        margin-bottom: 1rem;
+        font-size: 0.82rem;
+        color: var(--muted);
     }
 
-    #loading-span {
+    .empty-slot {
         display: flex;
-        flex-direction: row;
-    }
-
-    #loading-span .spinner {
-        position: relative;
-        top: 22px;
-    }
-
-    #loading-span h4 {
-        padding-left: 10px;
-    }
-
-    #servers-ul {
-        margin: 0;
-        margin-left: -10%;
-    }
-
-    #servers-ul li {
-        display: flex;
-        flex-direction: column;
-        list-style: none;
-        margin-bottom: 1rem;
-        font-weight: 400;
-        font-size: 1.1rem;
-    }
-
-    .first-row {
-        display: flex;
-        align-items: start;
-        font-weight: 400;
-        display: flex;
-        flex-direction: row;
-        align-items: bottom;
-        justify-content: space-between;
-    }
-
-    .list-text {
-        padding-top: 1px;
-    }
-
-    .list-button {
-        font-size: 1rem;
-        font-weight: 400;
-        padding: 5px 10px;
-    }
-
-    .second-row {
-        display: flex;
-        align-items: end;
-        justify-content: space-between;
-        padding-top: 5px;
-        font-weight: 100;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px dashed var(--line);
+        background: none;
+        color: var(--muted);
         font-size: 0.9rem;
-        color: rgb(150, 150, 150);
-        border-bottom: solid;
-        border-width: 1px;
+        font-weight: 500;
+        text-align: left;
+        transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+
+        small {
+            margin-left: auto;
+            font-size: 0.75rem;
+            font-weight: 400;
+        }
     }
 
-    .second-row .list-button {
-        padding: 0px 8px;
-        margin-bottom: 1px;
-        font-size: 0.9rem;
-    }
-
-    .third-row {
-        display: flex;
-        justify-content: space-between;
-    }
-
-    .third-row button {
-        padding: 0px 8px;
-        font-size: 0.9rem;
+    .empty-slot:not(:disabled):hover {
+        color: var(--accent);
+        border-color: rgba(var(--accent-rgb), 0.55);
+        background: rgba(var(--accent-rgb), 0.05);
     }
 
     .spinner {
@@ -87,12 +44,13 @@
     }
 }
 
-@keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
+.folders-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
 
-    to {
-        transform: rotate(360deg);
+    .spinner {
+        animation: spin 1s linear infinite;
     }
 }

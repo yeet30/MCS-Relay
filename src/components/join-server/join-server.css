@@ -1,68 +1,65 @@
-.join-server-wrapper{
+.join-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px dashed var(--line);
+    text-align: left;
 
-    h3 {
-        margin: 1rem 0rem;
-    }
-
-    .rows{
+    .join-title {
         display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    .first-row {
-        display: flex;
-        font-weight: 400;  
         align-items: center;
-        justify-content: space-between;
+        gap: 8px;
+        font-weight: 600;
     }
 
-    .list-text {
-        width: 70%;
+    .join-hint {
+        margin: 0;
+        font-size: 0.8rem;
+        color: var(--muted);
     }
 
-    #join-input {
-        font-family: monospace;
-        padding: 4px 10px;
-        height: 1rem;
-        width: 100%;
-    }
-
-    .list-button {
-        font-size: 1rem;
-        font-weight: 400;
-        padding: 5px 10px;
-    }
-
-    .second-row {
+    .join-row {
         display: flex;
-        align-items: end;
-        justify-content: space-between;
-        padding-top: 5px;
-        font-weight: 100;
-        font-size: 1rem;
-        color: rgb(150, 150, 150);
-        border-bottom: solid;
-        border-width: 1px;
+        gap: 8px;
+
+        .text-button {
+            flex: none;
+            padding: 0 16px;
+        }
     }
 
-    .second-row .list-button {
-        padding: 0px 8px;
-        margin-bottom: 1px;
-        font-size: 0.9rem;
+    .join-input {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 10px;
+        border-radius: 9px;
+        border: 1px solid var(--line);
+        background: var(--panel-2);
+        color: var(--muted);
+
+        input {
+            flex: 1;
+            min-width: 0;
+            padding: 7px 0;
+            border: none;
+            outline: none;
+            background: none;
+            color: var(--text);
+            font-family: var(--mono);
+            font-size: 0.8rem;
+        }
+    }
+
+    .join-input:focus-within {
+        border-color: rgba(var(--accent-rgb), 0.6);
     }
 
     .spinner {
         animation: spin 1s linear infinite;
-    }
-}
-
-@keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
-
-    to {
-        transform: rotate(360deg);
     }
 }

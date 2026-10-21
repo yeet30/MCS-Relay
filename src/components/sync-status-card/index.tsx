@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { FolderInput, Loader2, RefreshCw, Wrench } from 'lucide-react';
 import type { ConflictChoice, SyncReport } from '../../../shared/types';
 import { useConfirm } from '../../hooks/useConfirm';
-import { formatWhen } from '../../lib/format';
+import { formatCount, formatWhen } from '../../lib/format';
 import { CHOICE_LABELS, FIRST_SYNC_CHOICE_LABELS, cleanupLines, describeReport, planHasFiles } from '../../lib/sync';
 import type { IModalItems } from '../../lib/ui-types';
 import { useAuthStore } from '../../stores/authStore';
@@ -45,6 +45,7 @@ export default function SyncStatusCard() {
     const report = useSessionStore((s) => reportFor(s, serverId));
     const checking = useSessionStore((s) => s.checkingId !== null && s.checkingId === serverId);
     const checkError = useSessionStore((s) => (s.checkError?.serverId === serverId ? s.checkError.error : null));
+    const checkProgress = useSessionStore((s) => (s.checkProgress?.serverId === serverId ? s.checkProgress : null));
     const myEmail = useAuthStore((s) => s.user?.email ?? null);
     const { confirm, popup } = useConfirm();
     const [resolving, setResolving] = useState<ConflictChoice | null>(null);
@@ -52,6 +53,10 @@ export default function SyncStatusCard() {
     const [showRepair, setShowRepair] = useState(false);
 
     if (!server || !serverId) return null;
+    // Hashing a big world takes a while: say how far it got.
+    const checkingLine = checkProgress && checkProgress.total > 0
+        ? `Checking the files in your folder (${formatCount(checkProgress.done)} of ${formatCount(checkProgress.total)})…`
+        : 'Comparing your folder with the cloud…';
     const nameFor = (email: string) => server.members.find((m) => m.email === email)?.name || email;
 
     if (!report) {
@@ -59,7 +64,7 @@ export default function SyncStatusCard() {
             <div className='sync-card info'>
                 {checkError
                     ? <p className='sync-body'>{checkError.message}</p>
-                    : <p className='sync-body'><Loader2 size={12} className='spinner' /> Comparing your folder with the cloud…</p>}
+                    : <p className='sync-body'><Loader2 size={12} className='spinner' /> {checkingLine}</p>}
             </div>
         );
     }
@@ -102,6 +107,7 @@ export default function SyncStatusCard() {
             </div>
             <p className='sync-body'>{copy.body}</p>
             {cleanup.map((line) => <p key={line} className='sync-cleanup'>{line}</p>)}
+            {(checking || checkProgress) && <p className='sync-checking'><Loader2 size={12} className='spinner' /> {checkingLine}</p>}
             <div className='sync-actions'>
                 {choices.map((choice) => (
                     <button

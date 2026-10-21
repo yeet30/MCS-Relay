@@ -15,14 +15,14 @@
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        background-color: #1e1e1e;
-        border-radius: 10px;
+        background-color: var(--panel);
+        border-radius: 16px;
         padding: 20px;
         z-index: 301;
         width: 500px;
         max-height: 300px;
-        border-style: dotted;
-        border-width: 1px;
+        border: 1px solid var(--line);
+        box-shadow: var(--shadow);
     }
 
 

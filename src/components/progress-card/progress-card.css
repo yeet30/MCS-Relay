@@ -100,7 +100,28 @@
         }
     }
 
-    .progress-meta,
+    /* Size, speed and time left, spread over the line; a very long time left is cut, never wrapped. */
+    .progress-meta {
+        margin: 0;
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+
+        span {
+            flex: none;
+        }
+
+        .progress-eta {
+            flex: 0 1 auto;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    }
+
     .progress-steps {
         margin: 0;
         color: var(--muted);

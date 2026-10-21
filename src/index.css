@@ -3,25 +3,33 @@
 }
 
 :root {
-    font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+    /* Inter and JetBrains Mono ship with the app (@fontsource), so every PC sees the same letters. */
+    font-family: 'Inter Variable', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
     line-height: 1.5;
     font-weight: 400;
 
     /* The app is dark-only: its panels are dark, so a light page background would hide their text. */
     color-scheme: dark;
-    color: rgba(255, 255, 255, 0.87);
-    background-color: #242424;
+    color: var(--text);
+    background-color: var(--bg);
 
-    --bg: #242424;
-    --panel: #1e1e1e;
-    --panel-2: rgb(40, 40, 40);
-    --line: rgb(60, 60, 60);
-    --muted: rgb(150, 150, 150);
+    /* Dark greys with a hint of green; panels sit a little darker than the page. */
+    --bg: #1f2421;
+    --panel: #181c1a;
+    --panel-2: #252b28;
+    --panel-3: #2e3531;
+    --line: #343c38;
+    --text: #e4e9e6;
+    --muted: #949f99;
     --good: #98c379;
     --bad: #e06c75;
     --warn: #e5c07b;
-    --accent: #646cff;
-    --mono: 'JetBrains Mono', Consolas, monospace;
+    --info: #7aa2f7;
+    --accent: #4cc38a;
+    --accent-rgb: 76, 195, 138;
+    --accent-strong: #66d39f;
+    --shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    --mono: 'JetBrains Mono Variable', 'JetBrains Mono', Consolas, monospace;
 
     font-synthesis: none;
     text-rendering: optimizeLegibility;
@@ -35,19 +43,30 @@
 
 a {
     font-weight: 500;
-    color: #646cff;
+    color: var(--accent);
     text-decoration: inherit;
 }
 
 a:hover {
-    color: #535bf2;
+    color: var(--accent-strong);
 }
 
 body {
     margin: 0;
     min-width: 320px;
     min-height: 100vh;
-    background-color: #242424;
+    background-color: var(--bg);
+    /* A soft light from the top keeps the page from looking flat. */
+    background-image: radial-gradient(ellipse 80% 45% at 50% -10%, rgba(var(--accent-rgb), 0.07), transparent 70%);
+    background-attachment: fixed;
+}
+
+h1, h2, h3 {
+    letter-spacing: -0.015em;
+}
+
+input, textarea, select {
+    font-family: inherit;
 }
 
 h1 {
@@ -63,13 +82,13 @@ button {
     font-weight: 500;
     font-family: inherit;
     color: inherit;
-    background-color: #1a1a1a;
+    background-color: var(--panel);
     cursor: pointer;
-    transition: border-color 0.25s;
+    transition: border-color 0.2s, background-color 0.2s;
 }
 
 button:hover {
-    border-color: #646cff;
+    border-color: var(--accent);
 }
 
 button:disabled {
@@ -81,9 +100,13 @@ button:disabled:hover {
     border-color: transparent;
 }
 
-button:focus,
+button:focus {
+    outline: none;
+}
+
 button:focus-visible {
-    outline: 4px auto -webkit-focus-ring-color;
+    outline: 2px solid rgba(var(--accent-rgb), 0.7);
+    outline-offset: 2px;
 }
 
 /* Small text buttons used inside cards and panels. */
@@ -99,8 +122,12 @@ button:focus-visible {
 }
 
 .text-button.primary {
-    background-color: rgba(100, 108, 255, 0.25);
-    border-color: rgba(100, 108, 255, 0.6);
+    background-color: rgba(var(--accent-rgb), 0.16);
+    border-color: rgba(var(--accent-rgb), 0.55);
+}
+
+.text-button.primary:hover {
+    background-color: rgba(var(--accent-rgb), 0.24);
 }
 
 .text-button.danger {

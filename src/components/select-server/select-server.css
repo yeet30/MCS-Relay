@@ -16,7 +16,7 @@
         border-radius: 20px;
         height: 2rem;
         width: 10rem;
-        background-color:rgb(50, 50, 50);
+        background-color: var(--panel-3);
         border: 1px solid rgb(85, 85, 85);
         z-index: 1;
     }

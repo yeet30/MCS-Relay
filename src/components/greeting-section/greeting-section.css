@@ -57,7 +57,7 @@
         height: 12px;
         border-radius: 50%;
         background: #e5484d;
-        box-shadow: 0 0 0 2px #242424;
+        box-shadow: 0 0 0 2px var(--bg);
         animation: scroller-pulse 1.6s ease-in-out infinite;
     }
 }

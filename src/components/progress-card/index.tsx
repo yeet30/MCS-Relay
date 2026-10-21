@@ -116,14 +116,16 @@ function percent(progress: SessionProgress): number {
     return Math.floor(Math.min(1, Math.max(0, progress.fraction)) * 100);
 }
 
-/** "412 / 700 MB · 4.1 MB/s · about 1 min left" while files move. */
-function transferLine(transfer: TransferSnapshot): string | null {
+/** "412 / 700 MB", "4.1 MB/s", "about 1 min left" while files move, spread over the line. */
+function TransferMeta({ transfer }: { transfer: TransferSnapshot }) {
     if (!transfer.active) return null;
-    const parts: string[] = [];
-    if (transfer.bytesTotal > 0) parts.push(formatBytesPair(transfer.bytesDone, transfer.bytesTotal));
-    if (transfer.bytesPerSec > 0 && transfer.bytesTotal > 0) parts.push(formatSpeed(transfer.bytesPerSec));
-    parts.push(formatEta(transfer.etaSec));
-    return parts.join(' · ');
+    return (
+        <p className='progress-meta'>
+            {transfer.bytesTotal > 0 && <span>{formatBytesPair(transfer.bytesDone, transfer.bytesTotal)}</span>}
+            {transfer.bytesPerSec > 0 && transfer.bytesTotal > 0 && <span>{formatSpeed(transfer.bytesPerSec)}</span>}
+            <span className='progress-eta'>{formatEta(transfer.etaSec)}</span>
+        </p>
+    );
 }
 
 /** "Step 5 of 8 · 1,210 of 2,320 actions" */
@@ -241,7 +243,6 @@ export default function ProgressCard({ compact = false }: { compact?: boolean })
     }
 
     const failed = progress.outcome === 'failed' || progress.outcome === 'cancelled';
-    const extra = transfer ? transferLine(transfer) : null;
     return (
         <div className={`progress-card ${progress.outcome}`}>
             {modal}
@@ -256,7 +257,7 @@ export default function ProgressCard({ compact = false }: { compact?: boolean })
                     : progress.outcome === 'cancelled' ? <CirclePause size={12} /> : failed ? <X size={12} /> : <Check size={12} />}
                 <span>{progress.message}</span>
             </p>
-            {extra && <p className='progress-meta'>{extra}</p>}
+            {transfer && <TransferMeta transfer={transfer} />}
             {progress.note && progress.active && <p className='progress-note'><Info size={12} /> <span>{progress.note}</span></p>}
             {transfer && transfer.failures.length > 0 && <FailedFiles failures={transfer.failures} />}
             <div className='progress-foot'>

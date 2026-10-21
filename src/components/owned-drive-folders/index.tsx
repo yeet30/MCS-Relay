@@ -1,6 +1,6 @@
 import './owned-drive-folders.css';
 import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Plus } from 'lucide-react';
 import { useConfirm } from '../../hooks/useConfirm';
 import { createServer } from '../../stores/serverActions';
 import { useServersStore } from '../../stores/serversStore';
@@ -8,6 +8,7 @@ import ServerSlot from '../server-slot';
 
 const MAX_SLOTS = 3;
 
+/** The servers in my own Google Drive, and the free slots for new ones. */
 export default function OwnedDriveFolders() {
     const servers = useServersStore((s) => s.servers);
     const loading = useServersStore((s) => s.loading && !s.loaded);
@@ -21,41 +22,23 @@ export default function OwnedDriveFolders() {
         setCreating(false);
     }
 
+    if (loading) {
+        return <p className='folders-loading'><Loader2 size={16} className='spinner' /> Loading servers…</p>;
+    }
     return (
-        <div className='owned-drive-wrapper'>
+        <div className='folders-tab'>
             {popup}
-            {owned.length === 0 && <h3>Start by creating your first server folder.</h3>}
-            {loading
-                ? (
-                    <span id='loading-span'>
-                        <Loader2 size={24} className='spinner' />
-                        <h4>Loading servers...</h4>
-                    </span>
-                )
-                : (
-                    <ul id='servers-ul'>
-                        {owned.map((server) => <li key={server.id}><ServerSlot server={server} /></li>)}
-                        {Array.from({ length: Math.max(0, MAX_SLOTS - owned.length) }).map((_, index) => (
-                            <li key={`ghost-${index}`}>
-                                <span className='first-row'>
-                                    <span className='list-text ghost'>+ Create New Server</span>
-                                    <span>
-                                        <button
-                                            className='list-button'
-                                            style={{ backgroundColor: 'rgb(10, 30, 10)' }}
-                                            disabled={creating}
-                                            onClick={handleCreate}
-                                        >
-                                            {creating && <Loader2 size={12} className='spinner' />}
-                                            Create Server
-                                        </button>
-                                    </span>
-                                </span>
-                                <span className='second-row'>Empty slot</span>
-                            </li>
-                        ))}
-                    </ul>
-                )}
+            <p className='folders-intro'>
+                Servers kept in your Google Drive. You can own up to {MAX_SLOTS}; {owned.length === 0 ? 'start by creating one.' : `${owned.length} of ${MAX_SLOTS} used.`}
+            </p>
+            {owned.map((server) => <ServerSlot key={server.id} server={server} />)}
+            {Array.from({ length: Math.max(0, MAX_SLOTS - owned.length) }).map((_, index) => (
+                <button key={`free-${index}`} className='empty-slot' disabled={creating} onClick={handleCreate}>
+                    {creating && index === 0 ? <Loader2 size={16} className='spinner' /> : <Plus size={16} />}
+                    <span>Create a server</span>
+                    <small>Free slot</small>
+                </button>
+            ))}
         </div>
     );
 }

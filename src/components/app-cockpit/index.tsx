@@ -11,7 +11,7 @@ import { createServer } from '../../stores/serverActions';
 import { selectSelectedServer, useServersStore } from '../../stores/serversStore';
 import { lockFor, reportFor, useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { DirectoryMenu } from '../directory-menu';
+import { DirectoryMenu, TransferMenu } from '../directory-menu';
 import FailedFiles from '../progress-card/failed-files';
 import JoinServer from '../join-server';
 import Modal from '../modal';
@@ -133,7 +133,7 @@ export default function AppCockpit() {
             <Modal
                 isOpen={isJoinOpen}
                 onClose={() => setIsJoinOpen(false)}
-                items={[{ title: 'Join Server', content: <JoinServer confirm={confirm} onJoined={() => setIsJoinOpen(false)} /> }]}
+                items={[{ title: 'Join a server', content: <JoinServer confirm={confirm} onJoined={() => setIsJoinOpen(false)} /> }]}
             />
             {popup}
         </>
@@ -154,11 +154,13 @@ export default function AppCockpit() {
                 {dialogs}
                 <h3>You are not a member of any server, create or join one.</h3>
                 <div className='buttons-div'>
-                    <button className='initial-button' title='Create a server' onClick={handleCreate} disabled={creating}>
-                        {creating ? <LoaderCircle size={120} className='spinner' /> : <Plus size={120} />}
+                    <button className='initial-button' title='Create a server in your Google Drive' onClick={handleCreate} disabled={creating}>
+                        {creating ? <LoaderCircle size={52} strokeWidth={1.5} className='spinner' /> : <Plus size={52} strokeWidth={1.5} />}
+                        <span>Create a server</span>
                     </button>
-                    <button className='initial-button' title='Join a server' onClick={() => setIsJoinOpen(true)}>
-                        <LogIn size={120} />
+                    <button className='initial-button' title='Join a server from an invitation' onClick={() => setIsJoinOpen(true)}>
+                        <LogIn size={52} strokeWidth={1.5} />
+                        <span>Join a server</span>
                     </button>
                 </div>
             </div>
@@ -169,27 +171,27 @@ export default function AppCockpit() {
     switch (mode.kind) {
         case 'stop':
             button = (
-                <button className='onOff-button' title='Stop the server and upload the world' onClick={handleStop} disabled={requesting}>
-                    {requesting ? <LoaderCircle size={128} className='spinner' /> : <Square size={120} fill='currentColor' />}
+                <button className='onOff-button stop' title='Stop the server and upload the world' onClick={handleStop} disabled={requesting}>
+                    {requesting ? <LoaderCircle size={76} strokeWidth={1.75} className='spinner' /> : <Square size={46} strokeWidth={1.75} fill='currentColor' />}
                 </button>
             );
             break;
         case 'busy':
             button = (
-                <button className='onOff-button' title={mode.label} disabled>
-                    <LoaderCircle size={128} className='spinner' />
+                <button className='onOff-button busy' title={mode.label} disabled>
+                    <LoaderCircle size={76} strokeWidth={1.75} className='spinner' />
                 </button>
             );
             break;
         case 'start':
             button = (
                 <button
-                    className='onOff-button'
+                    className='onOff-button start'
                     title={mode.reason ?? 'Start the server'}
                     onClick={handleStart}
                     disabled={!mode.enabled || requesting}
                 >
-                    {requesting ? <LoaderCircle size={128} className='spinner' /> : <Power size={128} />}
+                    {requesting ? <LoaderCircle size={76} strokeWidth={1.75} className='spinner' /> : <Power size={72} strokeWidth={1.75} />}
                 </button>
             );
             break;
@@ -200,7 +202,7 @@ export default function AppCockpit() {
                     title={mode.kind === 'failed' ? 'Dismiss the error first' : mode.error ? 'Retry the upload first' : 'Continue the upload first'}
                     disabled
                 >
-                    <Power size={128} />
+                    <Power size={72} strokeWidth={1.75} />
                 </button>
             );
     }
@@ -209,10 +211,9 @@ export default function AppCockpit() {
         <div className='cockpit'>
             {dialogs}
             <div className='cockpit-wrapper'>
+                <div className='side-slot left'><TransferMenu server={selected} canWrite={canWrite} /></div>
                 {button}
-                <div className='directory-menu'>
-                    <DirectoryMenu server={selected} canWrite={canWrite} />
-                </div>
+                <div className='side-slot right'><DirectoryMenu server={selected} canWrite={canWrite} /></div>
             </div>
             {mode.kind === 'start' && !mode.enabled && mode.reason && report && <p className='power-reason'>{mode.reason}</p>}
             {(mode.kind === 'failed' || mode.kind === 'upload-pending') && <PowerMessage mode={mode} />}

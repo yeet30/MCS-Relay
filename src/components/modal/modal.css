@@ -6,7 +6,8 @@
         left: 0;
         width: 100%;
         height: 100%;
-        background-color: rgba(0,0,0,0.3);
+        background-color: rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(2px);
         z-index: 200;
     }
 
@@ -15,10 +16,11 @@
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        background-color: #1e1e1e;
-        border-radius: 10px;
-        padding: 20px;
-        padding-top: 20px;
+        background-color: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+        padding: 18px 20px 20px;
         z-index: 201;
         display: flex;
         flex-direction: column;
@@ -31,27 +33,30 @@
         flex-direction: column;
     }
 
+    /* Tabs are words with an underline; the one shown is bright with an accent line. */
     #modal-tabs {
-        width: 80%;
+        width: calc(100% - 40px);
         display: flex;
         flex-direction: row;
-        gap: 5px;
+        gap: 20px;
     }
 
     #title-seperator {
-        height: 3px;
-        width: 75%;
-        background-color: rgba(70,70,70);
+        height: 1px;
+        width: 100%;
+        margin-top: -1px;
+        margin-bottom: 12px;
+        background-color: var(--line);
     }
 
     .tab{
-        background-color: rgb(40, 40,40);
-        padding: 5px 10px;
         margin: 0;
-        border-top-left-radius: 15px;
-        border-top-right-radius: 15px;
-        border-bottom-left-radius: 15px;
-        border-bottom-right-radius: 15px;
+        padding: 2px 0 8px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--muted);
+        border-bottom: 2px solid transparent;
+        transition: color 0.15s ease, border-color 0.15s ease;
     }
 
     #modal-tabs > .tab:only-child {
@@ -60,14 +65,12 @@
 
     .tab:hover{
         cursor: pointer;
+        color: var(--text);
     }
 
     .tab.active{
-        background-color: rgba(70,70,70);
-        border-top-left-radius: 15px;
-        border-top-right-radius: 15px;
-        border-bottom-left-radius: 0px;
-        border-bottom-right-radius: 0px;
+        color: var(--text);
+        border-bottom-color: var(--accent);
     }
 
     #children {
@@ -106,12 +109,24 @@
 
     #modal-close {
         position: absolute;
-        top: 10px;
-        right: 10px;
+        top: 12px;
+        right: 12px;
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
         background: none;
         border: none;
-        color: white;
+        color: var(--muted);
         cursor: pointer;
-        font-size: 16px;
+        font-size: 15px;
+    }
+
+    #modal-close:hover {
+        background: var(--panel-2);
+        color: var(--text);
     }
 }

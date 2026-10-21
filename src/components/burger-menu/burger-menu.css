@@ -8,8 +8,9 @@
         border-style: solid;
         border-radius: 50px;
         border-width: 1px;
-        width: 85px;
-        height: 40px;
+        box-sizing: border-box;
+        width: 89px;
+        height: 44px;
         display: flex;
         cursor: pointer;
         padding: 1px;
@@ -19,9 +20,10 @@
     }
 
     #menu-clicker.open{
-        /* As wide as the dropdown below it (230px), inset by 5px on both sides like on the right. */
-        width: 220px;
-        background-color: #1e1e1e;
+        /* The dropdown is 232px wide (with its border) and 5px further out on every side: the pill sits in it
+           with the same 5px gap left, right and on top. */
+        width: 222px;
+        background-color: var(--panel);
     }
 
     #profile-picture{
@@ -67,10 +69,11 @@
         position: absolute;
         top: 11px;
         right: 5px;
-        height: 55px;
-        width: 100px;
-        border-radius: 20px;
-        background-color: #1e1e1e;
+        height: 54px;
+        width: 97px;
+        /* Concentric with the pill: its 22px radius plus the 5px gap. */
+        border-radius: 27px;
+        background-color: var(--panel);
         border: 1px solid transparent;
         transition: width 0.3s ease, height 0.3s ease;
         z-index: 98;
@@ -78,20 +81,19 @@
     }
 
     #menu-clicker:hover ~ #drawer.close {
-        outline: 4px solid #1e1e1e;
+        outline: 4px solid var(--panel);
         transition: width 0.3s ease, height 0.3s ease;
         z-index: 98;
         overflow: hidden;
     }
 
     #drawer.open {
-        border-radius: 22px;
-        border-bottom-right-radius: 12px;
+        border-radius: 27px 27px 16px 16px;
         width: 230px;
         height: 312px;
         right: 5px;
-        border-color: rgb(60, 60, 60);
-        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+        border-color: var(--line);
+        box-shadow: var(--shadow);
     }
 
     .drawer-body {

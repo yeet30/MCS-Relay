@@ -1,94 +1,128 @@
-.server-slot{
+/* One server in Drive Folders, as a card. */
+.server-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    text-align: left;
 
-    .first-row {
-        display: flex;
-        align-items: start;
-        font-weight: 400;
-        display: flex;
-        flex-direction: row;    
-        align-items: bottom;
-        justify-content: space-between;
-    }
-
-    .list-text {
-        padding-top: 1px;
+    .server-card-head {
         display: flex;
         align-items: center;
-        height: 1.6rem;
-        width: 100%;
+        gap: 10px;
     }
 
-    .name-input{
+    .server-initial {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9px;
+        background: rgba(var(--accent-rgb), 0.16);
+        color: var(--accent);
+        font-weight: 700;
+    }
+
+    .name-input {
+        flex: 1;
+        min-width: 0;
+        padding: 2px 6px;
+        margin-left: -6px;
+        border: 1px solid transparent;
+        border-radius: 6px;
         background: none;
-        border: none;
         outline: none;
-        padding: 0;
-        margin: 0;
-        font-size: inherit;
-        font-family: inherit;
-
-        min-width: 1ch;
-        max-width: 100%;
+        color: var(--text);
+        font-size: 1.05rem;
+        font-weight: 600;
+        text-overflow: ellipsis;
     }
 
-    .edit-button{
-        margin-left: 1rem;
-        padding: 0px 10px;
-        border-radius: 10px;
-        background-color: rgba(0, 0, 0, 0.3);
+    .name-input.editing {
+        background: var(--panel);
+        border-color: rgba(var(--accent-rgb), 0.55);
     }
 
-    .edit-button:hover{
-        cursor:pointer;
-    }
-    
-    .server-name:has(.edit-button:hover) {
-        border-bottom: solid 1px;
-    }
-
-    .button-span{
-        display:flex;
-        gap: 2px;
-    }
-
-    .list-button {
+    .server-path {
         display: flex;
         align-items: center;
-        font-size: 1rem;
-        font-weight: 400;
-        margin-left: 1px;
-        gap: 5px;
-        background-color: rgba(0, 0, 0, 0.3);
+        gap: 8px;
+        padding: 6px 8px 6px 10px;
+        border-radius: 9px;
+        background: var(--panel);
+        color: var(--muted);
+        font-size: 0.85rem;
+
+        svg {
+            flex: none;
+        }
+
+        .text-button {
+            flex: none;
+        }
     }
 
-    .second-row {
-        display: flex;
-        align-items: end;
-        justify-content: space-between;
-        padding-top: 5px;
-        font-weight: 100;
-        font-size: 0.9rem;
-        color: rgb(150, 150, 150);
-        border-bottom: solid;
-        border-width: 1px;
+    .path-text {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        direction: rtl;                 /* a long path keeps its end (the folder name) visible */
+        text-align: left;
         user-select: text;
+        color: rgb(210, 216, 213);
     }
 
-    .second-row .list-button {
-        padding: 0px 8px;
-        margin-bottom: 1px;
-        font-size: 0.9rem;
+    .path-text.missing {
+        direction: ltr;
+        color: var(--warn);
     }
 
-    .third-row {
+    .server-checking {
+        margin: -2px 0 0;
         display: flex;
-        justify-content: space-between;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.78rem;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
     }
 
-    .third-row button {
-        padding: 0px 8px;
-        font-size: 0.9rem;
+    .spinner {
+        animation: spin 1s linear infinite;
     }
+}
+
+/* Small square icon buttons used in cards. */
+.icon-button {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: none;
+    color: var(--muted);
+}
+
+.icon-button:not(:disabled):hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: transparent;
+    color: var(--text);
+}
+
+.icon-button.danger:not(:disabled):hover {
+    background: rgba(224, 108, 117, 0.14);
+    color: var(--bad);
 }
 
 @keyframes spin {

@@ -41,14 +41,14 @@
         align-items: center;
         padding: 5px 15px;
         right: 10px;
-        background-color: rgb(50, 50, 50);
+        background-color: var(--panel-3);
         border-radius: 10px;
         z-index: 302;
         cursor: pointer;
     }
 
     #enable-label.enabled{
-        background-color: rgb(24, 24, 24);
+        background-color: var(--panel);
     }
 
     .playitgg-title input{
@@ -136,7 +136,7 @@
         width: 100%;
         z-index: 302;
         padding: 5px 0rem;
-        background: rgb(30, 30, 30);
+        background: var(--panel-2);
     }
 
     .save-button {

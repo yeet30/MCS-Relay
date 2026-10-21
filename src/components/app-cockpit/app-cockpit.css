@@ -9,35 +9,103 @@
     }
 }
 
-.cockpit-wrapper{
+/* Registered so the ring and glow fade instead of jumping. */
+@property --ring {
+    syntax: '<color>';
+    inherits: false;
+    initial-value: rgba(255, 255, 255, 0.025);
+}
 
-    width: 50%;
+@property --glow {
+    syntax: '<color>';
+    inherits: false;
+    initial-value: transparent;
+}
+
+/* The power button, with the transfer button at its bottom left and the folder button at its bottom right. */
+.cockpit-wrapper {
     position: relative;
+    width: 290px;
+    height: 196px;
     display: flex;
-    flex-direction: row;
-    align-items: end;
+    align-items: center;
+    justify-content: center;
 
-    .onOff-button{
+    .side-slot {
+        position: absolute;
+        bottom: 4px;
+        z-index: 2;
+    }
+
+    .side-slot.left { left: 0; }
+    .side-slot.right { right: 0; }
+
+    .onOff-button {
+        --ring: rgba(255, 255, 255, 0.025);
+        --glow: transparent;
         position: relative;
+        width: 180px;
+        height: 180px;
+        padding: 0;
         display: flex;
         align-items: center;
-        width: 196px;
-        height: 185px;
         justify-content: center;
         border-radius: 50%;
-        left:50%;
-        transform: translate(-50%);
+        border: 1px solid var(--line);
+        color: #5f6a64;
+        background: radial-gradient(circle at 50% 28%, #2c332f 0%, #1c211e 60%, #161a18 100%);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.06),
+            inset 0 -10px 22px rgba(0, 0, 0, 0.35),
+            0 0 0 9px var(--ring),
+            0 0 48px var(--glow),
+            0 14px 34px rgba(0, 0, 0, 0.45);
+        transition: color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, transform 0.1s ease;
     }
 
-    .directory-menu {
-        position: absolute;
-        right:0;
-        
+    /* The circle never fades like other disabled buttons; only its icon goes quiet. */
+    .onOff-button:disabled {
+        opacity: 1;
     }
-    
+
+    .onOff-button:not(:disabled):active {
+        transform: scale(0.985);
+    }
+
+    .onOff-button.start:not(:disabled),
+    .onOff-button.busy {
+        color: var(--accent);
+    }
+
+    .onOff-button.start:not(:disabled):hover {
+        --ring: rgba(var(--accent-rgb), 0.12);
+        --glow: rgba(var(--accent-rgb), 0.22);
+        border-color: rgba(var(--accent-rgb), 0.55);
+        color: var(--accent-strong);
+    }
+
+    /* Running: a slow pulse says the server is live; the button itself stops it. */
+    .onOff-button.stop {
+        color: var(--bad);
+        border-color: rgba(224, 108, 117, 0.35);
+        animation: live-pulse 2.6s ease-in-out infinite;
+    }
+
+    .onOff-button.stop:not(:disabled):hover {
+        --glow: rgba(224, 108, 117, 0.25);
+        border-color: rgba(224, 108, 117, 0.6);
+        animation: none;
+        --ring: rgba(224, 108, 117, 0.12);
+    }
+
     .spinner {
         animation: spin 1s linear infinite;
     }
+}
+
+@keyframes live-pulse {
+    0%, 100% { --ring: rgba(var(--accent-rgb), 0.05); }
+    50% { --ring: rgba(var(--accent-rgb), 0.16); }
 }
 
 .initial-buttons-section {
@@ -47,13 +115,37 @@
     align-items: center;
 
     .buttons-div{
-        width: 80%;
         display: flex;
         flex-direction: row;
-        justify-content: space-between;
+        justify-content: center;
+        gap: 24px;
     }
+
     .initial-button{
-        border-radius: 10px;
+        width: 170px;
+        height: 150px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        border-radius: 18px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--muted);
+        box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+        transition: color 0.2s ease, border-color 0.2s ease;
+
+        span {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+    }
+
+    .initial-button:not(:disabled):hover{
+        color: var(--accent);
+        border-color: rgba(var(--accent-rgb), 0.55);
     }
 }
 

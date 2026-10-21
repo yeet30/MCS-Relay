@@ -16,9 +16,9 @@
         gap: 8px;
         padding: 8px 10px;
         border-radius: 10px;
-        background-color: #1e1e1e;
-        border: 1px solid rgb(60, 60, 60);
-        border-left: 4px solid #646cff;
+        background-color: var(--panel);
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--info);
         box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
         font-size: 0.85rem;
         user-select: text;

@@ -8,7 +8,7 @@
     border-radius: 12px;
     background: var(--panel);
     border: 1px solid var(--line);
-    border-left: 4px solid var(--accent);
+    border-left: 4px solid var(--info);
     text-align: left;
 
     &.good { border-left-color: var(--good); }
@@ -29,8 +29,8 @@
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.04em;
-        background: rgba(100, 108, 255, 0.2);
-        color: #b8bcff;
+        background: rgba(122, 162, 247, 0.16);
+        color: var(--info);
 
         &.good { background: rgba(152, 195, 121, 0.18); color: var(--good); }
         &.warn { background: rgba(229, 192, 123, 0.18); color: var(--warn); }
@@ -58,6 +58,16 @@
         align-items: center;
         gap: 6px;
         flex-wrap: wrap;
+    }
+
+    .sync-checking {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.78rem;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
     }
 
     .sync-cleanup {
