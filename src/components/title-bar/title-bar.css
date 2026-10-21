@@ -1,0 +1,21 @@
+.title-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    height: var(--titlebar-h);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    background: var(--titlebar);
+    color: var(--titlebar-text);
+    font-size: 0.78rem;
+    font-weight: 600;
+    -webkit-app-region: drag;
+
+    img {
+        image-rendering: pixelated;
+    }
+}

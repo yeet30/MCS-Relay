@@ -43,6 +43,17 @@ export interface JavaFlags {
 export type ThemeName = 'light' | 'mint' | 'dark';
 export const THEMES: readonly ThemeName[] = ['light', 'mint', 'dark'];
 
+/** The window around the page in each theme: the page colour (shown before it paints) and the title bar, whose
+ *  minimise and close buttons Windows draws in `titleText`. The page draws the rest of the bar in `titleBar`. */
+export const WINDOW_COLORS: Record<ThemeName, { page: string; titleBar: string; titleText: string }> = {
+    light: { page: '#e6e6e8', titleBar: '#ffffff', titleText: '#1c1c20' },
+    mint: { page: '#1b2822', titleBar: '#213129', titleText: '#e6ece9' },
+    dark: { page: '#141416', titleBar: '#1c1c1f', titleText: '#e7e7ea' },
+};
+
+/** Height of the title bar, in px: the page leaves this much room at the top. */
+export const TITLE_BAR_HEIGHT = 32;
+
 export interface AppSettings {
     selectedServerId: ServerId | null;
     playitggPath: string;

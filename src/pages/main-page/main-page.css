@@ -1,7 +1,9 @@
 #main-section {
+    /* Positioned, so the menu and buttons placed at its corners sit below the title bar. */
+    position: relative;
     display: flex;
     flex-direction: row;
-    height: 100dvh;
+    height: calc(100dvh - var(--titlebar-h, 0px));
     width: 100%;
 }
 

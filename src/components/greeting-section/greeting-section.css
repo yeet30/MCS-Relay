@@ -6,7 +6,7 @@
 
     .first-page {
         width: 100%;
-        min-height: 100dvh;
+        min-height: calc(100dvh - var(--titlebar-h, 0px));
     }
 
     .greeting-title {
@@ -27,7 +27,7 @@
     }
 
     .console-section {
-        height: 100dvh;
+        height: calc(100dvh - var(--titlebar-h, 0px));
         width: 100%;
         display: flex;
         align-items: center;

@@ -24,10 +24,14 @@ export class SettingsService {
     private readonly platform: NodeJS.Platform;
 
     /** `platform` exists for tests (path comparison and the playit.gg file filter). */
-    constructor(deps: { appData: AppData; dialogs: Dialogs; platform?: NodeJS.Platform }) {
+    private readonly onChange?: (settings: AppSettings) => void;
+
+    /** onChange: after every successful set (the window follows the theme). */
+    constructor(deps: { appData: AppData; dialogs: Dialogs; platform?: NodeJS.Platform; onChange?: (settings: AppSettings) => void }) {
         this.appData = deps.appData;
         this.dialogs = deps.dialogs;
         this.platform = deps.platform ?? process.platform;
+        this.onChange = deps.onChange;
     }
 
     get(): AppSettings {
@@ -59,6 +63,7 @@ export class SettingsService {
             next.theme = patch.theme as ThemeName;
         }
         this.appData.writeSettings(next);
+        this.onChange?.(next);
         return next;
     }
 

@@ -172,10 +172,17 @@ a:hover {
     color: var(--accent-strong);
 }
 
+html {
+    /* Scrolling to a section stops below the title bar, not under it. */
+    scroll-padding-top: var(--titlebar-h, 0px);
+}
+
 body {
     margin: 0;
     min-width: 320px;
-    min-height: 100vh;
+    /* The title bar is fixed at the top; the page starts below it. */
+    padding-top: var(--titlebar-h, 0px);
+    min-height: calc(100vh - var(--titlebar-h, 0px));
     background-color: var(--bg);
 }
 

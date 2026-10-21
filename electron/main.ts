@@ -3,6 +3,8 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, Notification, safeStorage, shell, Tray } from 'electron';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { TITLE_BAR_HEIGHT, WINDOW_COLORS } from '../shared/types';
+import type { ThemeName } from '../shared/types';
 import { GoogleAuth } from './auth/GoogleAuth';
 import { DriveClient } from './drive/DriveClient';
 import { DriveFiles } from './drive/DriveFiles';
@@ -46,7 +48,7 @@ const userData = app.getPath('userData');
 const appData = new AppData(userData);
 const dialogs = createDialogs(() => win);
 const events = createEventSink(() => win);
-const settings = new SettingsService({ appData, dialogs });
+const settings = new SettingsService({ appData, dialogs, onChange: (s) => applyWindowTheme(s.theme) });
 const auth = new GoogleAuth({
     userDataDir: userData,
     credentialsPath: path.join(app.getAppPath(), 'config', 'client_secret.json'),
@@ -172,11 +174,27 @@ function isTrustedUrl(url: string): boolean {
     return url.startsWith('file://') && decodeURIComponent(new URL(url).pathname).includes('/dist/');
 }
 
+/** The title bar and the window's background follow the theme (the page draws the bar's left part itself). */
+function applyWindowTheme(theme: ThemeName): void {
+    if (!win) return;
+    const colors = WINDOW_COLORS[theme];
+    win.setBackgroundColor(colors.page);
+    if (process.platform === 'win32') {
+        win.setTitleBarOverlay({ color: colors.titleBar, symbolColor: colors.titleText, height: TITLE_BAR_HEIGHT });
+    }
+}
+
 function createWindow(): void {
+    const colors = WINDOW_COLORS[settings.get().theme];
     win = new BrowserWindow({
         width: 800,
         height: 600,
         resizable: false,
+        maximizable: false,
+        backgroundColor: colors.page,
+        // Windows draws only the minimise and close buttons, in the theme's colours; the page draws the rest.
+        titleBarStyle: 'hidden',
+        titleBarOverlay: { color: colors.titleBar, symbolColor: colors.titleText, height: TITLE_BAR_HEIGHT },
         icon: path.join(process.env.VITE_PUBLIC, 'launcher.ico'),
         // The chime is played by the page, also while the window is hidden in the tray.
         webPreferences: { preload: path.join(__dirname, 'preload.mjs'), autoplayPolicy: 'no-user-gesture-required', backgroundThrottling: false },
