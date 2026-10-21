@@ -73,7 +73,9 @@ export class SettingsService {
         return current;
     }
 
-    setLocalPath(id: string, localPath: string | null): void {
+    /** `listed`: the servers that exist for this account right now. A folder still remembered for a server that
+     *  was deleted on Drive does not block another server (without `listed`, every remembered server counts). */
+    setLocalPath(id: string, localPath: string | null, listed?: ReadonlySet<string>): void {
         const current = this.getServer(id);
         if (localPath === null) {
             current.localPath = null;
@@ -82,7 +84,7 @@ export class SettingsService {
                 throw invalid('Choose the server folder with the folder picker.');
             }
             const chosen = path.resolve(localPath.trim());
-            const clash = this.serverUsingFolder(id, chosen);
+            const clash = this.serverUsingFolder(id, chosen, listed);
             if (clash) {
                 throw invalid('This folder is already used by another server (or contains it). Choose a separate folder for each server.', `${chosen} overlaps ${clash}`);
             }
@@ -115,14 +117,14 @@ export class SettingsService {
     }
 
     /** Two servers syncing the same folder (or one inside the other) would overwrite each other's worlds. */
-    private serverUsingFolder(id: string, chosen: string): string | null {
+    private serverUsingFolder(id: string, chosen: string, listed?: ReadonlySet<string>): string | null {
         const key = (p: string) => {
             const resolved = path.resolve(p);
             return this.platform === 'win32' || this.platform === 'darwin' ? resolved.toLowerCase() : resolved;
         };
         const a = key(chosen);
         for (const other of this.appData.serverIds()) {
-            if (other === id) continue;
+            if (other === id || (listed && !listed.has(other))) continue;
             const otherPath = this.appData.readServerSettings(other).localPath;
             if (!otherPath) continue;
             const b = key(otherPath);

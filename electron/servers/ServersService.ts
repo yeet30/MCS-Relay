@@ -53,6 +53,8 @@ const ROLE_ORDER: MemberRole[] = ['owner', 'organizer', 'fileOrganizer', 'writer
 export class ServersService {
     /** Server names from the last listing, for notifications. */
     private readonly names = new Map<string, string>();
+    /** The servers of the last successful listing; null before the first one. */
+    private listed: Set<string> | null = null;
     private readonly drive: ServersDrive;
     private readonly launcher: LauncherFiles;
     private readonly auth: { me(): Promise<UserInfo> };
@@ -82,7 +84,30 @@ export class ServersService {
             Promise.all(ownedFolders.map((folder) => this.summarize(folder, 'owned', me))),
             Promise.all(joinedIds.map((id) => this.joinedSummary(id, me))),
         ]);
-        return [...owned, ...joined.filter((s): s is ServerSummary => s !== null)];
+        const servers = [...owned, ...joined.filter((s): s is ServerSummary => s !== null)];
+        this.listed = new Set(servers.map((s) => s.id));
+        void this.forgetDeleted(this.listed).catch((err: unknown) => console.warn('[servers] could not tidy up deleted servers:', err));
+        return servers;
+    }
+
+    /** Own servers this PC still remembers (a folder, a sync state) but the listing no longer shows: when they
+     *  are really gone on Drive (deleted, or trashed by hand in the website) they are forgotten here. Joined
+     *  servers are kept, because access may come back. Backups are never deleted. */
+    private async forgetDeleted(listed: ReadonlySet<string>): Promise<void> {
+        const joined = new Set(this.settings.get().joinedServerIds);
+        for (const id of this.appData.serverIds()) {
+            if (listed.has(id) || joined.has(id)) continue;
+            let gone: boolean;
+            try {
+                gone = (await this.drive.getMeta(id)).trashed === true;
+            } catch (err) {
+                if (!isDriveStatus(err, 404)) continue;
+                gone = true;
+            }
+            if (!gone) continue;
+            this.forgetLocally(id);
+            console.log(`[servers] forgot server ${id}: it no longer exists on Google Drive`);
+        }
     }
 
     async create(): Promise<ServerSummary> {
@@ -216,7 +241,7 @@ export class ServersService {
         requireId(id);
         const chosen = await this.dialogs.chooseFolder('Choose the folder for this server on this PC');
         if (!chosen) return null;
-        this.settings.setLocalPath(id, chosen);
+        this.settings.setLocalPath(id, chosen, this.listed ?? undefined);
         return this.settings.getServer(id).localPath;
     }
 

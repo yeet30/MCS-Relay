@@ -430,6 +430,23 @@ describe('local folder', () => {
         expect(alice.settings.getServer('srv1').localPath).toBe(folder);
     });
 
+    test('a server deleted on Drive by hand stops blocking its folder and is forgotten after the next listing', async () => {
+        const gone = await alice.servers.create();
+        const kept = await alice.servers.create();
+        const folder = path.join(tmp, 'mc');
+        alice.dialogs.chooseFolder.mockResolvedValue(folder);
+        await alice.servers.chooseLocalPath(gone.id);
+        store.node(gone.id).trashed = true;                 // deleted in the Drive website, the app not told
+
+        await alice.servers.list();
+        await expect(alice.servers.chooseLocalPath(kept.id)).resolves.toBe(folder);
+        await vi.waitFor(() => expect(alice.appData.serverIds()).not.toContain(gone.id));
+        // Two servers that both exist still cannot share a folder.
+        const third = await alice.servers.create();
+        await alice.servers.list();
+        await expectAppError(alice.servers.chooseLocalPath(third.id), 'INVALID');
+    });
+
     test('openFolder needs an existing local folder', async () => {
         await expectAppError(alice.servers.openFolder('srv1'), 'NO_LOCAL_PATH');
         const folder = path.join(tmp, 'mc');

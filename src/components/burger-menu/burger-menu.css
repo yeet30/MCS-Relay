@@ -19,7 +19,8 @@
     }
 
     #menu-clicker.open{
-        width: 185px;
+        /* As wide as the dropdown below it (230px), inset by 5px on both sides like on the right. */
+        width: 220px;
         background-color: #1e1e1e;
     }
 
