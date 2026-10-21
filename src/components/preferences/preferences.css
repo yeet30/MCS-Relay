@@ -26,7 +26,7 @@
     .pref-icon {
         display: inline-flex;
         margin-top: 2px;
-        color: var(--accent);
+        color: var(--muted);
     }
 
     .pref-text {
@@ -59,51 +59,57 @@
     font-size: 0.8rem;
 }
 
-/* An on/off switch built on a checkbox, so it works with the keyboard too. */
-.switch {
-    position: relative;
-    display: inline-flex;
-    margin-top: 2px;
-    cursor: pointer;
 
-    input {
-        position: absolute;
-        opacity: 0;
-        width: 0;
-        height: 0;
-    }
+/* Three themes side by side, each drawn in its own colours. */
+.theme-options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 6px;
+}
 
-    .switch-track {
-        width: 36px;
-        height: 20px;
-        border-radius: 10px;
-        background: rgb(70, 70, 70);
-        position: relative;
-        transition: background 0.2s ease;
-    }
+.theme-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    font-size: 0.85rem;
+    font-weight: 500;
+}
 
-    .switch-thumb {
-        position: absolute;
-        top: 2px;
-        left: 2px;
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: #ddd;
-        transition: transform 0.2s ease;
-    }
+.theme-option.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+}
 
-    input:checked + .switch-track {
-        background: var(--accent);
-    }
+.theme-swatch {
+    width: 100%;
+    height: 54px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    border-radius: 8px;
+    border: 1px solid rgba(128, 128, 128, 0.35);
+    overflow: hidden;
+    box-sizing: border-box;
+}
 
-    input:checked + .switch-track .switch-thumb {
-        transform: translateX(16px);
-        background: #fff;
-    }
+.theme-swatch-card {
+    width: 70%;
+    height: 32px;
+    display: flex;
+    align-items: flex-start;
+    padding: 6px 8px;
+    border-radius: 6px 6px 0 0;
+    box-sizing: border-box;
+}
 
-    input:focus-visible + .switch-track {
-        outline: 2px solid #8b91ff;
-        outline-offset: 2px;
-    }
+.theme-swatch-accent {
+    width: 40%;
+    height: 5px;
+    border-radius: 3px;
 }

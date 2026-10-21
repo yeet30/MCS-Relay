@@ -4,14 +4,14 @@
     justify-content: space-between;
     border-radius: 10px;
     padding-left: 12px;
-    background-color: rgba(0, 0, 0, 0.1);
-    border: 1px solid rgba(0, 0, 0, 0.4);
+    background-color: var(--panel);
+    border: 1px solid var(--line);
 
     pre{
         text-decoration: none;
         white-space: nowrap;
         margin: 0;
-        color: rgb(220,220,220);
+        color: var(--text-2);
         margin-right: 10px;
     }
 
@@ -22,7 +22,7 @@
         align-items: center;
         margin: 0px;
         padding: 10px 12px;
-        background-color: rgba(0, 0, 0, 0.2);
+        background-color: var(--panel-2);
     }
 
 }

@@ -69,7 +69,7 @@
         text-align: left;
         font-size: 0.9rem;
         font-weight: 400;
-        color: rgb(230, 230, 230);
+        color: var(--text-2);
 
         svg {
             flex: none;
@@ -80,11 +80,11 @@
     }
 
     .side-option:not(:disabled):hover {
-        background: rgba(255, 255, 255, 0.06);
-        color: #fff;
+        background: var(--hover);
+        color: var(--text-strong);
 
         svg {
-            color: #fff;
+            color: var(--text-strong);
         }
     }
 

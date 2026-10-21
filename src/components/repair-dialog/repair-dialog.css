@@ -4,7 +4,7 @@
     gap: 12px;
     text-align: left;
     font-size: 0.85rem;
-    color: rgb(215, 215, 215);
+    color: var(--text-2);
 
     section {
         display: flex;
@@ -18,7 +18,7 @@
         align-items: center;
         gap: 6px;
         font-size: 0.85rem;
-        color: white;
+        color: var(--text-strong);
     }
 
     p {
@@ -39,7 +39,7 @@
         padding: 8px 10px;
         border-radius: 8px;
         border-left: 3px solid var(--warn);
-        background: rgba(229, 192, 123, 0.08);
+        background: rgba(var(--warn-rgb), 0.1);
 
         h5 {
             color: var(--warn);
@@ -50,7 +50,7 @@
         padding: 8px 10px;
         border-radius: 8px;
         border-left: 3px solid var(--bad);
-        background: rgba(224, 108, 117, 0.1);
+        background: rgba(var(--bad-rgb), 0.1);
 
         h5 {
             color: var(--bad);

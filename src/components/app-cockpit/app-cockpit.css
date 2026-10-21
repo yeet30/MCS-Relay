@@ -13,7 +13,7 @@
 @property --ring {
     syntax: '<color>';
     inherits: false;
-    initial-value: rgba(255, 255, 255, 0.02);
+    initial-value: transparent;
 }
 
 /* The power button, with the transfer button at its bottom left and the folder button at its bottom right. */
@@ -35,7 +35,7 @@
     .side-slot.right { right: 0; }
 
     .onOff-button {
-        --ring: rgba(255, 255, 255, 0.02);
+        --ring: var(--ring-idle);
         position: relative;
         width: 180px;
         height: 180px;
@@ -45,7 +45,7 @@
         justify-content: center;
         border-radius: 50%;
         border: 2px solid var(--line);
-        color: #56615b;
+        color: var(--power-idle);
         background: var(--panel);
         /* Flat: a solid outer ring that lights up, no shading. */
         box-shadow: 0 0 0 8px var(--ring);
@@ -76,7 +76,7 @@
     /* Running: a slow pulse says the server is live; the button itself stops it. */
     .onOff-button.stop {
         color: var(--bad);
-        border-color: rgba(224, 108, 117, 0.35);
+        border-color: rgba(var(--bad-rgb), 0.35);
         animation: live-pulse 2.6s ease-in-out infinite;
     }
 
@@ -84,7 +84,7 @@
         border-color: var(--bad);
         background: var(--panel-2);
         animation: none;
-        --ring: rgba(224, 108, 117, 0.12);
+        --ring: rgba(var(--bad-rgb), 0.12);
     }
 
     .spinner {
@@ -220,7 +220,7 @@
 
     .power-message-text {
         margin: 0;
-        color: rgb(210, 210, 210);
+        color: var(--text-2);
         user-select: text;
     }
 

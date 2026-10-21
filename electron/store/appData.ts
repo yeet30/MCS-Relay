@@ -11,8 +11,8 @@
 // The files are small, so synchronous fs is fine; every write is atomic (write *.tmp, fsync, rename).
 import fs from 'node:fs';
 import path from 'node:path';
-import { DEFAULT_JAVA_FLAGS } from '../../shared/types';
-import type { AppSettings, BaseEntry, BaseSnapshot, JavaFlags, ServerSettings } from '../../shared/types';
+import { DEFAULT_JAVA_FLAGS, THEMES } from '../../shared/types';
+import type { AppSettings, BaseEntry, BaseSnapshot, JavaFlags, ServerSettings, ThemeName } from '../../shared/types';
 import { normalizeRule } from '../../shared/paths';
 import { AppError } from '../errors';
 
@@ -49,6 +49,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     eulaAccepted: false,
     notifications: true,
     notificationSound: true,
+    theme: 'light',
 };
 
 const LEGACY_FILE = 'localStore.json';
@@ -408,6 +409,7 @@ function parseSettings(raw: unknown): AppSettings {
         eulaAccepted: r.eulaAccepted === true,
         notifications: typeof r.notifications === 'boolean' ? r.notifications : DEFAULT_SETTINGS.notifications,
         notificationSound: typeof r.notificationSound === 'boolean' ? r.notificationSound : DEFAULT_SETTINGS.notificationSound,
+        theme: THEMES.includes(r.theme as ThemeName) ? (r.theme as ThemeName) : DEFAULT_SETTINGS.theme,
     };
 }
 

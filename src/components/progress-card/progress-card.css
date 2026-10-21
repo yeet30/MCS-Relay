@@ -77,7 +77,7 @@
         display: flex;
         align-items: center;
         gap: 6px;
-        color: rgb(215, 215, 215);
+        color: var(--text-2);
 
         span {
             overflow: hidden;
@@ -177,7 +177,7 @@
         gap: 6px;
 
         .text-button {
-            color: rgb(225, 225, 225);
+            color: var(--text-2);
         }
     }
 
@@ -228,7 +228,7 @@
     }
 
     .log-duration {
-        color: #888;
+        color: var(--faint);
         font-size: 0.72rem;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
@@ -239,18 +239,18 @@
     }
 
     .log-time {
-        color: #777;
+        color: var(--faint);
         font-size: 0.75rem;
         font-variant-numeric: tabular-nums;
     }
 
-    .loading { color: #bbb; }
+    .loading { color: var(--muted); }
     .done { color: var(--good); }
     .error { color: var(--bad); }
     .cancelled { color: var(--warn); }
 
     .log-text {
-        color: rgb(220, 220, 220);
+        color: var(--text-2);
     }
 
     .error .log-text {

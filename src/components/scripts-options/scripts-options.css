@@ -28,7 +28,7 @@
         text-overflow: ellipsis;
         direction: rtl;                 /* a long path keeps the program name visible */
         text-align: left;
-        color: rgb(210, 214, 212);
+        color: var(--text-2);
     }
 
     .path-text.missing {

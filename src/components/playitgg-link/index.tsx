@@ -32,7 +32,7 @@ export default function PlayitggLink() {
     return (
         <span className='link-wrapper'>
             <pre>{link}</pre>
-            <button onClick={handleCopy} style={{ color: copied ? '#4caf50' : '#ccc' }} title='Copy to clipboard'>
+            <button onClick={handleCopy} style={{ color: copied ? 'var(--good)' : 'var(--muted)' }} title='Copy to clipboard'>
                 {copied ? <Check size={18} /> : <Copy size={18} />}
             </button>
         </span>

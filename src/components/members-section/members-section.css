@@ -92,14 +92,14 @@
         border-radius: 5px;
 
         font-size: 0.9rem;
-        color: rgb(210, 216, 213);
+        color: var(--text-2);
 
         transition: background-color 0.2s ease, color 0.2s ease;
     }
 
     .player-name:hover {
-        background-color: rgba(255, 255, 255, 0.05);
-        color: #ffffff;
+        background-color: var(--hover);
+        color: var(--text-strong);
     }
 
     .uptime-span {

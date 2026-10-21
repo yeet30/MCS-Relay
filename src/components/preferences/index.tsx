@@ -2,12 +2,21 @@ import './preferences.css';
 import { useEffect } from 'react';
 import { Bell, ExternalLink, Play, ScrollText, Volume2 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import type { AppSettings } from '../../../shared/types';
+import { THEMES } from '../../../shared/types';
+import type { AppSettings, ThemeName } from '../../../shared/types';
 import { invoke } from '../../api';
 import { playChime } from '../../lib/chime';
+import { applyTheme } from '../../lib/theme';
 import { useSettingsStore } from '../../stores/settingsStore';
 
 const EULA_URL = 'https://www.minecraft.net/en-us/eula';
+
+/** Each theme's own page, card and accent colours, so the choice shows what it looks like. */
+const THEME_PREVIEW: Record<ThemeName, { label: string; bg: string; panel: string; accent: string }> = {
+    light: { label: 'Light', bg: '#e6e6e8', panel: '#ffffff', accent: '#c23b30' },
+    mint: { label: 'Mint', bg: '#1b2822', panel: '#283b31', accent: '#4cc38a' },
+    dark: { label: 'Dark', bg: '#141416', panel: '#242428', accent: '#e2574c' },
+};
 
 function Toggle({ icon, title, text, checked, onChange, children }: {
     icon: ReactNode; title: string; text: string; checked: boolean; onChange: (value: boolean) => void; children?: ReactNode;
@@ -37,10 +46,37 @@ export default function Preferences() {
     }, []);
 
     if (!settings) return <p className='pref-help'>Loading…</p>;
-    const set = (patch: Partial<Pick<AppSettings, 'notifications' | 'notificationSound' | 'eulaAccepted'>>) => void useSettingsStore.getState().update(patch);
+    const set = (patch: Partial<Pick<AppSettings, 'notifications' | 'notificationSound' | 'eulaAccepted' | 'theme'>>) => void useSettingsStore.getState().update(patch);
+    const chooseTheme = (theme: ThemeName) => {
+        applyTheme(theme);                                  // at once; the setting is saved meanwhile
+        set({ theme });
+    };
 
     return (
         <div className='preferences'>
+            <h4 className='pref-section'>Appearance</h4>
+            <div className='theme-options' role='radiogroup' aria-label='Theme'>
+                {THEMES.map((theme) => {
+                    const preview = THEME_PREVIEW[theme];
+                    return (
+                        <button
+                            key={theme}
+                            role='radio'
+                            aria-checked={settings.theme === theme}
+                            className={`theme-option ${settings.theme === theme ? 'selected' : ''}`}
+                            onClick={() => chooseTheme(theme)}
+                        >
+                            <span className='theme-swatch' style={{ background: preview.bg }} aria-hidden>
+                                <span className='theme-swatch-card' style={{ background: preview.panel }}>
+                                    <span className='theme-swatch-accent' style={{ background: preview.accent }} />
+                                </span>
+                            </span>
+                            <span className='theme-name'>{preview.label}</span>
+                        </button>
+                    );
+                })}
+            </div>
+
             <h4 className='pref-section'>Notifications</h4>
             <Toggle
                 icon={<Bell size={16} />}

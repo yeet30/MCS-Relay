@@ -1,7 +1,8 @@
 // The one writer of this PC's settings. Values arriving over IPC are unknown at runtime, so every
 // setter validates before anything is stored.
 import path from 'node:path';
-import type { AppSettings, JavaFlags, ServerSettings } from '../../shared/types';
+import { THEMES } from '../../shared/types';
+import type { AppSettings, JavaFlags, ServerSettings, ThemeName } from '../../shared/types';
 import { AppError } from '../errors';
 import { RAM_LIMITS, isValidServerId } from '../store/appData';
 import type { AppData } from '../store/appData';
@@ -53,6 +54,10 @@ export class SettingsService {
         if ('eulaAccepted' in patch) next.eulaAccepted = requireBoolean(patch.eulaAccepted, 'eulaAccepted');
         if ('notifications' in patch) next.notifications = requireBoolean(patch.notifications, 'notifications');
         if ('notificationSound' in patch) next.notificationSound = requireBoolean(patch.notificationSound, 'notificationSound');
+        if ('theme' in patch) {
+            if (!THEMES.includes(patch.theme as ThemeName)) throw invalid('That theme does not exist.');
+            next.theme = patch.theme as ThemeName;
+        }
         this.appData.writeSettings(next);
         return next;
     }

@@ -18,7 +18,7 @@
     }
 
     .members-toggle:hover {
-        background: rgba(255, 255, 255, 0.04);
+        background: var(--hover);
         border-color: transparent;
         color: var(--text);
     }
@@ -58,7 +58,7 @@
     }
 
     .member-row:hover {
-        background: rgba(255, 255, 255, 0.03);
+        background: var(--hover);
     }
 
     .member-avatar {
@@ -104,13 +104,13 @@
     }
 
     .member-role.owner {
-        background: rgba(229, 192, 123, 0.14);
+        background: rgba(var(--warn-rgb), 0.14);
         color: var(--warn);
     }
 
     .member-role.writer {
-        background: rgba(var(--accent-rgb), 0.14);
-        color: var(--accent);
+        background: rgba(var(--good-rgb), 0.14);
+        color: var(--good);
     }
 
     .member-spacer {

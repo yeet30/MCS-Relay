@@ -8,34 +8,154 @@
     line-height: 1.5;
     font-weight: 400;
 
-    /* The app is dark-only: its panels are dark, so a light page background would hide their text. */
-    color-scheme: dark;
     color: var(--text);
     background-color: var(--bg);
-
-    /* Flat greens leaning to teal (not yellow): cards sit one step lighter than the page, nothing has depth
-       or gradients. */
-    --bg: #1b2822;
-    --panel: #213129;
-    --panel-2: #283b31;
-    --panel-3: #31473b;
-    --line: #35493e;
-    --text: #e6ece9;
-    --muted: #94a89d;
-    --good: #98c379;
-    --bad: #e06c75;
-    --warn: #e5c07b;
-    --info: #7aa2f7;
-    --accent: #4cc38a;
-    --accent-rgb: 76, 195, 138;
-    --accent-strong: #66d39f;
-    --shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
     --mono: 'JetBrains Mono Variable', 'JetBrains Mono', Consolas, monospace;
 
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+}
+
+/* ------------------------------------------------------------------ themes
+   Every colour in the app comes from these variables; Preferences > Appearance switches data-theme on <html>.
+   Flat: cards sit one step away from the page, nothing has depth or gradients. */
+
+/* Light (default): light stone grey and white, with the redstone red of the logo used sparingly. */
+:root,
+:root[data-theme='light'] {
+    color-scheme: light;
+    --bg: #e6e6e8;
+    --panel: #ffffff;
+    --panel-2: #f3f3f4;
+    --panel-3: #e7e7ea;
+    --line: #d2d2d7;
+    --line-strong: #b4b4bb;
+    --text: #1c1c20;
+    --text-strong: #0b0b0d;
+    --text-2: #3b3b42;
+    --muted: #696972;
+    --faint: #8d8d96;
+    --hover: rgba(0, 0, 0, 0.05);
+    --button-bg: #ffffff;
+    --soft-button-bg: #ffffff;
+    --soft-button-border: rgba(0, 0, 0, 0.14);
+    --overlay: rgba(28, 28, 34, 0.35);
+    --shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
+    --accent: #c23b30;
+    --accent-rgb: 194, 59, 48;
+    --accent-strong: #a52e25;
+    --on-accent: #ffffff;
+    --good: #2f7d4f;
+    --good-rgb: 47, 125, 79;
+    --bad: #b3261e;
+    --bad-rgb: 179, 38, 30;
+    --warn: #a8670d;
+    --warn-rgb: 168, 103, 13;
+    --info: #2563b0;
+    --info-rgb: 37, 99, 176;
+    --danger-text: #7f1d16;
+    --modal-panel: #ffffff;
+    --modal-panel-2: #f4f4f5;
+    --modal-panel-3: #e8e8eb;
+    --modal-line: #d6d6db;
+    --modal-muted: #6b6b74;
+    --power-idle: #b9b9c0;
+    --ring-idle: rgba(0, 0, 0, 0.035);
+    --scroll-track: rgba(0, 0, 0, 0.04);
+    --scroll-thumb: rgba(0, 0, 0, 0.2);
+    --scroll-thumb-hover: rgba(0, 0, 0, 0.32);
+}
+
+/* Mint: the earlier teal-leaning greens with an emerald accent. */
+:root[data-theme='mint'] {
+    color-scheme: dark;
+    --bg: #1b2822;
+    --panel: #213129;
+    --panel-2: #283b31;
+    --panel-3: #31473b;
+    --line: #35493e;
+    --line-strong: #4d6658;
+    --text: #e6ece9;
+    --text-strong: #ffffff;
+    --text-2: #d2dad6;
+    --muted: #94a89d;
+    --faint: #7a8a82;
+    --hover: rgba(255, 255, 255, 0.06);
+    --button-bg: #213129;
+    --soft-button-bg: rgba(0, 0, 0, 0.3);
+    --soft-button-border: rgba(255, 255, 255, 0.12);
+    --overlay: rgba(0, 0, 0, 0.45);
+    --shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    --accent: #4cc38a;
+    --accent-rgb: 76, 195, 138;
+    --accent-strong: #66d39f;
+    --on-accent: #0f1712;
+    --good: #98c379;
+    --good-rgb: 152, 195, 121;
+    --bad: #e06c75;
+    --bad-rgb: 224, 108, 117;
+    --warn: #e5c07b;
+    --warn-rgb: 229, 192, 123;
+    --info: #7aa2f7;
+    --info-rgb: 122, 162, 247;
+    --danger-text: #ecc8cc;
+    --modal-panel: #1b1b1b;
+    --modal-panel-2: #232323;
+    --modal-panel-3: #2c2c2c;
+    --modal-line: #333333;
+    --modal-muted: #969696;
+    --power-idle: #56615b;
+    --ring-idle: rgba(255, 255, 255, 0.02);
+    --scroll-track: rgba(255, 255, 255, 0.04);
+    --scroll-thumb: rgba(255, 255, 255, 0.22);
+    --scroll-thumb-hover: rgba(255, 255, 255, 0.35);
+}
+
+/* Dark: neutral dark greys with the logo's red. */
+:root[data-theme='dark'] {
+    color-scheme: dark;
+    --bg: #141416;
+    --panel: #1c1c1f;
+    --panel-2: #242428;
+    --panel-3: #2d2d32;
+    --line: #313136;
+    --line-strong: #4a4a51;
+    --text: #e7e7ea;
+    --text-strong: #ffffff;
+    --text-2: #cdcdd2;
+    --muted: #95959e;
+    --faint: #74747c;
+    --hover: rgba(255, 255, 255, 0.06);
+    --button-bg: #1c1c1f;
+    --soft-button-bg: rgba(0, 0, 0, 0.3);
+    --soft-button-border: rgba(255, 255, 255, 0.12);
+    --overlay: rgba(0, 0, 0, 0.5);
+    --shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+    --accent: #e2574c;
+    --accent-rgb: 226, 87, 76;
+    --accent-strong: #ee736a;
+    --on-accent: #1a0907;
+    --good: #7cc58a;
+    --good-rgb: 124, 197, 138;
+    --bad: #f47c86;
+    --bad-rgb: 244, 124, 134;
+    --warn: #e3b341;
+    --warn-rgb: 227, 179, 65;
+    --info: #6cb0ff;
+    --info-rgb: 108, 176, 255;
+    --danger-text: #f3c6ca;
+    --modal-panel: #1a1a1d;
+    --modal-panel-2: #222226;
+    --modal-panel-3: #2b2b30;
+    --modal-line: #34343a;
+    --modal-muted: #9a9aa3;
+    --power-idle: #5d5d65;
+    --ring-idle: rgba(255, 255, 255, 0.02);
+    --scroll-track: rgba(255, 255, 255, 0.04);
+    --scroll-thumb: rgba(255, 255, 255, 0.22);
+    --scroll-thumb-hover: rgba(255, 255, 255, 0.35);
 }
 
 ::-webkit-scrollbar {
@@ -59,14 +179,14 @@ body {
     background-color: var(--bg);
 }
 
-/* Modals and dialogs are neutral grey: the green belongs to the page behind them. */
+/* Modals and dialogs use the theme's neutral panels (grey in Mint, white in Light). */
 .modal-wrapper,
 .popup-wrapper {
-    --panel: #1b1b1b;
-    --panel-2: #232323;
-    --panel-3: #2c2c2c;
-    --line: #333333;
-    --muted: #969696;
+    --panel: var(--modal-panel);
+    --panel-2: var(--modal-panel-2);
+    --panel-3: var(--modal-panel-3);
+    --line: var(--modal-line);
+    --muted: var(--modal-muted);
 }
 
 h1, h2, h3 {
@@ -90,7 +210,7 @@ button {
     font-weight: 500;
     font-family: inherit;
     color: inherit;
-    background-color: var(--panel);
+    background-color: var(--button-bg);
     cursor: pointer;
     transition: border-color 0.2s, background-color 0.2s;
 }
@@ -127,8 +247,12 @@ button:focus-visible {
     font-weight: 400;
     border-radius: 6px;
     /* A faint outline, so it reads as a button on any background. */
-    border-color: rgba(255, 255, 255, 0.12);
-    background-color: rgba(0, 0, 0, 0.3);
+    border-color: var(--soft-button-border);
+    background-color: var(--soft-button-bg);
+}
+
+.text-button:hover {
+    background-color: var(--hover);
 }
 
 .text-button.primary {
@@ -141,6 +265,59 @@ button:focus-visible {
 }
 
 .text-button.danger {
-    background-color: rgba(224, 108, 117, 0.15);
-    border-color: rgba(224, 108, 117, 0.5);
+    background-color: rgba(var(--bad-rgb), 0.12);
+    border-color: rgba(var(--bad-rgb), 0.5);
+    color: var(--bad);
+}
+
+/* An on/off switch around a real checkbox (keyboard and screen readers keep working). */
+.switch {
+    position: relative;
+    flex: none;
+    cursor: pointer;
+
+    input {
+        position: absolute;
+        opacity: 0;
+        width: 1px;
+        height: 1px;
+    }
+
+    .switch-track {
+        position: relative;
+        display: block;
+        width: 38px;
+        height: 22px;
+        border-radius: 999px;
+        background: var(--panel-3);
+        border: 1px solid var(--line);
+        box-sizing: border-box;
+        transition: background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .switch-thumb {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--muted);
+        transition: transform 0.2s ease, background 0.2s ease;
+    }
+
+    input:checked + .switch-track {
+        background: rgba(var(--accent-rgb), 0.2);
+        border-color: rgba(var(--accent-rgb), 0.7);
+    }
+
+    input:checked + .switch-track .switch-thumb {
+        transform: translateX(16px);
+        background: var(--accent);
+    }
+
+    input:focus-visible + .switch-track {
+        outline: 2px solid rgba(var(--accent-rgb), 0.7);
+        outline-offset: 2px;
+    }
 }

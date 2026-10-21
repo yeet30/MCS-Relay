@@ -6,7 +6,7 @@
         left: 0;
         width: 100%;
         height: 100%;
-        background-color: rgba(0,0,0,0.3);
+        background-color: var(--overlay);
         z-index: 300;
     }
 
@@ -64,7 +64,7 @@
     }
 
     .popup-decline:hover {
-        border-color: #555;
+        border-color: var(--line-strong);
         background: var(--panel-3);
     }
 

@@ -39,6 +39,10 @@ export interface JavaFlags {
     customFlags: string;
 }
 
+/** The app's colour themes: light grey with red (default, from the logo), the earlier mint green, and dark. */
+export type ThemeName = 'light' | 'mint' | 'dark';
+export const THEMES: readonly ThemeName[] = ['light', 'mint', 'dark'];
+
 export interface AppSettings {
     selectedServerId: ServerId | null;
     playitggPath: string;
@@ -48,6 +52,7 @@ export interface AppSettings {
     eulaAccepted: boolean;              // this Google account accepted the Minecraft EULA in the app
     notifications: boolean;             // a desktop notification when a start or stop finishes in the background
     notificationSound: boolean;         // a short chime when a start or stop finishes
+    theme: ThemeName;                   // per PC, like the other display settings
 }
 
 export interface ServerSettings {

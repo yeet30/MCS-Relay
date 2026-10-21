@@ -19,17 +19,17 @@
         background-color: var(--panel);
         border: 1px solid var(--line);
         border-left: 4px solid var(--info);
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+        box-shadow: var(--shadow);
         font-size: 0.85rem;
         user-select: text;
     }
 
     .notice.error {
-        border-left-color: #e06c75;
+        border-left-color: var(--bad);
     }
 
     .notice.success {
-        border-left-color: #98c379;
+        border-left-color: var(--good);
     }
 
     .notice-text {
@@ -46,13 +46,13 @@
         padding: 0;
         font-size: 0.75rem;
         background: none;
-        color: rgb(150, 150, 150);
+        color: var(--muted);
         text-decoration: underline;
     }
 
     .notice-detail {
         font-size: 0.72rem;
-        color: rgb(150, 150, 150);
+        color: var(--muted);
         overflow-wrap: anywhere;
         user-select: text;
     }
@@ -61,6 +61,6 @@
         padding: 2px;
         background: none;
         display: flex;
-        color: rgb(150, 150, 150);
+        color: var(--muted);
     }
 }

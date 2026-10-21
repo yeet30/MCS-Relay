@@ -1,7 +1,8 @@
 import './login-page.css';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, LoaderCircle } from 'lucide-react';
+import { LoaderCircle } from 'lucide-react';
+import logoUrl from '../../assets/logo.svg';
 import { useAuthStore } from '../../stores/authStore';
 
 /** Google's "G", as its sign-in buttons show it. */
@@ -51,7 +52,7 @@ export default function LoginPage() {
     return (
         <div className='login-page'>
             <div className='login-card'>
-                <span className='login-mark' aria-hidden><Box size={34} strokeWidth={1.6} /></span>
+                <img className='login-mark' src={logoUrl} alt='' width={72} height={72} />
                 <h1 className='login-title'>MCS-Relay</h1>
                 <p className='login-tagline'>
                     Host a Minecraft server from a shared Google Drive. Whoever plays hosts it, and the world is saved for
@@ -66,6 +67,7 @@ export default function LoginPage() {
                 {error && <p className='login-error'>{error}</p>}
             </div>
             <p className='login-footer'>Your browser opens so you can sign in. Server files are kept in your Google Drive.</p>
+            <p className='login-disclaimer'>Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.</p>
         </div>
     );
 }

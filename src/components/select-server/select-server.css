@@ -17,7 +17,7 @@
         height: 2rem;
         width: 10rem;
         background-color: var(--panel-3);
-        border: 1px solid rgb(85, 85, 85);
+        border: 1px solid var(--line-strong);
         z-index: 1;
     }
 
@@ -56,7 +56,7 @@
         margin-top: -20px;
         max-height: 0px;
         width: 10rem;
-        background-color: rgb(34, 34, 34);
+        background-color: var(--panel);
         border-radius: 10px;
         transition: max-height 0.3s ease;
         overflow: auto;
@@ -67,8 +67,8 @@
     .server-drawer.open{
         max-height: 150px;
         padding-bottom: 10px;
-        border: 1px solid rgb(85, 85, 85);
-        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.55);
+        border: 1px solid var(--line-strong);
+        box-shadow: var(--shadow);
     }
 
     .server-type{
@@ -81,7 +81,7 @@
         padding-left: 20px;
         font-size: 1rem;
         font-weight: 400;
-        color: rgba(150, 150, 150, 1);
+        color: var(--muted);
     }
 
     .server-item{
@@ -101,7 +101,7 @@
         width: 100%;
         justify-content: start;
         align-items: end;
-        background-color: rgba(127, 255, 212, 0.1);
+        background-color: rgba(var(--accent-rgb), 0.1);
     }
 
     .server-drawer > .owned:first-child{
@@ -114,8 +114,8 @@
         width: 100%;
         justify-content: start;
         align-items: end;
-        border-top: solid 1px rgba(150, 150, 150, 1);;
-        background-color:rgb(220, 20, 60, 0.1)
+        border-top: solid 1px var(--line);
+        background-color: rgba(var(--bad-rgb), 0.1);
     }
 
     .server-drawer > .joined:first-child{
