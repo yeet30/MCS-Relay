@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import type { LockContent, LockView, SessionState, SyncPlan, SyncReport, TransferSnapshot } from '../../shared/types';
 import {
-    abandonControl, cancelMode, cancelQuestion, canStart, incompleteStartQuestion, incompleteWarning, cleanupLines, continueAction, describeReport, hostingMessage, isSessionBusy, livePresence,
+    abandonControl, cancelMode, cancelQuestion, canStart, describeServerChanges, incompleteStartQuestion, incompleteWarning, cleanupLines, continueAction, describeReport, hostingMessage, isSessionBusy, livePresence,
     manualSyncBlockers, planHasFiles, powerMode, repairBlocker, startBlocker, stopControl, transferFraction,
 } from './sync';
 
@@ -325,5 +325,15 @@ describe('a revision saved from a cancelled upload', () => {
         expect(incompleteStartQuestion(report({ status: 'local-changes', baseRevision: 43, remoteRevision: 43, remoteIncomplete: inc }), 'alex@example.com'))
             .toBeNull();
         expect(incompleteStartQuestion(report(), 'steve@example.com')).toBeNull();
+    });
+});
+
+describe('describeServerChanges', () => {
+    test('says what is new, gone or renamed, or that nothing changed', () => {
+        const a = { id: 'a', name: 'Survival' };
+        const b = { id: 'b', name: 'Create Mod' };
+        expect(describeServerChanges([a, b], [a, b])).toBe('Checked Google Drive: your servers have not changed.');
+        expect(describeServerChanges([a], [a, b])).toBe('Checked Google Drive. New: Create Mod.');
+        expect(describeServerChanges([a, b], [{ id: 'a', name: 'Hardcore' }])).toBe('Checked Google Drive. Gone: Create Mod; Survival is now Hardcore.');
     });
 });

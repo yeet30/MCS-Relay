@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { invoke } from '../../api';
 import { formatUptime } from '../../lib/format';
-import { isSessionBusy, livePresence } from '../../lib/sync';
+import { describeServerChanges, isSessionBusy, livePresence } from '../../lib/sync';
+import { useNoticeStore } from '../../stores/noticeStore';
 import { useServersStore } from '../../stores/serversStore';
 import { lockFor, useSessionStore } from '../../stores/sessionStore';
 
@@ -38,11 +39,16 @@ export default function MembersSection() {
         return () => clearInterval(timer);
     }, [presence?.startedAt]);
 
+    /** Lists the servers on Google Drive again (shared with you, deleted, renamed), re-checks the selected one,
+     *  and says what changed. */
     async function handleRefresh() {
         setSpinning(true);
+        const before = useServersStore.getState().servers.map(({ id, name }) => ({ id, name }));
         await useSessionStore.getState().resync();
         const busy = isSessionBusy(useSessionStore.getState().state.phase);
         await useServersStore.getState().reload({ recheck: !busy });
+        const { servers, error } = useServersStore.getState();
+        if (!error) useNoticeStore.getState().info(describeServerChanges(before, servers));
         setSpinning(false);
     }
 
@@ -51,7 +57,12 @@ export default function MembersSection() {
 
     return (
         <section className='members-section'>
-            <button className='refresh-button' title='Check again' onClick={handleRefresh} disabled={spinning}>
+            <button
+                className='refresh-button'
+                title='Check Google Drive again: servers shared with you, deleted or renamed, and the files of the selected server'
+                onClick={handleRefresh}
+                disabled={spinning}
+            >
                 <RotateCcw className={`refresh-svg ${spinning ? 'spin' : ''}`} size={20} />
             </button>
             {presence && (

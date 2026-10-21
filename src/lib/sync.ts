@@ -287,6 +287,27 @@ export function repairBlocker(report: SyncReport): string | null {
     return null;
 }
 
+/* ------------------------------------------------------------------ checking Google Drive again */
+
+/** What the reload button found: servers that appeared (shared with you), disappeared (deleted, or you were
+ *  removed) or were renamed since the last listing. */
+export function describeServerChanges(
+    before: ReadonlyArray<{ id: ServerId; name: string }>, after: ReadonlyArray<{ id: ServerId; name: string }>,
+): string {
+    const old = new Map(before.map((s) => [s.id, s.name]));
+    const now = new Map(after.map((s) => [s.id, s.name]));
+    const added = after.filter((s) => !old.has(s.id)).map((s) => s.name);
+    const removed = before.filter((s) => !now.has(s.id)).map((s) => s.name);
+    const renamed = after.filter((s) => old.has(s.id) && old.get(s.id) !== s.name).map((s) => `${old.get(s.id)} is now ${s.name}`);
+    const parts: string[] = [];
+    if (added.length > 0) parts.push(`new: ${listNames(added)}`);
+    if (removed.length > 0) parts.push(`gone: ${listNames(removed)}`);
+    if (renamed.length > 0) parts.push(renamed.join(', '));
+    if (parts.length === 0) return 'Checked Google Drive: your servers have not changed.';
+    const text = parts.join('; ');
+    return `Checked Google Drive. ${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
+}
+
 /* ------------------------------------------------------------------ who is playing */
 
 export interface Presence {
