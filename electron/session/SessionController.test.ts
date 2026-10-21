@@ -66,6 +66,7 @@ function setup(overrides: { report?: SyncReport; journal?: boolean } = {}) {
         }),
         baseRevision: vi.fn(() => 3),
         cleanupMyPlaceholders: vi.fn(async () => 0),
+        unfinishedRepair: vi.fn(() => false),
     };
     const changes = { start: vi.fn(async () => undefined), stop: vi.fn(async () => undefined), clear: vi.fn(), all: vi.fn(() => []) };
     const minecraft = {
@@ -115,7 +116,15 @@ function setup(overrides: { report?: SyncReport; journal?: boolean } = {}) {
         setJava: (running: boolean) => {
             javaRunning = running;
         },
+        setJournal: (exists: boolean) => {
+            journal = exists;
+        },
     };
+}
+
+/** A sync step that only ends when the run is cancelled. */
+function untilAborted(signal: AbortSignal | undefined): Promise<never> {
+    return new Promise((_, reject) => signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true }));
 }
 
 describe('SessionController: a normal session', () => {
@@ -387,5 +396,95 @@ describe('SessionController: EULA, notifications and syncing without playing', (
         const idle = setup();
         await expect(idle.session.syncNow('s1', 'up')).rejects.toThrow(/nothing to upload/);
         expect(idle.lock.claim).not.toHaveBeenCalled();
+    });
+});
+
+describe('SessionController: cancel and continue', () => {
+    it('cancelling a download goes back to idle, frees the server and keeps what already arrived', async () => {
+        const t = setup({ report: report({ status: 'cloud-newer' }) });
+        t.sync.download.mockImplementationOnce(((_: string, __: SyncReport, signal?: AbortSignal) => untilAborted(signal)) as never);
+        const starting = t.session.start('s1');
+        await vi.waitFor(() => expect(t.session.getState().phase).toBe('downloading'));
+        await t.session.cancel();
+        await starting;
+        expect(t.session.getState().phase).toBe('idle');
+        expect(t.lock.releaseIfMine).toHaveBeenCalledWith('s1');
+        expect(t.minecraft.start).not.toHaveBeenCalled();
+        const progress = t.session.getProgress();
+        expect(progress).toMatchObject({ outcome: 'cancelled', kind: 'start', serverId: 's1' });
+        expect(progress.message).toMatch(/already arrived are kept/);
+        expect(t.notes.some((n) => n.outcome === 'failed')).toBe(false);
+    });
+
+    it('pausing an upload keeps the server reserved, and Continue picks it up', async () => {
+        const t = setup();
+        await t.session.start('s1');
+        t.sync.uploadSession.mockImplementationOnce(((_: string, signal?: AbortSignal) => {
+            t.setJournal(true);                                     // the first files reached Drive
+            return untilAborted(signal);
+        }) as never);
+        const stopping = t.session.stop();
+        await vi.waitFor(() => expect(t.session.getState().phase).toBe('uploading'));
+        await t.session.cancel();
+        await stopping;
+        expect(t.session.getState()).toMatchObject({ phase: 'upload-pending', error: null });
+        expect(t.lock.releaseIfMine).not.toHaveBeenCalled();
+        expect(t.session.getProgress()).toMatchObject({ outcome: 'cancelled', kind: 'stop', message: expect.stringMatching(/paused/) });
+        expect(t.notes.some((n) => n.outcome === 'failed')).toBe(false);
+
+        await t.session.retryUpload();
+        expect(t.session.getProgress()).toMatchObject({ title: 'Continuing the upload', outcome: 'done' });
+        expect(t.session.getState().phase).toBe('idle');
+        expect(t.lock.releaseIfMine).toHaveBeenCalledTimes(1);
+    });
+
+    it('an upload cancelled before anything was sent frees the server', async () => {
+        const t = setup();
+        await t.session.start('s1');
+        t.sync.uploadSession.mockImplementationOnce(((_: string, signal?: AbortSignal) => untilAborted(signal)) as never);
+        const stopping = t.session.stop();
+        await vi.waitFor(() => expect(t.session.getState().phase).toBe('uploading'));
+        await t.session.cancel();
+        await stopping;
+        expect(t.session.getState().phase).toBe('idle');
+        expect(t.lock.releaseIfMine).toHaveBeenCalledWith('s1');
+        expect(t.session.getProgress().message).toMatch(/stay on this PC/);
+    });
+
+    it('there is nothing to cancel while idle or while the server runs', async () => {
+        const t = setup();
+        await expect(t.session.cancel()).rejects.toThrow(/nothing to cancel/);
+        await t.session.start('s1');
+        await expect(t.session.cancel()).rejects.toThrow(/nothing to cancel/);
+        expect(t.session.getState().phase).toBe('running');
+    });
+});
+
+describe('SessionController: repairing another member\'s unfinished upload', () => {
+    const bobStale: LockView = {
+        state: 'stale', ageSeconds: 600,
+        lock: { format: 2, sessionId: 'bob', host: { name: 'Bob', email: 'bob@example.com' }, phase: 'uploading', leaseSeconds: 45, baseRevision: 3, startedAt: null, address: null, players: [] },
+    };
+
+    it('takes the server over, uploads in repair mode and frees it', async () => {
+        const t = setup({ report: report({ status: 'unfinished-upload', lock: bobStale }) });
+        await t.session.repair('s1');
+        expect(t.lock.claim).toHaveBeenCalledWith('s1', 3, { phase: 'uploading', takeOverUnfinished: true });
+        expect(t.sync.uploadSession).toHaveBeenCalledWith('s1', expect.any(AbortSignal), expect.anything(), { repair: true });
+        expect(t.session.getState().phase).toBe('idle');
+        expect(t.lock.releaseIfMine).toHaveBeenCalledWith('s1');
+        expect(t.notes.at(-1)?.title).toBe('Survival is repaired');
+        expect(t.session.getProgress()).toMatchObject({ outcome: 'done', kind: 'repair' });
+    });
+
+    it('refuses without an unfinished upload, or from a PC that is not at the last saved version', async () => {
+        const fine = setup();
+        await expect(fine.session.repair('s1')).rejects.toThrow(/no unfinished upload/);
+        const behind = setup({ report: report({ status: 'unfinished-upload', lock: bobStale, baseRevision: 2 }) });
+        await expect(behind.session.repair('s1')).rejects.toThrow(/Only a PC that has revision 3/);
+        for (const t of [fine, behind]) {
+            expect(t.lock.claim).not.toHaveBeenCalled();
+            expect(t.session.getState().phase).toBe('idle');
+        }
     });
 });

@@ -54,6 +54,8 @@ export interface Commands {
     'session:stop': () => void;
     'session:resolve': (serverId: ServerId, choice: ConflictChoice) => SyncReport;
     'session:retryUpload': () => void;
+    'session:cancel': () => void;
+    'session:repair': (serverId: ServerId) => void;
     /** Sync without playing: download the latest version, or upload this PC's changes, under the lock. */
     'session:syncNow': (serverId: ServerId, direction: 'down' | 'up') => void;
     'session:dismiss': () => void;

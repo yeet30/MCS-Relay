@@ -11,9 +11,13 @@
     font-size: 0.85rem;
     text-align: left;
 
-    &.failed,
-    &.cancelled {
+    &.failed {
         border-left: 4px solid var(--bad);
+    }
+
+    /* Cancelled or paused by the user: not an error. */
+    &.cancelled {
+        border-left: 4px solid var(--warn);
     }
 
     .progress-head {
@@ -40,6 +44,10 @@
         font-weight: 500;
     }
 
+    &.cancelled .progress-percent {
+        color: var(--warn);
+    }
+
     .progress-bar {
         position: relative;
         height: 6px;
@@ -56,9 +64,12 @@
         }
     }
 
-    &.failed .progress-bar span,
-    &.cancelled .progress-bar span {
+    &.failed .progress-bar span {
         background: var(--bad);
+    }
+
+    &.cancelled .progress-bar span {
+        background: var(--warn);
     }
 
     .progress-message {
@@ -111,6 +122,12 @@
         flex: none;
     }
 
+    .progress-buttons {
+        flex: none;
+        display: flex;
+        gap: 6px;
+    }
+
     &.compact {
         flex-direction: row;
         align-items: center;
@@ -125,9 +142,36 @@
         color: var(--good);
     }
 
-    &.compact.failed .compact-icon,
-    &.compact.cancelled .compact-icon {
+    &.compact.failed .compact-icon {
         color: var(--bad);
+    }
+
+    &.compact.cancelled .compact-icon {
+        color: var(--warn);
+    }
+
+    .compact-buttons {
+        flex: none;
+        display: flex;
+        gap: 6px;
+
+        .text-button {
+            color: rgb(225, 225, 225);
+        }
+    }
+
+    /* With a Continue button the text gets its own line, so it is not cut off. */
+    &.compact.with-action {
+        flex-wrap: wrap;
+
+        .compact-text {
+            flex: 1 1 calc(100% - 30px);
+            white-space: normal;
+        }
+
+        .compact-buttons {
+            margin-left: auto;
+        }
     }
 
     .compact-text {
@@ -182,6 +226,7 @@
     .loading { color: #bbb; }
     .done { color: var(--good); }
     .error { color: var(--bad); }
+    .cancelled { color: var(--warn); }
 
     .log-text {
         color: rgb(220, 220, 220);

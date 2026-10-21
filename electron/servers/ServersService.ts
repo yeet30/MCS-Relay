@@ -162,6 +162,12 @@ export class ServersService {
         this.names.set(id, trimmed);
     }
 
+    /** Whether the signed-in account owns the server folder (asked from Drive, never cached). */
+    async isOwner(id: string): Promise<boolean> {
+        requireId(id);
+        return isOwnedByMe(await this.drive.getMeta(id));
+    }
+
     /** The name a server had in the last listing (null when it was never listed). */
     nameOf(id: string): string | null {
         return this.names.get(id) ?? null;

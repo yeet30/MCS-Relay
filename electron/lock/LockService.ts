@@ -202,7 +202,13 @@ export class LockService {
         return { state: ageSeconds > lock.leaseSeconds ? 'stale' : 'held', lock, ageSeconds };
     }
 
-    async claim(serverId: string, baseRevision: number, opts: { phase?: LockPhase; allowStaleFromMe?: boolean } = {}): Promise<void> {
+    /** `allowStaleFromMe`: my own unfinished upload may be taken over (this PC resumes it from its journal).
+     *  `takeOverUnfinished`: anyone's unfinished upload may be taken over (the owner's repair). A lock that is
+     *  still held (renewed) is never taken. */
+    async claim(
+        serverId: string, baseRevision: number,
+        opts: { phase?: LockPhase; allowStaleFromMe?: boolean; takeOverUnfinished?: boolean } = {},
+    ): Promise<void> {
         const me = await this.me();
         const before = await this.inspect(serverId);
         if (before.state === 'held') {
@@ -210,7 +216,7 @@ export class LockService {
         }
         if (before.state === 'stale' && before.lock.phase === 'uploading') {
             const fromMe = sameEmail(before.lock.host.email, me.email);
-            if (!(opts.allowStaleFromMe && fromMe)) throw unfinishedUpload(before.lock, fromMe);
+            if (!opts.takeOverUnfinished && !(opts.allowStaleFromMe && fromMe)) throw unfinishedUpload(before.lock, fromMe);
         }
 
         const previous = this.claims.get(serverId);

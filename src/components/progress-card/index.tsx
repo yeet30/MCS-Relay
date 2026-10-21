@@ -1,11 +1,19 @@
 import './progress-card.css';
 import { useEffect, useState } from 'react';
-import { Check, ChevronRight, Clock, Info, Loader2, X } from 'lucide-react';
-import type { LaneView, SessionProgress, StepMessage, TransferKind, TransferSnapshot } from '../../../shared/types';
+import { Check, ChevronRight, CirclePause, Clock, Info, Loader2, Play, X } from 'lucide-react';
+import type {
+    LaneView, ServerId, SessionPhase, SessionProgress, StepMessage, TransferKind, TransferSnapshot,
+} from '../../../shared/types';
+import { invoke } from '../../api';
+import { useConfirm } from '../../hooks/useConfirm';
 import {
     durationBetween, formatBytes, formatBytesPair, formatClock, formatCount, formatDuration, formatEta, formatSpeed, formatWhen,
 } from '../../lib/format';
+import { cancelMode, cancelQuestion, continueAction } from '../../lib/sync';
 import type { IModalItems } from '../../lib/ui-types';
+import { useNoticeStore } from '../../stores/noticeStore';
+import { request } from '../../stores/request';
+import { useServersStore } from '../../stores/serversStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import Modal from '../modal';
 import FailedFiles from './failed-files';
@@ -24,6 +32,7 @@ function useNow(running: boolean): number {
 function StatusIcon({ status }: { status: StepMessage['status'] }) {
     if (status === 'loading') return <Loader2 size={12} className='spinner' />;
     if (status === 'done') return <Check size={12} />;
+    if (status === 'cancelled') return <CirclePause size={12} />;
     return <X size={12} />;
 }
 
@@ -129,11 +138,57 @@ const OUTCOME_WORDS: Record<SessionProgress['outcome'], string> = {
     running: 'in progress', done: 'done', failed: 'stopped with an error', cancelled: 'cancelled',
 };
 
+/** A cancelled upload that still waits in upload-pending is paused, not over. */
+function outcomeWord(progress: SessionProgress, phase: SessionPhase): string {
+    return progress.outcome === 'cancelled' && phase === 'upload-pending' ? 'paused' : OUTCOME_WORDS[progress.outcome];
+}
+
+/** Cancel (a start, a download) or Pause (an upload), after saying what that means for the files. */
+function StopButton({ progress, phase }: { progress: SessionProgress; phase: SessionPhase }) {
+    const { confirm, popup } = useConfirm();
+    const [stopping, setStopping] = useState(false);
+    const mode = cancelMode(phase);
+    if (!mode && !stopping) return popup;
+
+    async function handleClick() {
+        if (!(await confirm(cancelQuestion(progress.kind, phase)))) return;
+        setStopping(true);
+        await request('session:cancel');
+        setStopping(false);
+    }
+
+    return (
+        <>
+            {popup}
+            <button className='text-button' disabled={stopping} onClick={handleClick}>
+                {stopping ? <Loader2 size={12} className='spinner' /> : <CirclePause size={12} />}
+                {stopping ? (mode === 'pause' ? 'Pausing…' : 'Cancelling…') : mode === 'pause' ? 'Pause' : 'Cancel'}
+            </button>
+        </>
+    );
+}
+
+/** Runs a cancelled run again; what was already done (downloaded files, the upload journal) is not redone. */
+async function continueRun(action: NonNullable<ReturnType<typeof continueAction>>, serverId: ServerId): Promise<void> {
+    let result;
+    if (action === 'start') result = await invoke('session:start', serverId);
+    else if (action === 'repair') result = await invoke('session:repair', serverId);
+    else result = await invoke('session:syncNow', serverId, action);
+    const phase = useSessionStore.getState().state.phase;
+    // A run that fails shows its error under the power button already.
+    if (!result.ok && result.error.code !== 'NOT_SIGNED_IN' && phase !== 'failed' && phase !== 'upload-pending') {
+        useNoticeStore.getState().error(result.error);
+    }
+}
+
 /** The block under the server picker: what is happening, how far it is, and the details behind a button. */
 export default function ProgressCard({ compact = false }: { compact?: boolean }) {
     const progress = useSessionStore((s) => s.progress);
     const transfer = useSessionStore((s) => s.transfer);
+    const phase = useSessionStore((s) => s.state.phase);
+    const selectedId = useServersStore((s) => s.selectedId);
     const [modalTab, setModalTab] = useState<number | null>(null);
+    const [continuing, setContinuing] = useState(false);
     const now = useNow(Boolean(progress?.active));
     if (!progress) return null;
 
@@ -149,17 +204,38 @@ export default function ProgressCard({ compact = false }: { compact?: boolean })
         ? durationBetween(progress.startedAt, new Date(now).toISOString())
         : durationBetween(progress.startedAt, progress.endedAt);
 
+    // Only offered for the selected server, and only while nothing else runs.
+    const action = progress.outcome === 'cancelled' && phase === 'idle' && progress.serverId === selectedId
+        ? continueAction(progress.kind)
+        : null;
+
+    async function handleContinue() {
+        if (!action || !progress?.serverId) return;
+        setContinuing(true);
+        await continueRun(action, progress.serverId);
+        setContinuing(false);
+    }
+
     if (compact || (!progress.active && progress.outcome === 'done')) {
         return (
-            <div className={`progress-card compact ${progress.outcome}`}>
+            <div className={`progress-card compact ${progress.outcome}${action ? ' with-action' : ''}`}>
                 {modal}
-                <span className='compact-icon'>{progress.outcome === 'done' ? <Check size={13} /> : <X size={13} />}</span>
+                <span className='compact-icon'>
+                    {progress.outcome === 'done' ? <Check size={13} /> : progress.outcome === 'cancelled' ? <CirclePause size={13} /> : <X size={13} />}
+                </span>
                 <span className='compact-text'>
-                    {progress.title}: {OUTCOME_WORDS[progress.outcome]}
-                    {took !== null && ` in ${formatDuration(took)}`}
+                    {progress.title}: {outcomeWord(progress, phase)}
+                    {took !== null && ` ${progress.outcome === 'done' ? 'in' : 'after'} ${formatDuration(took)}`}
                     {progress.endedAt && <span className='compact-when'> · {formatWhen(progress.endedAt)}</span>}
                 </span>
-                <button className='text-button' onClick={openDetails}>Show details</button>
+                <span className='compact-buttons'>
+                    {action && (
+                        <button className='text-button primary' disabled={continuing} title='Pick up where it stopped' onClick={handleContinue}>
+                            {continuing ? <Loader2 size={12} className='spinner' /> : <Play size={12} />} Continue
+                        </button>
+                    )}
+                    <button className='text-button' onClick={openDetails}>Show details</button>
+                </span>
             </div>
         );
     }
@@ -171,11 +247,13 @@ export default function ProgressCard({ compact = false }: { compact?: boolean })
             {modal}
             <div className='progress-head'>
                 <span className='progress-title'>{progress.title}</span>
-                <span className='progress-percent'>{failed ? OUTCOME_WORDS[progress.outcome] : `${percent(progress)}%`}</span>
+                <span className='progress-percent'>{failed ? outcomeWord(progress, phase) : `${percent(progress)}%`}</span>
             </div>
             <div className='progress-bar'><span style={{ width: `${progress.fraction * 100}%` }} /></div>
             <p className='progress-message'>
-                {progress.active ? <Loader2 size={12} className='spinner' /> : failed ? <X size={12} /> : <Check size={12} />}
+                {progress.active
+                    ? <Loader2 size={12} className='spinner' />
+                    : progress.outcome === 'cancelled' ? <CirclePause size={12} /> : failed ? <X size={12} /> : <Check size={12} />}
                 <span>{progress.message}</span>
             </p>
             {extra && <p className='progress-meta'>{extra}</p>}
@@ -186,9 +264,12 @@ export default function ProgressCard({ compact = false }: { compact?: boolean })
                     {stageLine(progress)}
                     {took !== null && ` · ${failed ? 'after ' : ''}${formatDuration(took)}`}
                 </span>
-                <button className='text-button' onClick={openDetails}>
-                    Show details <ChevronRight size={12} />
-                </button>
+                <span className='progress-buttons'>
+                    {progress.active && <StopButton progress={progress} phase={phase} />}
+                    <button className='text-button' onClick={openDetails}>
+                        Show details <ChevronRight size={12} />
+                    </button>
+                </span>
             </div>
         </div>
     );

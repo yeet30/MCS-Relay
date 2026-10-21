@@ -1,7 +1,7 @@
 // What the UI derives from the session phase, the SyncReport and the lock view. Pure, so the decisions
 // (can I start? what does the card say?) are tested without React or Electron.
 import type {
-    AppErrorInfo, ConflictChoice, LockPhase, LockView, PendingCleanup, ServerId, SessionPhase, SessionState,
+    AppErrorInfo, ConflictChoice, LockPhase, LockView, PendingCleanup, RunKind, ServerId, SessionPhase, SessionState,
     SyncReport, SyncStatus, TransferSnapshot,
 } from '../../shared/types';
 import { formatAgo, formatBytes, formatCount, formatWhen, listNames, plural } from './format';
@@ -102,6 +102,85 @@ export function powerMode(
 export function canStart(session: SessionState, serverId: ServerId | null, report: SyncReport | null, lock: LockView | null): boolean {
     const mode = powerMode(session, serverId, report, lock);
     return mode.kind === 'start' && mode.enabled;
+}
+
+/* ------------------------------------------------------------------ cancel, pause and continue */
+
+/** What the button on the progress card does now: a start or a download is cancelled, an upload is paused.
+ *  null while nothing can be stopped (the server runs, Java saves the world, the server is being released). */
+export function cancelMode(phase: SessionPhase): 'cancel' | 'pause' | null {
+    if (phase === 'uploading') return 'pause';
+    if (phase === 'checking' || phase === 'claiming' || phase === 'downloading' || phase === 'launching') return 'cancel';
+    return null;
+}
+
+export interface Question {
+    message: string;
+    confirmText: string;
+    cancelText: string;
+}
+
+/** Asked before cancelling or pausing, so the user knows what happens to their files and to the server. */
+export function cancelQuestion(kind: RunKind | null, phase: SessionPhase): Question {
+    const cancelText = 'Keep going';
+    if (cancelMode(phase) === 'pause') {
+        const what = kind === 'repair' ? 'repair' : 'upload';
+        return {
+            message: `Pause the ${what}?\n\nWhat is already uploaded stays on Google Drive, and the server stays reserved for you: nobody else can start it until the ${what} is finished.\n\nUse this to switch to another network, for example. Press "Continue ${what}" when you are ready. If you close Drive Launcher meanwhile, it continues the next time you open it.`,
+            confirmText: `Pause ${what}`,
+            cancelText,
+        };
+    }
+    switch (kind) {
+        case 'down':
+            return {
+                message: 'Cancel the download?\n\nThe server is freed for the others. Files that already arrived stay in your folder, so downloading again only fetches the rest.',
+                confirmText: 'Cancel download', cancelText,
+            };
+        case 'up':
+            return {
+                message: 'Cancel the upload?\n\nNothing has been sent yet, so the cloud stays as it is. Your changes stay on this PC.',
+                confirmText: 'Cancel upload', cancelText,
+            };
+        case 'repair':
+            return { message: 'Cancel the repair?\n\nNothing has been changed in the cloud yet.', confirmText: 'Cancel repair', cancelText };
+        default:
+            return {
+                message: 'Cancel the start?\n\nThe server is freed for the others. Files that were already downloaded stay in your folder, so the next start only downloads the rest.',
+                confirmText: 'Cancel start', cancelText,
+            };
+    }
+}
+
+/** After a run was cancelled and the session is idle again: what Continue runs. An upload cancelled before
+ *  anything was sent continues as "Upload my changes". */
+export function continueAction(kind: RunKind | null): 'start' | 'down' | 'up' | 'repair' | null {
+    switch (kind) {
+        case 'start':
+        case 'down':
+        case 'repair':
+            return kind;
+        case 'stop':
+        case 'retry':
+        case 'resume':
+        case 'up':
+            return 'up';
+        default:
+            return null;
+    }
+}
+
+/** Why this PC cannot repair the server, or null when it can. The main process checks the same rules. */
+export function repairBlocker(report: SyncReport): string | null {
+    if (report.status !== 'unfinished-upload') return 'There is no unfinished upload to repair.';
+    if (report.remoteRevision === null) return 'The cloud has no saved version yet, so there is nothing to repair it to.';
+    if (report.baseRevision === null) {
+        return `This PC has never synced this server, so it does not have revision ${report.remoteRevision}, the last saved version.`;
+    }
+    if (report.baseRevision !== report.remoteRevision) {
+        return `This PC has revision ${report.baseRevision}, but the last saved version is revision ${report.remoteRevision}. Only a PC that has revision ${report.remoteRevision} can repair it.`;
+    }
+    return null;
 }
 
 /* ------------------------------------------------------------------ who is playing */
@@ -230,7 +309,7 @@ function lockHost(report: SyncReport): { name: string; email: string } | null {
 }
 
 /** When the stale lock was last written, i.e. roughly when the upload stopped. */
-function stoppedAt(report: SyncReport): string | null {
+export function stoppedAt(report: SyncReport): string | null {
     if (report.lock.state === 'free') return null;
     const checked = Date.parse(report.checkedAt);
     if (Number.isNaN(checked)) return null;

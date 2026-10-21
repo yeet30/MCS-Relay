@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import type { LockContent, LockView, SessionState, SyncPlan, SyncReport, TransferSnapshot } from '../../shared/types';
 import {
-    canStart, cleanupLines, describeReport, hostingMessage, isSessionBusy, livePresence, planHasFiles, powerMode,
-    startBlocker, transferFraction,
+    cancelMode, cancelQuestion, canStart, cleanupLines, continueAction, describeReport, hostingMessage, isSessionBusy, livePresence,
+    planHasFiles, powerMode, repairBlocker, startBlocker, transferFraction,
 } from './sync';
 
 const NOW = new Date(2026, 9, 14, 20, 0).getTime();
@@ -217,4 +217,39 @@ test('transferFraction uses bytes, or files when nothing has a size', () => {
     expect(transferFraction(base)).toBe(0.5);
     expect(transferFraction({ ...base, bytesTotal: 400, bytesDone: 100 })).toBe(0.25);
     expect(transferFraction({ ...base, filesTotal: 0, filesDone: 0 })).toBe(0);
+});
+
+describe('cancel, pause and continue', () => {
+    test('a start or download is cancelled, an upload paused, and nothing else can be stopped', () => {
+        for (const phase of ['checking', 'claiming', 'downloading', 'launching'] as const) expect(cancelMode(phase)).toBe('cancel');
+        expect(cancelMode('uploading')).toBe('pause');
+        for (const phase of ['idle', 'running', 'stopping', 'releasing', 'failed', 'upload-pending'] as const) expect(cancelMode(phase)).toBeNull();
+    });
+
+    test('the question says what happens to the files and the server', () => {
+        expect(cancelQuestion('stop', 'uploading')).toMatchObject({ confirmText: 'Pause upload', message: expect.stringContaining('stays reserved for you') });
+        expect(cancelQuestion('repair', 'uploading').confirmText).toBe('Pause repair');
+        expect(cancelQuestion('start', 'downloading').message).toContain('only downloads the rest');
+        expect(cancelQuestion('down', 'downloading').confirmText).toBe('Cancel download');
+    });
+
+    test('Continue runs the same thing again; an upload that sent nothing continues as "upload my changes"', () => {
+        expect(continueAction('start')).toBe('start');
+        expect(continueAction('down')).toBe('down');
+        expect(continueAction('repair')).toBe('repair');
+        expect(continueAction('stop')).toBe('up');
+        expect(continueAction(null)).toBeNull();
+    });
+});
+
+describe('repairBlocker', () => {
+    const unfinished = (patch: Partial<SyncReport> = {}) => report({ status: 'unfinished-upload', lock: stale({ phase: 'uploading' }), ...patch });
+
+    test('allows a repair only from a PC at the last saved version', () => {
+        expect(repairBlocker(unfinished())).toBeNull();
+        expect(repairBlocker(unfinished({ baseRevision: 41 }))).toMatch(/has revision 41, but the last saved version is revision 42/);
+        expect(repairBlocker(unfinished({ baseRevision: null }))).toMatch(/never synced/);
+        expect(repairBlocker(unfinished({ remoteRevision: null, baseRevision: null }))).toMatch(/no saved version/);
+        expect(repairBlocker(report())).toMatch(/no unfinished upload/);
+    });
 });

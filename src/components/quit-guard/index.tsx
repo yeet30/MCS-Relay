@@ -13,8 +13,9 @@ function quitMessage(prompt: QuitPrompt): string {
             return 'You are hosting a server. Quitting stops it and uploads the world to the cloud first. This may take a moment.';
         case 'upload-pending':
             return 'Your last upload has not finished. Drive Launcher finishes it the next time you open it; until then nobody else can start this server.';
-        case 'stopping':
         case 'uploading':
+            return 'Drive Launcher is still saving the world to the cloud. Quitting waits until it is done. To quit sooner, pause the upload first: it continues the next time you open Drive Launcher.';
+        case 'stopping':
         case 'releasing':
             return 'Drive Launcher is still saving the world to the cloud. Quitting waits until it is done.';
         default:

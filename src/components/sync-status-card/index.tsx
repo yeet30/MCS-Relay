@@ -1,6 +1,6 @@
 import './sync-status-card.css';
 import { useState } from 'react';
-import { FolderInput, Loader2, RefreshCw } from 'lucide-react';
+import { FolderInput, Loader2, RefreshCw, Wrench } from 'lucide-react';
 import type { ConflictChoice, SyncReport } from '../../../shared/types';
 import { useConfirm } from '../../hooks/useConfirm';
 import { formatWhen } from '../../lib/format';
@@ -13,6 +13,7 @@ import { selectSelectedServer, useServersStore } from '../../stores/serversStore
 import { reportFor, useSessionStore } from '../../stores/sessionStore';
 import FileGroups from '../file-groups';
 import Modal from '../modal';
+import RepairDialog from '../repair-dialog';
 
 function planTabs(report: SyncReport): IModalItems[] {
     const plan = report.plan;
@@ -48,6 +49,7 @@ export default function SyncStatusCard() {
     const { confirm, popup } = useConfirm();
     const [resolving, setResolving] = useState<ConflictChoice | null>(null);
     const [showFiles, setShowFiles] = useState(false);
+    const [showRepair, setShowRepair] = useState(false);
 
     if (!server || !serverId) return null;
     const nameFor = (email: string) => server.members.find((m) => m.email === email)?.name || email;
@@ -67,6 +69,8 @@ export default function SyncStatusCard() {
     const choices = report.status === 'diverged' ? report.allowedChoices.filter((c) => c !== report.pendingChoice) : [];
     const cleanup = cleanupLines(report.cleanup, nameFor);
     const author = report.remoteAuthor ? report.remoteAuthor.name || nameFor(report.remoteAuthor.email) : 'the other member';
+    // Repair overrides another member's unfinished upload, so only the owner gets it (the main process checks too).
+    const canRepair = report.status === 'unfinished-upload' && (server.kind === 'owned' || server.myRole === 'owner');
 
     async function handleChoice(choice: ConflictChoice) {
         if (!serverId || !report) return;
@@ -81,6 +85,9 @@ export default function SyncStatusCard() {
         <div className={`sync-card ${copy.tone}`}>
             {popup}
             <Modal isOpen={showFiles} onClose={() => setShowFiles(false)} width={520} height={400} items={planTabs(report)} />
+            {canRepair && (
+                <RepairDialog isOpen={showRepair} onClose={() => setShowRepair(false)} report={report} myEmail={myEmail} nameFor={nameFor} />
+            )}
             <div className='sync-head'>
                 <span className={`sync-pill ${copy.tone}`}>{copy.pill}</span>
                 <span className='sync-title'>{copy.title}</span>
@@ -110,6 +117,11 @@ export default function SyncStatusCard() {
                 {report.status === 'no-local-path' && (
                     <button className='text-button primary' onClick={() => void chooseLocalPath(serverId)}>
                         <FolderInput size={12} /> Choose folder
+                    </button>
+                )}
+                {canRepair && (
+                    <button className='text-button' title='For when the other member cannot open Drive Launcher soon' onClick={() => setShowRepair(true)}>
+                        <Wrench size={12} /> Repair from this PC…
                     </button>
                 )}
                 {planHasFiles(report) && <button className='text-button' onClick={() => setShowFiles(true)}>Show files</button>}

@@ -3,7 +3,7 @@
 // The bar is units done / units planned. Stages whose size is only known later (how many folders?) start
 // with an estimate; the bar never moves backwards when an estimate turns out too small.
 import type {
-    ProgressStage, ProgressStageKey, SessionProgress, StepMessage, TransferSnapshot,
+    ProgressStage, ProgressStageKey, RunKind, SessionProgress, StepMessage, TransferSnapshot,
 } from '../../shared/types';
 import type { ProgressSink } from '../sync/progressSink';
 
@@ -11,6 +11,13 @@ export interface StagePlan {
     key: ProgressStageKey;
     label: string;
     total: number;
+}
+
+export interface RunInfo {
+    /** A hint shown while the run is active, e.g. that a first upload takes long. */
+    note?: string | null;
+    kind?: RunKind | null;
+    serverId?: string | null;
 }
 
 /** Lines of the progress log. A task keeps its id, so its "loading" line turns into "done" in place. */
@@ -31,7 +38,7 @@ const EMIT_EVERY_MS = 150;
 
 const IDLE: SessionProgress = {
     active: false, title: '', message: '', unitsDone: 0, unitsTotal: 0, fraction: 0, stages: [],
-    outcome: 'done', startedAt: null, endedAt: null, note: null,
+    outcome: 'done', startedAt: null, endedAt: null, note: null, kind: null, serverId: null,
 };
 
 export class OrchestrationProgress implements ProgressSink {
@@ -45,6 +52,8 @@ export class OrchestrationProgress implements ProgressSink {
     private endedAt: string | null = null;
     private failureMessage: string | null = null;
     private note: string | null = null;
+    private kind: RunKind | null = null;
+    private serverId: string | null = null;
     private timer: ReturnType<typeof setTimeout> | null = null;
     private lastEmit = 0;
     private readonly now: () => number;
@@ -59,9 +68,11 @@ export class OrchestrationProgress implements ProgressSink {
     }
 
     /** Starts a new run. Stages with total 0 are kept (their size may become known) but weigh nothing yet. */
-    begin(title: string, plan: StagePlan[], note: string | null = null): void {
+    begin(title: string, plan: StagePlan[], run: RunInfo = {}): void {
         this.title = title;
-        this.note = note;
+        this.note = run.note ?? null;
+        this.kind = run.kind ?? null;
+        this.serverId = run.serverId ?? null;
         this.stages = plan.map((p) => ({
             key: p.key, label: p.label, total: Math.max(0, p.total), done: 0, settled: 0, live: 0,
             state: 'pending', message: p.label, taskId: null,
@@ -152,7 +163,7 @@ export class OrchestrationProgress implements ProgressSink {
         this.schedule();
     }
 
-    /** Ends the run. A failure marks the stage that was running as failed in the log. */
+    /** Ends the run. A failure marks the stage that was running as failed in the log, a cancel as cancelled. */
     finish(outcome: Exclude<SessionProgress['outcome'], 'running'>, message?: string): void {
         if (!this.active) return;
         let closedCurrent = false;
@@ -164,7 +175,7 @@ export class OrchestrationProgress implements ProgressSink {
                 stage.live = 0;
             }
             if (message && outcome !== 'done' && stage === this.current) stage.message = message;
-            this.closeTask(stage, outcome === 'done' ? 'done' : 'error');
+            this.closeTask(stage, outcome === 'done' ? 'done' : outcome === 'cancelled' ? 'cancelled' : 'error');
         }
         if (outcome === 'done') {
             for (const stage of this.stages) if (stage.state === 'pending') stage.state = 'skipped';
@@ -172,9 +183,10 @@ export class OrchestrationProgress implements ProgressSink {
         } else if (message && !closedCurrent) {
             // It failed before (or between) stages: the reason still belongs in the log.
             const id = this.d.log.open(message, 'major');
-            this.d.log.update(id, message, outcome === 'cancelled' ? 'done' : 'error');
+            this.d.log.update(id, message, outcome === 'cancelled' ? 'cancelled' : 'error');
             this.failureMessage = message;
         }
+        this.snapshot();                                // takes in what settled since the last emit, while still active
         this.outcome = outcome;
         this.active = false;
         this.current = null;
@@ -199,6 +211,8 @@ export class OrchestrationProgress implements ProgressSink {
             startedAt: this.startedAt,
             endedAt: this.endedAt,
             note: this.note,
+            kind: this.kind,
+            serverId: this.serverId,
         };
     }
 
@@ -222,7 +236,7 @@ export class OrchestrationProgress implements ProgressSink {
         if (this.failureMessage) return this.failureMessage;
         for (let i = this.stages.length - 1; i >= 0; i--) {
             const s = this.stages[i];
-            if (s.state === 'failed' || s.state === 'done') return s.message;
+            if (s.state === 'failed' || s.state === 'cancelled' || s.state === 'done') return s.message;
         }
         return this.title;
     }
@@ -237,8 +251,8 @@ export class OrchestrationProgress implements ProgressSink {
         return stage;
     }
 
-    private closeTask(stage: Stage, status: 'done' | 'error'): void {
-        stage.state = status === 'done' ? 'done' : 'failed';
+    private closeTask(stage: Stage, status: 'done' | 'error' | 'cancelled'): void {
+        stage.state = status === 'error' ? 'failed' : status;
         if (stage.taskId !== null) this.d.log.update(stage.taskId, stage.message, status);
     }
 

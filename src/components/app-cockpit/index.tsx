@@ -1,6 +1,6 @@
 import './app-cockpit.css';
 import { useState } from 'react';
-import { CloudUpload, LoaderCircle, LogIn, Plus, Power, Square } from 'lucide-react';
+import { CloudUpload, LoaderCircle, LogIn, Play, Plus, Power, Square } from 'lucide-react';
 import { invoke } from '../../api';
 import { useConfirm } from '../../hooks/useConfirm';
 import { powerMode } from '../../lib/sync';
@@ -16,12 +16,16 @@ import FailedFiles from '../progress-card/failed-files';
 import JoinServer from '../join-server';
 import Modal from '../modal';
 
-/** The error box under the power button: a failed start (Dismiss) or an upload that has to be retried. */
+/** The box under the power button: a failed start (Dismiss), an upload that has to be retried, or one the user
+ *  paused (an upload-pending without an error). */
 function PowerMessage({ mode }: { mode: Extract<PowerMode, { kind: 'failed' | 'upload-pending' }> }) {
     const failures = useSessionStore((s) => s.transfer?.failures);
+    const repairing = useSessionStore((s) => s.progress?.kind === 'repair');
     const [busy, setBusy] = useState(false);
     const error = mode.error;
     const transferError = error?.code === 'UPLOAD_INCOMPLETE' || error?.code === 'DOWNLOAD_INCOMPLETE';
+    const paused = mode.kind === 'upload-pending' && error === null;
+    const what = repairing ? 'repair' : 'upload';
 
     async function run(action: 'session:dismiss' | 'session:retryUpload') {
         setBusy(true);
@@ -30,10 +34,19 @@ function PowerMessage({ mode }: { mode: Extract<PowerMode, { kind: 'failed' | 'u
     }
 
     return (
-        <div className={`power-message ${mode.kind}`}>
+        <div className={`power-message ${paused ? 'paused' : mode.kind}`}>
             <p className='power-message-title'>
-                {mode.kind === 'failed' ? 'The session could not start.' : 'The upload did not finish. The server stays reserved for you until it does.'}
+                {mode.kind === 'failed'
+                    ? 'The session could not start.'
+                    : paused
+                        ? `The ${what} is paused. The server stays reserved for you until it finishes.`
+                        : `The ${what} did not finish. The server stays reserved for you until it does.`}
             </p>
+            {paused && (
+                <p className='power-message-text'>
+                    What is already uploaded stays on Google Drive, so continuing only sends the rest. If you close Drive Launcher, it continues the next time you open it.
+                </p>
+            )}
             {error && <p className='power-message-text'>{error.message}</p>}
             {transferError && failures && failures.length > 0 && <FailedFiles failures={failures} />}
             <div className='power-message-buttons'>
@@ -41,8 +54,8 @@ function PowerMessage({ mode }: { mode: Extract<PowerMode, { kind: 'failed' | 'u
                     ? <button className='text-button' disabled={busy} onClick={() => run('session:dismiss')}>Dismiss</button>
                     : (
                         <button className='text-button primary' disabled={busy} onClick={() => run('session:retryUpload')}>
-                            {busy ? <LoaderCircle size={12} className='spinner' /> : <CloudUpload size={12} />}
-                            Retry upload
+                            {busy ? <LoaderCircle size={12} className='spinner' /> : paused ? <Play size={12} /> : <CloudUpload size={12} />}
+                            {paused ? `Continue ${what}` : `Retry ${what}`}
                         </button>
                     )}
             </div>
@@ -182,7 +195,11 @@ export default function AppCockpit() {
             break;
         default:
             button = (
-                <button className='onOff-button' title={mode.kind === 'failed' ? 'Dismiss the error first' : 'Retry the upload first'} disabled>
+                <button
+                    className='onOff-button'
+                    title={mode.kind === 'failed' ? 'Dismiss the error first' : mode.error ? 'Retry the upload first' : 'Continue the upload first'}
+                    disabled
+                >
                     <Power size={128} />
                 </button>
             );

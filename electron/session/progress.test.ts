@@ -117,3 +117,24 @@ describe('OrchestrationProgress', () => {
         expect(t.last().stages.map((s) => s.state)).toEqual(['done', 'skipped']);
     });
 });
+
+describe('OrchestrationProgress: a cancelled run', () => {
+    it('marks the running stage as cancelled, not failed, and remembers what Continue has to do', () => {
+        const t = setup();
+        current = t.progress;
+        t.progress.begin('Starting the server', [
+            { key: 'check', label: 'Checking', total: 1 },
+            { key: 'download', label: 'Downloading', total: 10 },
+        ], { kind: 'start', serverId: 's1' });
+        t.progress.enter('check', 'Checking');
+        t.progress.complete('check', 'Checked');
+        t.progress.enter('download', 'Downloading 10 files');
+        t.progress.settle('download', 4);
+        t.progress.finish('cancelled', 'The start was cancelled');
+        const last = t.last();
+        expect(last).toMatchObject({ active: false, outcome: 'cancelled', kind: 'start', serverId: 's1', message: 'The start was cancelled' });
+        expect(last.stages.map((s) => s.state)).toEqual(['done', 'cancelled']);
+        expect(last.fraction).toBeCloseTo(5 / 11);
+        expect(t.lines.map((l) => l.status)).toEqual(['done', 'cancelled']);
+    });
+});

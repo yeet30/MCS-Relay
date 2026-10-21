@@ -24,6 +24,8 @@ export interface UploadJournal {
     sessionId: string;
     /** true when journal.log records every job; journals from before the log existed lack it. */
     logged?: boolean;
+    /** The upload repairs another member's unfinished upload: resuming it checks the cloud again. */
+    repair?: boolean;
 }
 
 /** One line of journal.log. Appended as things happen, so after a crash the file says exactly what reached
@@ -447,6 +449,7 @@ function parseJournal(raw: unknown, id: string): UploadJournal | null {
     if (typeof raw.startedAt !== 'string' || !isCount(raw.baseRevision) || typeof raw.sessionId !== 'string') return null;
     const journal: UploadJournal = { format: 1, serverId: id, startedAt: raw.startedAt, baseRevision: raw.baseRevision, sessionId: raw.sessionId };
     if (raw.logged === true) journal.logged = true;
+    if (raw.repair === true) journal.repair = true;
     return journal;
 }
 

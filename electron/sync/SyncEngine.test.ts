@@ -368,7 +368,7 @@ describe('failures and resuming', () => {
         expect(Buffer.from(store.node(manifest!.files['a.txt'].driveId).content).toString()).toBe('a-2');
     });
 
-    it('someone else\'s stale upload makes the server unfinished-upload; my own does not', async () => {
+    it('a stale upload makes the server unfinished-upload, unless it is mine and this PC has its journal', async () => {
         const stale = (email: string): LockView => ({
             state: 'stale', ageSeconds: 300,
             lock: { format: 2, sessionId: 'x', host: { name: 'X', email }, phase: 'uploading', leaseSeconds: 45, baseRevision: 1, startedAt: null, address: null, players: [] },
@@ -376,6 +376,9 @@ describe('failures and resuming', () => {
         alice.lockView = stale(BOB.email);
         expect((await alice.sync.preflight(serverId)).status).toBe('unfinished-upload');
         alice.lockView = stale(ALICE.email);
+        // Mine, but from another PC: this one cannot resume it.
+        expect((await alice.sync.preflight(serverId)).status).toBe('unfinished-upload');
+        alice.appData.writeJournal(serverId, { format: 1, serverId, startedAt: '2026-10-21T10:00:00Z', baseRevision: 1, sessionId: 'x', logged: true });
         expect((await alice.sync.preflight(serverId)).status).toBe('in-sync');
     });
 });
@@ -541,6 +544,74 @@ describe('retrying and resuming an upload', () => {
         expect(store.node(bobs.id).trashed).toBe(false);
         expect(store.node(used.id).trashed).toBe(false);
         expect(progress.events).toContain('complete cleanup: Moved 1 leftover file to the trash');
+    });
+});
+
+describe('repairing another member\'s unfinished upload', () => {
+    const bobStale: LockView = {
+        state: 'stale', ageSeconds: 600,
+        lock: { format: 2, sessionId: 'bob', host: { name: 'Bob', email: BOB.email }, phase: 'uploading', leaseSeconds: 45, baseRevision: 1, startedAt: null, address: null, players: [] },
+    };
+
+    beforeEach(async () => {
+        await put(alice, 'server.properties', 'motd=hi');
+        await put(alice, 'world/level.dat', 'level-1');
+        await put(alice, 'world/region/r.0.0.mca', 'region-1');
+        await session(alice);                                       // revision 1
+        // Bob's upload stops half way: level.dat is overwritten in place, r.0.0.mca (Alice's) is emptied into a
+        // placeholder, a new region file is created, and one file fails, so nothing is committed.
+        await bob.sync.download(serverId, await bob.sync.preflight(serverId));
+        await put(bob, 'world/level.dat', 'level-bob');
+        await rm(path.join(bob.root, 'world', 'region', 'r.0.0.mca'));
+        await put(bob, 'world/region/r.9.9.mca', 'bob-new');
+        await put(bob, 'world/stuck.dat', 'never arrives');
+        store.failNext('createFile', 3, () => new DriveError('Forbidden', 403, 'forbidden'), (args) => args[0] === 'stuck.dat');
+        await expect(bob.sync.uploadSession(serverId)).rejects.toMatchObject({ code: 'UPLOAD_INCOMPLETE' });
+        alice.lockView = bobStale;
+    });
+
+    function cloudText(rel: string, manifest: { files: Record<string, { driveId: string }> }): string {
+        return store.text(manifest.files[rel].driveId);
+    }
+
+    it('puts this PC\'s copy back wherever the cloud differs and commits it as the next revision', async () => {
+        expect((await alice.sync.preflight(serverId)).status).toBe('unfinished-upload');
+        const levelId = store.findPath(serverId, 'world/level.dat')!.id;
+        expect(store.text(levelId)).toBe('level-bob');
+
+        const result = await alice.sync.uploadSession(serverId, undefined, undefined, { repair: true });
+        expect(result.revision).toBe(2);
+        const manifest = (await readManifest(alice.launcher, serverId))!;
+        expect(manifest.author.email).toBe(ALICE.email);
+        expect(manifest.files['world/level.dat'].driveId).toBe(levelId);         // overwritten in place
+        expect(cloudText('world/level.dat', manifest)).toBe('level-1');
+        expect(cloudText('world/region/r.0.0.mca', manifest)).toBe('region-1'); // created again
+        expect(cloudText('server.properties', manifest)).toBe('motd=hi');
+        expect(Object.keys(manifest.files).sort()).toEqual(['server.properties', 'world/level.dat', 'world/region/r.0.0.mca']);
+        expect(alice.appData.readJournal(serverId)).toBeNull();
+
+        // Bob's app cannot finish his upload on top of the repaired cloud: it stops with a conflict instead.
+        bob.lockView = { state: 'free', lock: null };
+        await expect(bob.sync.uploadSession(serverId)).rejects.toMatchObject({ code: 'CONFLICT' });
+    });
+
+    it('a paused or failed repair is continued as a repair', async () => {
+        store.failNext('updateContent', 1, () => new DriveError('Forbidden', 403, 'forbidden'));
+        await expect(alice.sync.uploadSession(serverId, undefined, undefined, { repair: true })).rejects.toMatchObject({ code: 'UPLOAD_INCOMPLETE' });
+        expect(alice.sync.unfinishedRepair(serverId)).toBe(true);
+
+        const result = await alice.sync.uploadSession(serverId);
+        expect(result.revision).toBe(2);
+        expect(cloudText('world/level.dat', (await readManifest(alice.launcher, serverId))!)).toBe('level-1');
+        expect(alice.sync.unfinishedRepair(serverId)).toBe(false);
+    });
+
+    it('needs this PC to have the last saved version', async () => {
+        await put(alice, 'server.properties', 'motd=changed');
+        alice.appData.writeBase(serverId, { format: 2, serverId, revision: 0, files: {}, folders: {} });
+        await expect(alice.sync.uploadSession(serverId, undefined, undefined, { repair: true }))
+            .rejects.toMatchObject({ code: 'CONFLICT', message: expect.stringContaining('cannot repair') });
+        expect((await readManifest(alice.launcher, serverId))?.revision).toBe(1);
     });
 });
 

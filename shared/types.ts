@@ -199,7 +199,7 @@ export interface SessionState {
 export interface StepMessage {
     id: number;
     message: string;
-    status: 'loading' | 'done' | 'error';
+    status: 'loading' | 'done' | 'error' | 'cancelled';
     importance: 'major' | 'minor';
     at: string;
     endedAt?: string;                   // when a task's line stopped loading: the UI shows how long it took
@@ -209,14 +209,18 @@ export interface StepMessage {
 
 export type ProgressStageKey =
     | 'check' | 'claim' | 'scan' | 'download' | 'playit' | 'java' | 'watch'
-    | 'stop-java' | 'stop-playit' | 'folders' | 'files' | 'commit' | 'cleanup' | 'release';
+    | 'stop-java' | 'stop-playit' | 'verify' | 'folders' | 'files' | 'commit' | 'cleanup' | 'release';
+
+/** What a run of the progress bar is: a start, a stop with its upload, a retried or resumed upload, a sync
+ *  without playing (down / up), or a repair of another member's unfinished upload. */
+export type RunKind = 'start' | 'stop' | 'retry' | 'resume' | 'down' | 'up' | 'repair';
 
 export interface ProgressStage {
     key: ProgressStageKey;
     label: string;
     done: number;                       // units done; a transfer stage counts finished files plus the share of files in flight
     total: number;                      // units: 1 for a single action, one per file or folder otherwise
-    state: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
+    state: 'pending' | 'active' | 'done' | 'failed' | 'cancelled' | 'skipped';
 }
 
 /** The bar under the power button. Every action counts as one unit (one folder, one file, stopping Java,
@@ -233,6 +237,8 @@ export interface SessionProgress {
     startedAt: string | null;
     endedAt: string | null;
     note: string | null;                // a hint for this run, e.g. that a first upload takes long
+    kind: RunKind | null;               // what Continue does after a cancelled run
+    serverId: ServerId | null;
 }
 
 /* ------------------------------------------------------------------ transfers */

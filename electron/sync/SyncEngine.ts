@@ -59,6 +59,14 @@ interface JournalMemory {
     gone: Set<string>;
 }
 
+/** A repair's look at the cloud: manifest files whose Drive file no longer holds what the manifest says. */
+interface CloudCheck {
+    /** Different content, but the file is still there: overwritten in place. */
+    changed: Set<string>;
+    /** Trashed, deleted, or emptied into a placeholder: created again. */
+    gone: Set<string>;
+}
+
 type UploadOutcome = Extract<JobOutcome, { kind: 'upload' }>;
 type Log = (entry: JournalEntry) => void;
 
@@ -174,6 +182,11 @@ export class SyncEngine {
 
     baseRevision(serverId: string): number {
         return this.d.appData.readBase(serverId)?.revision ?? 0;
+    }
+
+    /** The unfinished upload of this PC is a repair (resuming it checks the cloud again). */
+    unfinishedRepair(serverId: string): boolean {
+        return this.d.appData.readJournal(serverId)?.repair === true;
     }
 
     /* ------------------------------------------------------------------ rules */
@@ -339,14 +352,17 @@ export class SyncEngine {
 
     /* ------------------------------------------------------------------ upload (under the lock) */
 
+    /** With `repair`, this PC's copy is also put back wherever the cloud no longer matches the last manifest
+     *  (another member's upload stopped half way). Needs this PC to be at the cloud's revision. */
     async uploadSession(
-        serverId: string, signal?: AbortSignal, progress: ProgressSink = NO_PROGRESS,
+        serverId: string, signal?: AbortSignal, progress: ProgressSink = NO_PROGRESS, opts: { repair?: boolean } = {},
     ): Promise<{ uploaded: number; deleted: number; revision: number }> {
         const root = await this.requireRoot(serverId);
         const isIgnored = await this.loadRules(serverId, true);
         let journal = this.d.appData.readJournal(serverId);
         let remote = await readManifest(this.d.launcher, serverId);
         const me = await this.d.me();
+        const repair = opts.repair === true || journal?.repair === true;
 
         if (journal && this.recoverCommitted(serverId, journal.baseRevision, remote, me)) {
             journal = null;
@@ -358,27 +374,40 @@ export class SyncEngine {
         progress.complete('scan', `Checked ${plural(local.size, 'file')}`);
         // Without a cloud manifest everything is new, whatever the base says.
         const planBase = remote ? baseToSnapshot(base) : new Map();
-        const { upload, deleteRemote } = planUpload(planBase, local);
+        const planned = planUpload(planBase, local);
+        let upload = planned.upload;
+        const deleteRemote = planned.deleteRemote;
+        if (remote && remote.revision !== baseRevision) {
+            throw new AppError('CONFLICT', repair
+                ? `This PC no longer has the cloud's last saved version (revision ${remote.revision}), so it cannot repair the server.`
+                : 'The cloud changed since this PC last synced, so the upload was stopped to protect the other copy.');
+        }
+        let broken: CloudCheck | null = null;
+        if (repair && remote) {
+            broken = await this.checkCloud(serverId, remote, signal, progress);
+            const restore = [...broken.changed, ...broken.gone].filter((p) => local.has(p));
+            upload = sorted(new Set([...upload, ...restore]));
+        }
 
         if (upload.length === 0 && deleteRemote.length === 0) {
             if (journal) this.d.appData.deleteJournal(serverId);
             for (const key of ['folders', 'files', 'commit', 'cleanup'] as const) progress.skip(key);
-            this.d.step('Nothing changed, so nothing was uploaded', 'done', 'major');
+            this.d.step(repair ? 'The cloud matches this PC, so nothing needed repairing' : 'Nothing changed, so nothing was uploaded', 'done', 'major');
             return { uploaded: 0, deleted: 0, revision: remote?.revision ?? baseRevision };
-        }
-        if (remote && remote.revision !== baseRevision) {
-            throw new AppError('CONFLICT', 'The cloud changed since this PC last synced, so the upload was stopped to protect the other copy.');
         }
         const memory = this.journalMemory(serverId, journal);
         this.d.appData.writeJournal(serverId, {
             format: 1, serverId, startedAt: journal?.startedAt ?? this.iso(), baseRevision, sessionId: this.d.lock.sessionId, logged: true,
+            ...(repair ? { repair: true } : {}),
         });
         const log: Log = (entry) => this.d.appData.appendJournalLog(serverId, [entry]);
 
         const remoteFiles: Record<string, ManifestEntry> = remote?.files ?? {};
         // A file someone trashed by hand on the Drive website would still accept new content, but nobody
         // else could download it any more: such paths are created again instead of updated.
-        const gone = await this.missingTargets(serverId, upload.filter((p) => remoteFiles[p]), remoteFiles, remote?.folders ?? {});
+        const gone = broken
+            ? broken.gone
+            : await this.missingTargets(serverId, upload.filter((p) => remoteFiles[p]), remoteFiles, remote?.folders ?? {});
         const isNew = (p: string): boolean => !remoteFiles[p] || gone.has(p);
         const newPaths = upload.filter(isNew);
         const manifestFolders = remote?.folders ?? {};
@@ -601,6 +630,60 @@ export class SyncEngine {
         });
         if (gone.size > 0) console.warn(`[sync] ${gone.size} files were removed outside the app and will be uploaded again`);
         return gone;
+    }
+
+    /** For a repair: every file of the manifest, checked against what Google Drive really holds. One listing
+     *  per folder (in parallel); only files missing from their folder's listing cost an extra request. */
+    private async checkCloud(serverId: string, remote: Manifest, signal: AbortSignal | undefined, progress: ProgressSink): Promise<CloudCheck> {
+        const paths = Object.keys(remote.files);
+        const check: CloudCheck = { changed: new Set(), gone: new Set() };
+        progress.setTotal('verify', paths.length);
+        progress.enter('verify', `Checking ${plural(paths.length, 'file')} on Google Drive`);
+        let checked = 0;
+        const judge = (p: string, meta: DriveFileMeta | null): void => {
+            if (!meta || meta.trashed || meta.appProperties?.[APP_PROPS.tombstone] === '1') check.gone.add(p);
+            else if (meta.md5Checksum?.toLowerCase() !== remote.files[p].md5.toLowerCase()) check.changed.add(p);
+            checked += 1;
+            progress.report('verify', checked, paths.length, `Checking files on Google Drive (${count(checked)} of ${count(paths.length)})`);
+        };
+        const byParent = new Map<string, string[]>();
+        for (const p of paths) {
+            const dir = parentOf(p);
+            const parentId = (dir ? remote.folders[dir] : serverId) ?? '';
+            byParent.set(parentId, [...(byParent.get(parentId) ?? []), p]);
+        }
+        const notListed: string[] = [];
+        await eachLimited([...byParent], LOOKUP_CONCURRENCY, async ([parentId, group]) => {
+            signal?.throwIfAborted();
+            const present = new Map<string, DriveFileMeta>();
+            try {
+                if (parentId) for (const child of await this.d.drive.listChildren(parentId)) present.set(child.id, child);
+            } catch (err) {
+                if (!isNotFound(err)) throw err;
+            }
+            for (const p of group) {
+                const meta = present.get(remote.files[p].driveId);
+                if (meta) judge(p, meta);
+                else notListed.push(p);
+            }
+        });
+        // Not in its folder: moved elsewhere (into pending-delete as a placeholder, for example) or really gone.
+        await eachLimited(notListed, LOOKUP_CONCURRENCY, async (p) => {
+            signal?.throwIfAborted();
+            let meta: DriveFileMeta | null = null;
+            try {
+                meta = await this.d.drive.getMeta(remote.files[p].driveId);
+            } catch (err) {
+                if (!isNotFound(err)) throw err;
+            }
+            judge(p, meta);
+        });
+        const broken = check.changed.size + check.gone.size;
+        progress.complete('verify', broken > 0
+            ? `${plural(broken, 'file')} on Google Drive no longer match revision ${remote.revision}`
+            : `Every file on Google Drive matches revision ${remote.revision}`);
+        if (broken > 0) console.log(`[sync] repair of ${serverId}: ${check.changed.size} changed, ${check.gone.size} gone`);
+        return check;
     }
 
     private async fileAlive(id: string): Promise<boolean> {
@@ -858,9 +941,10 @@ export class SyncEngine {
             plan = planSync(baseSnap, local, remoteSnap);
             status = deriveStatus(plan);
         }
-        // Someone else's upload stopped half way: their app must finish it before anyone plays.
-        // My own unfinished upload is resumed by the session instead (it has the journal).
-        if (lock.state === 'stale' && lock.lock.phase === 'uploading' && lock.lock.host.email.toLowerCase() !== me.email.toLowerCase()) {
+        // Someone else's upload stopped half way: their app must finish it before anyone plays. My own is
+        // resumed by the session instead, when this PC has its journal (otherwise it ran on another PC).
+        if (lock.state === 'stale' && lock.lock.phase === 'uploading'
+            && (lock.lock.host.email.toLowerCase() !== me.email.toLowerCase() || this.d.appData.readJournal(serverId) === null)) {
             status = 'unfinished-upload';
         }
         return { root, me, remote, baseRevision: base?.revision ?? null, local, remoteSnap, plan, status, lock };

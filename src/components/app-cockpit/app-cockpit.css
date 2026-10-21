@@ -95,7 +95,8 @@
     text-align: left;
     font-size: 0.85rem;
 
-    &.upload-pending {
+    &.upload-pending,
+    &.paused {
         border-left-color: var(--warn);
     }
 

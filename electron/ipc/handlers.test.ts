@@ -15,7 +15,7 @@ const ALL_COMMANDS: Record<CommandName, true> = {
     'session:get': true, 'session:preflight': true, 'session:lastReport': true, 'session:start': true, 'session:stop': true,
     'session:resolve': true, 'session:retryUpload': true, 'session:dismiss': true, 'session:command': true,
     'session:changes': true, 'session:transfers': true, 'session:steps': true, 'session:console': true,
-    'session:progress': true, 'session:syncNow': true,
+    'session:progress': true, 'session:syncNow': true, 'session:cancel': true, 'session:repair': true,
     'settings:get': true, 'settings:set': true, 'settings:getServer': true, 'settings:setServer': true,
     'settings:choosePlayitPath': true,
     'rules:get': true, 'rules:set': true, 'rules:pickPath': true,
@@ -71,6 +71,17 @@ describe('registerHandlers', () => {
         const result = await listeners.get('settings:get')!({ senderFrame: { url: 'https://evil.example' } });
         expect(result).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } });
         expect(deps.settings.get).not.toHaveBeenCalled();
+    });
+
+    it('lets only the owner repair a server', async () => {
+        const { call, deps } = setup();
+        const isOwner = deps.servers.isOwner as unknown as ReturnType<typeof vi.fn>;
+        isOwner.mockResolvedValue(false);
+        expect(await call('session:repair', 'abc')).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } });
+        expect(deps.session.repair).not.toHaveBeenCalled();
+        isOwner.mockResolvedValue(true);
+        expect(await call('session:repair', 'abc')).toMatchObject({ ok: true });
+        expect(deps.session.repair).toHaveBeenCalledWith('abc');
     });
 
     it('does not log out in the middle of a session', async () => {

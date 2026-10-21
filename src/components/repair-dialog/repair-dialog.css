@@ -1,0 +1,90 @@
+.repair-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    text-align: left;
+    font-size: 0.85rem;
+    color: rgb(215, 215, 215);
+
+    section {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    h5 {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.85rem;
+        color: white;
+    }
+
+    p {
+        margin: 0;
+        line-height: 1.45;
+    }
+
+    ol {
+        margin: 0;
+        padding-left: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        line-height: 1.4;
+    }
+
+    .repair-warning {
+        padding: 8px 10px;
+        border-radius: 8px;
+        border-left: 3px solid var(--warn);
+        background: rgba(229, 192, 123, 0.08);
+
+        h5 {
+            color: var(--warn);
+        }
+    }
+
+    .repair-checks {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+
+        li {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            color: var(--muted);
+        }
+
+        svg {
+            flex: none;
+            margin-top: 3px;
+        }
+
+        .good { color: var(--good); }
+        .bad { color: var(--bad); }
+    }
+
+    .repair-ack {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        cursor: pointer;
+
+        input {
+            margin-top: 3px;
+        }
+    }
+
+    .repair-buttons {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding-bottom: 4px;
+    }
+}

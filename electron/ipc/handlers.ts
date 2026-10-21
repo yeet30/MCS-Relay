@@ -18,10 +18,11 @@ import type { Handle } from './handle';
 export interface HandlerDeps {
     auth: Pick<GoogleAuth, 'status' | 'login' | 'enableCollaboration' | 'logout'>;
     servers: Pick<ServersService,
-        'list' | 'create' | 'delete' | 'rename' | 'invite' | 'removeMember' | 'leave' | 'join' | 'chooseLocalPath' | 'openFolder' | 'info'>;
+        'list' | 'create' | 'delete' | 'rename' | 'invite' | 'removeMember' | 'leave' | 'join' | 'chooseLocalPath' | 'openFolder' | 'info'
+        | 'isOwner'>;
     session: Pick<SessionController,
         'getState' | 'preflight' | 'lastReport' | 'start' | 'stop' | 'resolve' | 'retryUpload' | 'dismiss' | 'command'
-        | 'steps' | 'consoleLines' | 'select' | 'isBusy' | 'resumeUnfinishedUploads' | 'getProgress' | 'syncNow'>;
+        | 'steps' | 'consoleLines' | 'select' | 'isBusy' | 'resumeUnfinishedUploads' | 'getProgress' | 'syncNow' | 'cancel' | 'repair'>;
     settings: Pick<SettingsService, 'get' | 'set' | 'getServer' | 'setServer' | 'choosePlayitPath'>;
     sync: Pick<SyncEngine, 'getRules' | 'setRules'>;
     transfers: Pick<TransferEngine, 'snapshot'>;
@@ -142,6 +143,13 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
     handle('session:stop', () => d.session.stop());
     handle('session:resolve', (serverId, choice) => d.session.resolve(id(serverId), oneOf(choice, CHOICES, 'choice')));
     handle('session:retryUpload', () => d.session.retryUpload());
+    handle('session:cancel', () => d.session.cancel());
+    handle('session:repair', async (serverId) => {
+        const sid = id(serverId);
+        // Repair overwrites what another member uploaded: only the owner decides that.
+        if (!(await d.servers.isOwner(sid))) throw new AppError('FORBIDDEN', 'Only the owner of the server can repair it.');
+        return d.session.repair(sid);
+    });
     handle('session:syncNow', (serverId, direction) => d.session.syncNow(id(serverId), oneOf(direction, ['down', 'up'] as const, 'direction')));
     handle('session:dismiss', () => d.session.dismiss());
     handle('session:command', (command) => d.session.command(text(command, 'command', { max: 1000 })));
