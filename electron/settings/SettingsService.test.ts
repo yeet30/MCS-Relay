@@ -58,6 +58,13 @@ describe('app settings', () => {
         expect(settings.get().usePlayitgg).toBe(false);
     });
 
+    test('the theme starts light, keeps a valid choice and refuses unknown ones', () => {
+        expect(settings.get().theme).toBe('light');
+        expect(settings.set({ theme: 'mint' }).theme).toBe('mint');
+        expect(new SettingsService({ appData, dialogs, platform: 'win32' }).get().theme).toBe('mint');
+        expectInvalid(() => settings.set({ theme: 'neon' as unknown as AppSettings['theme'] }));
+    });
+
     test('joinedServerIds cannot be replaced through set', () => {
         settings.addJoined('a');
         settings.set({ joinedServerIds: [] } as unknown as Partial<AppSettings>);
