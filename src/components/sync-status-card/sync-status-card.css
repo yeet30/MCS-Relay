@@ -60,6 +60,31 @@
         flex-wrap: wrap;
     }
 
+    .sync-danger {
+        display: flex;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 9px;
+        border-left: 3px solid var(--bad);
+        background: rgba(224, 108, 117, 0.12);
+        color: var(--bad);
+
+        svg {
+            flex: none;
+            margin-top: 2px;
+        }
+
+        b {
+            font-size: 0.88rem;
+        }
+
+        p {
+            margin: 2px 0 0;
+            font-size: 0.8rem;
+            color: rgb(236, 200, 204);
+        }
+    }
+
     .sync-checking {
         margin: 0;
         display: flex;

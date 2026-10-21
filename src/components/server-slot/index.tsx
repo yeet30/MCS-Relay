@@ -10,6 +10,7 @@ import { request } from '../../stores/request';
 import { chooseLocalPath } from '../../stores/serverActions';
 import { useServersStore } from '../../stores/serversStore';
 import { useSessionStore } from '../../stores/sessionStore';
+import { useUiStore } from '../../stores/uiStore';
 import PermissionsList from '../permissions-list';
 
 const MAX_NAME = 60;
@@ -27,6 +28,8 @@ export default function ServerSlot({ server }: { server: ServerSummary }) {
     const [isEditing, setIsEditing] = useState(false);
     const [nameBuffer, setNameBuffer] = useState(server.name);
     const [loading, setLoading] = useState<'edit' | 'delete' | null>(null);
+    const renameId = useUiStore((s) => s.renameId);
+    const cardRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (!isEditing) setNameBuffer(server.name);
@@ -72,8 +75,15 @@ World files you uploaded stay in the server, because the others still need them,
         setTimeout(() => inputRef.current?.select(), 0);
     }
 
+    // A server that was just created opens with its name selected, as if the pen button had been pressed.
+    useEffect(() => {
+        if (renameId !== server.id || !useUiStore.getState().takeRename(server.id)) return;
+        cardRef.current?.scrollIntoView({ block: 'nearest' });
+        startEditing();
+    }, [renameId, server.id]);
+
     return (
-        <div className='server-card'>
+        <div className={`server-card ${isEditing ? 'renaming' : ''}`} ref={cardRef}>
             {popup}
             <div className='server-card-head'>
                 <span className='server-initial' aria-hidden>{server.name.charAt(0).toUpperCase() || '?'}</span>
@@ -114,7 +124,7 @@ World files you uploaded stay in the server, because the others still need them,
                     {server.localPath ?? 'No folder on this PC yet'}
                 </span>
                 <button
-                    className='text-button'
+                    className={`text-button ${server.localPath ? '' : 'primary'}`}
                     disabled={pathBusy || inUse}
                     title={inUse ? 'The folder cannot change during a session' : 'Choose the folder on this PC'}
                     onClick={() => void chooseLocalPath(server.id)}

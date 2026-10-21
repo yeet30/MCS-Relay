@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import type { LockContent, LockView, SessionState, SyncPlan, SyncReport, TransferSnapshot } from '../../shared/types';
 import {
-    cancelMode, cancelQuestion, canStart, cleanupLines, continueAction, describeReport, hostingMessage, isSessionBusy, livePresence,
+    abandonControl, cancelMode, cancelQuestion, canStart, incompleteStartQuestion, incompleteWarning, cleanupLines, continueAction, describeReport, hostingMessage, isSessionBusy, livePresence,
     manualSyncBlockers, planHasFiles, powerMode, repairBlocker, startBlocker, stopControl, transferFraction,
 } from './sync';
 
@@ -183,7 +183,7 @@ describe('describeReport', () => {
         const lock = stale({ phase: 'uploading', host: { name: 'Steve', email: 'steve@example.com' } }, 60);
         const copy = describeReport(report({ status: 'unfinished-upload', lock }), ctx);
         expect(copy.title).toBe('Steve\'s last upload didn\'t finish');
-        expect(copy.body).toBe('It stopped halfway today at 19:59, so the cloud is a mix of old and new files. Ask Steve to open Drive Launcher; it will finish the upload on its own.');
+        expect(copy.body).toBe('It stopped halfway today at 19:59, so the cloud is a mix of old and new files. Ask Steve to open MCS-Relay; it will finish the upload on its own.');
     });
 
     test('new server, missing folder and errors', () => {
@@ -198,8 +198,8 @@ test('cleanupLines', () => {
     const nameFor = (email: string) => (email === 'alex@example.com' ? 'Alex' : email);
     expect(cleanupLines({ mine: 0, others: [] }, nameFor)).toEqual([]);
     expect(cleanupLines({ mine: 2, others: [{ ownerEmail: 'alex@example.com', count: 3 }, { ownerEmail: 'x@example.com', count: 1 }] }, nameFor)).toEqual([
-        '3 deleted files are waiting for Alex to open Drive Launcher.',
-        '1 deleted file is waiting for x@example.com to open Drive Launcher.',
+        '3 deleted files are waiting for Alex to open MCS-Relay.',
+        '1 deleted file is waiting for x@example.com to open MCS-Relay.',
         'Cleaning up 2 of your old files.',
     ]);
 });
@@ -277,7 +277,7 @@ describe('an unfinished upload of this PC', () => {
     test('is named as this PC\'s, not another PC\'s', () => {
         expect(hostingMessage(leftover, 'alex@example.com')).toBe('has an unfinished upload from this PC.');
         expect(hostingMessage({ ...leftover, lock: lockContent({ phase: 'running' }) }, 'alex@example.com'))
-            .toBe('was still reserved by this PC when Drive Launcher closed.');
+            .toBe('was still reserved by this PC when MCS-Relay closed.');
     });
 
     test('the card says how to finish it', () => {
@@ -295,5 +295,34 @@ describe('manualSyncBlockers', () => {
         expect(manualSyncBlockers(report({ status: 'diverged', pendingChoice: 'keep-cloud' })).down).toBeNull();
         expect(manualSyncBlockers(report({ unfinishedHere: true })).up).toBeNull();
         expect(manualSyncBlockers(null)).toEqual({ down: null, up: null });
+    });
+});
+
+describe('a revision saved from a cancelled upload', () => {
+    const inc = { by: { name: 'Alex', email: 'alex@example.com' }, at: new Date(2026, 9, 14, 19, 0).toISOString(), sent: 812, planned: 2310 };
+    const ctx = { myEmail: 'steve@example.com', nameFor: (email: string) => email, now: NOW };
+
+    test('Cancel… shows next to Pause for uploads only, and works when Pause does', () => {
+        expect(abandonControl('stop', 'uploading')).toEqual({ show: true, reason: null });
+        expect(abandonControl('stop', 'stopping')).toMatchObject({ show: true, reason: expect.stringContaining('saving the world') });
+        expect(abandonControl('up', 'checking').show).toBe(false);
+        expect(abandonControl('start', 'downloading').show).toBe(false);
+        expect(abandonControl('repair', 'uploading').show).toBe(false);
+    });
+
+    test('everyone sees a red warning that names who cancelled and how much arrived', () => {
+        const others = incompleteWarning(report({ status: 'cloud-newer', remoteRevision: 43, remoteIncomplete: inc }), ctx);
+        expect(others).toMatchObject({ title: 'Revision 43 is incomplete', body: expect.stringContaining('Alex cancelled their upload') });
+        expect(others?.body).toContain('812 of 2,310 changes');
+        expect(incompleteWarning(report({ remoteIncomplete: inc }), { ...ctx, myEmail: 'alex@example.com' })?.body).toMatch(/^You cancelled/);
+        expect(incompleteWarning(report(), ctx)).toBeNull();
+    });
+
+    test('starting it asks first, except on the uploader\'s PC that still has the whole session', () => {
+        expect(incompleteStartQuestion(report({ status: 'cloud-newer', remoteRevision: 43, remoteIncomplete: inc }), 'steve@example.com'))
+            .toMatchObject({ confirmText: 'Start anyway', message: expect.stringContaining('Alex cancelled half way') });
+        expect(incompleteStartQuestion(report({ status: 'local-changes', baseRevision: 43, remoteRevision: 43, remoteIncomplete: inc }), 'alex@example.com'))
+            .toBeNull();
+        expect(incompleteStartQuestion(report(), 'steve@example.com')).toBeNull();
     });
 });

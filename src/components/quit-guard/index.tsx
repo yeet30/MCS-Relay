@@ -12,12 +12,12 @@ function quitMessage(prompt: QuitPrompt): string {
         case 'running':
             return 'You are hosting a server. Quitting stops it and uploads the world to the cloud first. This may take a moment.';
         case 'upload-pending':
-            return 'Your last upload has not finished. Drive Launcher finishes it the next time you open it; until then nobody else can start this server.';
+            return 'Your last upload has not finished. MCS-Relay finishes it the next time you open it; until then nobody else can start this server.';
         case 'uploading':
-            return 'Drive Launcher is still saving the world to the cloud. Quitting waits until it is done. To quit sooner, pause the upload first: it continues the next time you open Drive Launcher.';
+            return 'MCS-Relay is still saving the world to the cloud. Quitting waits until it is done. To quit sooner, pause the upload first: it continues the next time you open MCS-Relay.';
         case 'stopping':
         case 'releasing':
-            return 'Drive Launcher is still saving the world to the cloud. Quitting waits until it is done.';
+            return 'MCS-Relay is still saving the world to the cloud. Quitting waits until it is done.';
         default:
             return 'The server is starting. Quitting cancels the start and frees the server for others.';
     }

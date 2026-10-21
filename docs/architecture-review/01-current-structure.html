@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Drive Launcher As-Built</title>
+<title>MCS-Relay As-Built</title>
 <style>
-/* Drive Launcher architecture review: shared stylesheet.
+/* MCS-Relay architecture review: shared stylesheet.
    Layout: one reading column (46rem of text) inside a 52rem page; figures, tables and code may use the full width.
    Visual language: an engineering drawing set. Part 1 marks problems in redline red, Part 2 draws the plan in blueprint blue. */
 :root {
@@ -400,7 +400,7 @@ hr.end { border: 0; border-top: 3px solid var(--ink); margin: 3rem 0 1rem; }
 }
 
 @page {
-  @bottom-left { content: "Drive Launcher As-Built · Part 1 of 2"; font-family: Bahnschrift, "Segoe UI", sans-serif; font-size: 8pt; color: #6f7c78; }
+  @bottom-left { content: "MCS-Relay As-Built · Part 1 of 2"; font-family: Bahnschrift, "Segoe UI", sans-serif; font-size: 8pt; color: #6f7c78; }
   @bottom-right { content: counter(page) " / " counter(pages); font-family: Bahnschrift, "Segoe UI", sans-serif; font-size: 8pt; color: #6f7c78; }
 }
 </style>
@@ -409,8 +409,8 @@ hr.end { border: 0; border-top: 3px solid var(--ink); margin: 3rem 0 1rem; }
 <main class="page">
 
 <header class="masthead">
-  <div class="kicker"><span class="part">Part 1 of 2</span><span>Architecture review</span><span>Drive Launcher</span></div>
-  <h1>Drive Launcher As-Built</h1>
+  <div class="kicker"><span class="part">Part 1 of 2</span><span>Architecture review</span><span>MCS-Relay</span></div>
+  <h1>MCS-Relay As-Built</h1>
   <p class="dek">How the app works today, traced through the code: the hosting session, the lock, the file watcher, the manifest and the file transfers. Problems are marked in red on the diagrams and listed at the end with their file and line.</p>
   <dl class="titleblock">
     <div><dt>Drawing</dt><dd>Session, sync and UI</dd></div>
@@ -418,7 +418,7 @@ hr.end { border: 0; border-top: 3px solid var(--ink); margin: 3rem 0 1rem; }
     <div><dt>Revision</dt><dd>rewritten-manifest @ 6d97a0a + uncommitted changes in 3 files</dd></div>
     <div><dt>Date</dt><dd>14 October 2026</dd></div>
     <div><dt>Scope</dt><dd>electron/ (main.ts + 7 services), src/ (24 components, 4 stores)</dd></div>
-    <div><dt>Companion</dt><dd>Part 2 · Drive Launcher Blueprint</dd></div>
+    <div><dt>Companion</dt><dd>Part 2 · MCS-Relay Blueprint</dd></div>
   </dl>
 </header>
 
@@ -592,7 +592,7 @@ hr.end { border: 0; border-top: 3px solid var(--ink); margin: 3rem 0 1rem; }
 <svg class="dg" viewBox="0 0 760 430" role="img" aria-label="Wireframe of the main window: a members panel on the left with players and uptime, the Power button, folder cog, server picker, progress lines and playit.gg address in the middle, the Java console one screen further down, and the profile picture with the burger menu on the right. A legend on the right explains the eight numbered parts.">
   <rect x="10" y="10" width="520" height="410" rx="6" class="box"/>
   <rect x="10" y="10" width="520" height="22" rx="6" class="box-soft"/>
-  <text x="22" y="25" class="xs">Drive Launcher</text>
+  <text x="22" y="25" class="xs">MCS-Relay</text>
   <text x="514" y="25" class="xs end">–     ✕</text>
   <line x1="88" y1="32" x2="88" y2="420" class="ln-faint"/>
   <line x1="452" y1="32" x2="452" y2="420" class="ln-faint"/>
@@ -1559,7 +1559,7 @@ hr.end { border: 0; border-top: 3px solid var(--ink); margin: 3rem 0 1rem; }
 </div>
 
 <hr class="end">
-<p class="endnote">Continue with Part 2, Drive Launcher Blueprint: the same app with a structure that removes most of these findings at the root, explained step by step.</p>
+<p class="endnote">Continue with Part 2, MCS-Relay Blueprint: the same app with a structure that removes most of these findings at the root, explained step by step.</p>
 
 </main>
 </body>

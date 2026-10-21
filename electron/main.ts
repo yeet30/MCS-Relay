@@ -22,6 +22,8 @@ import { LauncherFiles } from './sync/launcherFiles';
 import { SyncEngine } from './sync/SyncEngine';
 import { TransferEngine } from './transfer/TransferEngine';
 
+const DATA_FOLDER = 'minecraft-distributed-hosting';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ├─┬ dist            the renderer
@@ -37,6 +39,9 @@ let tray: Tray | null = null;
 
 /* ------------------------------------------------------------------ services (created once) */
 
+// The data folder keeps the name it had before the app was called MCS-Relay: logins, server folders, sync state
+// and unfinished uploads stay where they are. Set before anything (the single-instance lock too) uses it.
+app.setPath('userData', path.join(app.getPath('appData'), DATA_FOLDER));
 const userData = app.getPath('userData');
 const appData = new AppData(userData);
 const dialogs = createDialogs(() => win);
@@ -176,6 +181,7 @@ function createWindow(): void {
         // The chime is played by the page, also while the window is hidden in the tray.
         webPreferences: { preload: path.join(__dirname, 'preload.mjs'), autoplayPolicy: 'no-user-gesture-required', backgroundThrottling: false },
     });
+    win.removeMenu();                                 // no File / Edit / View bar: the app has its own menu
     win.on('minimize', () => win?.hide());            // minimised to the tray
     win.on('close', (event) => {
         if (quitAllowed) return;
@@ -200,7 +206,7 @@ function createWindow(): void {
 
 function createTray(): void {
     tray = new Tray(nativeImage.createFromPath(path.join(process.env.VITE_PUBLIC, 'icon-16x16.png')));
-    tray.setToolTip('Drive Launcher');
+    tray.setToolTip('MCS-Relay');
     tray.setContextMenu(Menu.buildFromTemplate([
         { label: 'Open', click: showWindow },
         { label: 'Quit', click: requestQuit },
@@ -232,7 +238,7 @@ if (!app.requestSingleInstanceLock()) {
     });
 
     // Windows shows notifications only for an app with an id (in development: the Electron binary).
-    if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'com.yeet.drivelauncher' : process.execPath);
+    if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'com.yeet.mcsrelay' : process.execPath);
 
     void app.whenReady().then(async () => {
         appData.migrateLegacy();

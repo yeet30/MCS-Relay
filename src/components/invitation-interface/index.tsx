@@ -63,7 +63,7 @@ export default function InvitationInterface({ serverId, serverName, onDone }: { 
                 <span className='field-label'>Message <small>(optional)</small></span>
                 <textarea rows={2} placeholder='Come build with us!' value={message} onChange={(e) => setMessage(e.target.value)} />
             </label>
-            <p className='invite-note'>Google Drive emails them a link. They paste it into "Join a server" in Drive Launcher.</p>
+            <p className='invite-note'>Google Drive emails them a link. They paste it into "Join a server" in MCS-Relay.</p>
             <div className='form-buttons'>
                 <button type='button' className='text-button' onClick={onDone}>Cancel</button>
                 <button type='submit' className='text-button primary' disabled={sending || email.trim() === ''}>

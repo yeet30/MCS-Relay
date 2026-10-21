@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Drive Launcher Blueprint</title>
+<title>MCS-Relay Blueprint</title>
 <style>
-/* Drive Launcher architecture review: shared stylesheet.
+/* MCS-Relay architecture review: shared stylesheet.
    Layout: one reading column (46rem of text) inside a 52rem page; figures, tables and code may use the full width.
    Visual language: an engineering drawing set. Part 1 marks problems in redline red, Part 2 draws the plan in blueprint blue. */
 :root {
@@ -406,7 +406,7 @@ h2 .sec { color: var(--plan); }
 pre { border-left-color: var(--plan); }
 .titleblock { border-color: var(--plan); }
 @page {
-  @bottom-left { content: "Drive Launcher Blueprint · Part 2 of 2"; font-family: Bahnschrift, "Segoe UI", sans-serif; font-size: 8pt; color: #6f7c78; }
+  @bottom-left { content: "MCS-Relay Blueprint · Part 2 of 2"; font-family: Bahnschrift, "Segoe UI", sans-serif; font-size: 8pt; color: #6f7c78; }
   @bottom-right { content: counter(page) " / " counter(pages); font-family: Bahnschrift, "Segoe UI", sans-serif; font-size: 8pt; color: #6f7c78; }
 }
 </style>
@@ -415,13 +415,13 @@ pre { border-left-color: var(--plan); }
 <main class="page">
 
 <header class="masthead">
-  <div class="kicker"><span class="part">Part 2 of 2</span><span>Architecture review</span><span>Drive Launcher</span></div>
-  <h1>Drive Launcher Blueprint</h1>
+  <div class="kicker"><span class="part">Part 2 of 2</span><span>Architecture review</span><span>MCS-Relay</span></div>
+  <h1>MCS-Relay Blueprint</h1>
   <p class="dek">The same app, the same screens and the same idea, on a structure you can trust: one owner for the session, a lock that holds for as long as the work does, a sync that knows what changed on each side, and transfers that run in parallel and report their progress.</p>
   <dl class="titleblock">
     <div><dt>Drawing</dt><dd>Session, sync and UI</dd></div>
     <div><dt>Status</dt><dd>Proposed design</dd></div>
-    <div><dt>Builds on</dt><dd>Part 1 · Drive Launcher As-Built (findings F1–F41)</dd></div>
+    <div><dt>Builds on</dt><dd>Part 1 · MCS-Relay As-Built (findings F1–F41)</dd></div>
     <div><dt>Date</dt><dd>14 October 2026</dd></div>
     <div><dt>Stack</dt><dd>Unchanged: Electron, React, zustand, chokidar, plus Bottleneck</dd></div>
     <div><dt>Level</dt><dd>Junior-friendly: every new term is explained where it first appears</dd></div>
@@ -1058,7 +1058,7 @@ async function md5OfFile(file: string): Promise&lt;string&gt; {
   </div>
   <div class="mock">
     <div class="mock-head"><span class="mock-pill bad">Unfinished upload</span><span class="mock-title">Steve's last upload didn't finish</span></div>
-    <p class="mock-sub">It stopped halfway today at 17:32, so the cloud is a mix of old and new files. Ask Steve to open Drive Launcher; it will finish the upload on its own.</p>
+    <p class="mock-sub">It stopped halfway today at 17:32, so the cloud is a mix of old and new files. Ask Steve to open MCS-Relay; it will finish the upload on its own.</p>
     <div class="mock-btns"><span class="mock-btn">Show details</span></div>
   </div>
 </div>
@@ -1551,7 +1551,7 @@ const canStop = phase === 'running';</code></pre>
 <p>The app's data folder gets one subfolder per server, so nothing leaks from one server to another (F14), and the server folder itself contains only server files:</p>
 <figure>
 <div class="frame">
-<pre class="tree" aria-label="App data folder layout">%APPDATA%/Drive Launcher/
+<pre class="tree" aria-label="App data folder layout">%APPDATA%/MCS-Relay/
   token.json
   settings.json                app-wide: window, last selected server
   servers/

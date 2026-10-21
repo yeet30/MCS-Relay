@@ -1,8 +1,8 @@
 {
-  "name": "minecraft-distributed-hosting",
+  "name": "mcs-relay",
   "private": true,
   "version": "0.0.0",
-  "description": "Distributed Minecraft server hosting",
+  "description": "MCS-Relay: host a Minecraft server from a shared Google Drive, taking turns with friends",
   "author": "Yeet30",
   "type": "module",
   "scripts": {
@@ -14,8 +14,8 @@
     "preview": "vite preview"
   },
   "build": {
-    "appId": "com.yeet.drivelauncher",
-    "productName": "Drive Launcher",
+    "appId": "com.yeet.mcsrelay",
+    "productName": "MCS-Relay",
     "directories": {
       "output": "release"
     },

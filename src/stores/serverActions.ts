@@ -5,6 +5,7 @@ import { useNoticeStore } from './noticeStore';
 import { request } from './request';
 import { useServersStore } from './serversStore';
 import { useSessionStore } from './sessionStore';
+import { useUiStore } from './uiStore';
 
 export type ConfirmFn = (options: { message: string; confirmText?: string; cancelText?: string }) => Promise<boolean>;
 
@@ -38,7 +39,8 @@ async function offerLocalPath(server: ServerSummary, confirm: ConfirmFn, what: s
     if (!path) notices.info(`You can choose the folder for "${server.name}" later in Settings > Drive Folders.`);
 }
 
-/** Creates a server folder in my Drive, then offers to choose its local folder. */
+/** Creates a server folder in my Drive, then opens Drive Folders with its name ready to edit: the place where the
+ *  server is managed later, so the user meets it right away. Its folder on this PC is chosen there too. */
 export async function createServer(confirm: ConfirmFn): Promise<ServerSummary | null> {
     const accepted = await confirm({
         message: 'This creates a new server folder inside "Minecraft Shared Servers" in your Google Drive. You can own up to 3 servers.\n\nThe first upload of a server takes much longer than later ones, because every folder and file has to be created on Google Drive.\n\nDon\'t change the files in a server folder by hand while someone is hosting it.',
@@ -50,7 +52,7 @@ export async function createServer(confirm: ConfirmFn): Promise<ServerSummary | 
     if (!res.ok) return null;
     const hadSelection = useServersStore.getState().selectedId !== null;
     await useServersStore.getState().reload({ prefer: hadSelection ? null : res.value.id });
-    await offerLocalPath(res.value, confirm, `"${res.value.name}" was created.`);
+    useUiStore.getState().openDriveFolders(res.value.id);
     return res.value;
 }
 

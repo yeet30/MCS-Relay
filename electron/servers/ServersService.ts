@@ -398,7 +398,7 @@ export function initialRules(legacy: string[]): string[] {
 }
 
 function inviteMessage(serverId: string, note: string): string {
-    const instructions = 'You have been invited to a shared Minecraft server. To join, open Drive Launcher, '
+    const instructions = 'You have been invited to a shared Minecraft server. To join, open MCS-Relay, '
         + `choose "Join a server" and paste this server ID (or the folder link from this email):\n\n${serverId}`;
     return note ? `${note}\n\n${instructions}` : instructions;
 }

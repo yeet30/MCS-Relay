@@ -27,7 +27,7 @@ export interface SessionDeps {
     lock: Pick<LockService, 'inspect' | 'claim' | 'update' | 'release' | 'releaseIfMine' | 'isHolding'>;
     sync: Pick<SyncEngine,
         'preflight' | 'resolve' | 'download' | 'uploadSession' | 'loadRules' | 'hasJournal' | 'serversWithJournal'
-        | 'discardJournal' | 'baseRevision' | 'cleanupMyPlaceholders' | 'unfinishedRepair'>;
+        | 'discardJournal' | 'baseRevision' | 'cleanupMyPlaceholders' | 'unfinishedRepair' | 'commitPartial'>;
     changes: Pick<ChangeTracker, 'start' | 'stop' | 'clear' | 'all'>;
     minecraft: Pick<MinecraftProcess, 'start' | 'stopAndWait' | 'isRunning' | 'send'>;
     playit: Pick<PlayitProcess, 'start' | 'stop'>;
@@ -80,7 +80,7 @@ function checkRepairable(report: SyncReport): void {
     }
     const holder = report.lock.lock?.host.name ?? 'the other member';
     if (report.remoteRevision === null) {
-        throw new AppError('INVALID', `The cloud has no saved version yet, so there is nothing to repair. Ask ${holder} to open Drive Launcher to finish the first upload.`);
+        throw new AppError('INVALID', `The cloud has no saved version yet, so there is nothing to repair. Ask ${holder} to open MCS-Relay to finish the first upload.`);
     }
     if (report.baseRevision !== report.remoteRevision) {
         throw new AppError('INVALID', report.baseRevision === null
@@ -100,6 +100,8 @@ export class SessionController {
     private current: Promise<void> | null = null;
     private lockLost = false;
     private cancelled = false;
+    /** The cancel is for good: what was sent is saved as an incomplete version instead of pausing. */
+    private abandoning = false;
     private pollTimer: ReturnType<typeof setTimeout> | null = null;
     private nextStepId = 1;
     private lastTransfer: TransferSnapshot | null = null;
@@ -212,6 +214,7 @@ export class SessionController {
     private async runStart(serverId: string): Promise<void> {
         this.stopPolling();
         this.cancelled = false;
+        this.abandoning = false;
         this.abort = new AbortController();
         const signal = this.abort.signal;
         this.setState({ ...IDLE, phase: 'checking', serverId });
@@ -489,6 +492,7 @@ export class SessionController {
         const paused = this.state.error === null;
         this.lockLost = false;
         this.cancelled = false;
+        this.abandoning = false;
         this.abort = new AbortController();
         this.setState({ javaRunning: false, error: null });
         const holding = this.d.lock.isHolding(serverId);
@@ -529,6 +533,11 @@ export class SessionController {
             await this.d.sync.uploadSession(serverId, this.abort?.signal, this.progress, { repair: kind === 'repair' });
         } catch (err) {
             if (this.lockLost) return;
+            if (this.cancelled && this.abandoning) {
+                this.progress.finish('cancelled', 'The upload was cancelled');
+                await this.finishPartial(serverId);
+                return;
+            }
             if (this.cancelled) {
                 await this.pauseUpload(serverId, repair);
                 return;
@@ -559,6 +568,87 @@ export class SessionController {
             this.announce(serverId, 'done', `${this.nameOf(serverId)} is saved to the cloud`,
                 `${kind === 'retry' ? 'The retried upload finished' : 'Uploaded'} in ${this.elapsed()}. The server is free for the others.`);
         }
+        void this.refreshAfterSession(serverId);
+    }
+
+    /** Cancels the upload for good, during it or while it is paused: what reached Google Drive becomes the next
+     *  revision, marked incomplete (everyone is warned before they play it), the server is freed, and the rest of
+     *  this PC's changes stay for its next upload. Not for repairs, which can only pause. */
+    abandonUpload(): Promise<void> {
+        const serverId = this.state.serverId;
+        if (!serverId) return Promise.reject(new AppError('INVALID', 'There is no upload to cancel.'));
+        if (this.d.sync.unfinishedRepair(serverId)) {
+            return Promise.reject(new AppError('INVALID', 'A repair cannot be cancelled half way. Pause it and continue it later.'));
+        }
+        const phase = this.state.phase;
+        const kind = this.progress.snapshot().kind;
+        const uploading = kind === 'stop' || kind === 'retry' || kind === 'resume' || kind === 'up';
+        if (uploading && (phase === 'uploading' || phase === 'claiming') && this.abort && !this.cancelled) {
+            this.abandoning = true;
+            return this.cancel();
+        }
+        if (phase === 'upload-pending' && !this.d.minecraft.isRunning()) {
+            const run = this.runAbandon(serverId);
+            this.current = run.catch(() => undefined);
+            return run;
+        }
+        return Promise.reject(new AppError('INVALID', 'The upload cannot be cancelled at this moment.'));
+    }
+
+    /** From a paused (or failed) upload: reserve the server again if needed, then save what was sent. */
+    private async runAbandon(serverId: string): Promise<void> {
+        this.lockLost = false;
+        this.cancelled = false;
+        this.abandoning = false;
+        this.abort = new AbortController();
+        this.setState({ error: null, javaRunning: false });
+        if (!this.d.lock.isHolding(serverId)) {
+            this.setState({ phase: 'claiming' });
+            try {
+                await this.d.lock.claim(serverId, this.d.sync.baseRevision(serverId), { phase: 'uploading', allowStaleFromMe: true });
+            } catch (err) {
+                const info = toAppError(err);
+                this.setState({ phase: 'upload-pending', error: info });
+                throw err;
+            }
+        }
+        await this.finishPartial(serverId);
+    }
+
+    /** Saves what the cancelled upload sent and frees the server. On failure the upload waits again
+     *  (upload-pending), so it can still be continued or cancelled once more. */
+    private async finishPartial(serverId: string): Promise<void> {
+        this.setState({ phase: 'releasing' });
+        this.progress.begin('Cancelling the upload', [
+            { key: 'commit', label: 'Saving what was sent', total: 1 },
+            { key: 'cleanup', label: 'Cleaning up on Google Drive', total: 1 },
+            { key: 'release', label: 'Releasing the server', total: 1 },
+        ], { kind: 'up', serverId });
+        let saved: Awaited<ReturnType<SessionDeps['sync']['commitPartial']>>;
+        try {
+            saved = await this.d.sync.commitPartial(serverId, this.progress);
+        } catch (err) {
+            const info = toAppError(err);
+            this.progress.finish('failed', info.message);
+            this.setState({ phase: 'upload-pending', error: info });
+            this.announce(serverId, 'failed', `The upload of ${this.nameOf(serverId)} could not be cancelled`, info.message);
+            return;
+        }
+        if (!saved) {
+            this.progress.skip('cleanup');
+            this.step('Nothing had reached Google Drive yet, so the cloud did not change', 'done', 'major');
+        }
+        this.progress.enter('release', 'Releasing the server');
+        await this.d.lock.releaseIfMine(serverId);
+        this.progress.complete('release', 'The server is free for the others');
+        this.progress.finish('done');
+        this.setState({ ...IDLE });
+        const incomplete = saved !== null && (saved.planned === null || saved.sent < saved.planned);
+        this.announce(serverId, 'done', `The upload of ${this.nameOf(serverId)} was cancelled`, !saved
+            ? 'Nothing had been sent, so the cloud did not change. Your changes stay on this PC.'
+            : incomplete
+                ? `Revision ${saved.revision} is saved as incomplete. The rest of your changes stay on this PC for your next upload.`
+                : `Everything had already been sent: revision ${saved.revision} is complete.`);
         void this.refreshAfterSession(serverId);
     }
 
@@ -593,6 +683,7 @@ export class SessionController {
     private async checkForSync(serverId: string, title: string, plan: StagePlan[], run: RunInfo): Promise<SyncReport | null> {
         this.stopPolling();
         this.cancelled = false;
+        this.abandoning = false;
         this.abort = new AbortController();
         const signal = this.abort.signal;
         this.setState({ ...IDLE, phase: 'checking', serverId });
@@ -734,6 +825,7 @@ export class SessionController {
     private async runRepair(serverId: string): Promise<void> {
         this.stopPolling();
         this.cancelled = false;
+        this.abandoning = false;
         this.lockLost = false;
         this.abort = new AbortController();
         const signal = this.abort.signal;
@@ -886,6 +978,7 @@ export class SessionController {
             for (const serverId of this.d.sync.serversWithJournal()) {
                 if (this.isBusy()) break;
                 this.cancelled = false;
+                this.abandoning = false;
                 this.abort = new AbortController();
                 await this.finishUnfinishedUpload(serverId);
             }

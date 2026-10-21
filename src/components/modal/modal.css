@@ -35,28 +35,40 @@
 
     /* Tabs are words with an underline; the one shown is bright with an accent line. */
     #modal-tabs {
-        width: calc(100% - 40px);
+        width: 100%;
+        padding-right: 40px;
+        box-sizing: border-box;
         display: flex;
         flex-direction: row;
         gap: 20px;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 12px;
     }
 
     #title-seperator {
-        height: 1px;
-        width: 100%;
-        margin-top: -1px;
-        margin-bottom: 12px;
-        background-color: var(--line);
+        display: none;
     }
 
     .tab{
+        position: relative;
         margin: 0;
-        padding: 2px 0 8px;
+        padding: 2px 0 9px;
         font-size: 0.95rem;
         font-weight: 600;
         color: var(--muted);
-        border-bottom: 2px solid transparent;
-        transition: color 0.15s ease, border-color 0.15s ease;
+        transition: color 0.15s ease;
+    }
+
+    /* Drawn on top of the tab row's line, so it shows whatever the window's size or position. */
+    .tab.active::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: -1px;
+        height: 2px;
+        border-radius: 2px;
+        background: var(--accent);
     }
 
     #modal-tabs > .tab:only-child {
@@ -70,7 +82,6 @@
 
     .tab.active{
         color: var(--text);
-        border-bottom-color: var(--accent);
     }
 
     #children {

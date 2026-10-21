@@ -46,6 +46,17 @@
         }
     }
 
+    .repair-danger {
+        padding: 8px 10px;
+        border-radius: 8px;
+        border-left: 3px solid var(--bad);
+        background: rgba(224, 108, 117, 0.1);
+
+        h5 {
+            color: var(--bad);
+        }
+    }
+
     .repair-checks {
         list-style: none;
         margin: 0;

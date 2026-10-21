@@ -1,6 +1,6 @@
 import './progress-card.css';
 import { useEffect, useState } from 'react';
-import { Check, ChevronRight, CirclePause, Clock, Info, Loader2, Play, X } from 'lucide-react';
+import { Ban, Check, ChevronRight, CirclePause, Clock, Info, Loader2, Play, X } from 'lucide-react';
 import type {
     LaneView, ServerId, SessionPhase, SessionProgress, StepMessage, TransferKind, TransferSnapshot,
 } from '../../../shared/types';
@@ -9,12 +9,13 @@ import { useConfirm } from '../../hooks/useConfirm';
 import {
     durationBetween, formatBytes, formatBytesPair, formatClock, formatCount, formatDuration, formatEta, formatSpeed, formatWhen,
 } from '../../lib/format';
-import { cancelQuestion, continueAction, stopControl } from '../../lib/sync';
+import { abandonControl, cancelQuestion, continueAction, stopControl } from '../../lib/sync';
 import type { IModalItems } from '../../lib/ui-types';
 import { useNoticeStore } from '../../stores/noticeStore';
 import { request } from '../../stores/request';
 import { useServersStore } from '../../stores/serversStore';
 import { useSessionStore } from '../../stores/sessionStore';
+import CancelUploadDialog from '../cancel-upload-dialog';
 import Modal from '../modal';
 import FailedFiles from './failed-files';
 
@@ -170,6 +171,21 @@ function StopButton({ progress, phase }: { progress: SessionProgress; phase: Ses
     );
 }
 
+/** Cancel for good (next to Pause): opens the warning dialog that says what that does to the world. */
+function AbandonButton({ progress, phase }: { progress: SessionProgress; phase: SessionPhase }) {
+    const [open, setOpen] = useState(false);
+    const { show, reason } = abandonControl(progress.kind, phase);
+    if (!show) return null;
+    return (
+        <>
+            <CancelUploadDialog isOpen={open} running onClose={() => setOpen(false)} />
+            <button className='text-button' disabled={reason !== null} title={reason ?? 'Stop for good and save what was sent'} onClick={() => setOpen(true)}>
+                <Ban size={12} /> Cancel…
+            </button>
+        </>
+    );
+}
+
 /** Runs a cancelled run again; what was already done (downloaded files, the upload journal) is not redone. */
 async function continueRun(action: NonNullable<ReturnType<typeof continueAction>>, serverId: ServerId): Promise<void> {
     let result;
@@ -267,8 +283,9 @@ export default function ProgressCard({ compact = false }: { compact?: boolean })
                 </span>
                 <span className='progress-buttons'>
                     {progress.active && <StopButton progress={progress} phase={phase} />}
+                    {progress.active && <AbandonButton progress={progress} phase={phase} />}
                     <button className='text-button' onClick={openDetails}>
-                        Show details <ChevronRight size={12} />
+                        Details <ChevronRight size={12} />
                     </button>
                 </span>
             </div>

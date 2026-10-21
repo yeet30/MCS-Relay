@@ -1,4 +1,4 @@
-# Drive Launcher rewrite: implementation spec
+# MCS-Relay rewrite: implementation spec
 
 Repository: `C:/Users/ygtyi/Desktop/Code/minecraft-distributed-hosting` (branch `main`).
 Electron 30.5 (Node 20.16), React 18, zustand 5, TypeScript strict, Vite 5 + vite-plugin-electron.

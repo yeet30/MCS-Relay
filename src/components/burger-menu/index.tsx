@@ -1,10 +1,11 @@
 import './burger-menu.css';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FolderTree, LoaderCircle, LogOut, SlidersHorizontal, Terminal } from 'lucide-react';
 import type { IModalItems } from '../../lib/ui-types';
 import { useAuthStore } from '../../stores/authStore';
 import { useServersStore } from '../../stores/serversStore';
+import { useUiStore } from '../../stores/uiStore';
 import JoinedDriveFolders from '../joined-drive-folders';
 import Modal from '../modal';
 import OwnedDriveFolders from '../owned-drive-folders';
@@ -20,6 +21,7 @@ export default function BurgerMenu() {
     const [modalItems, setModalItems] = useState<IModalItems[] | null>(null);
     // Drive Folders holds cards with member lists, so it gets a larger window than the settings panels.
     const [wide, setWide] = useState(false);
+    const driveFoldersRequested = useUiStore((s) => s.driveFoldersRequested);
 
     async function handleLogout() {
         setLoggingOut(true);
@@ -36,6 +38,23 @@ export default function BurgerMenu() {
         setWide(large);
         setModalItems(items);
     }
+
+    const driveFolders: IModalItems[] = [
+        { title: 'Your Folders', content: <OwnedDriveFolders /> },
+        { title: 'Joined Folders', content: <JoinedDriveFolders /> },
+    ];
+
+    // Another part of the app asked for Drive Folders (a server was just created).
+    useEffect(() => {
+        if (!driveFoldersRequested) return;
+        useUiStore.getState().clearDriveFoldersRequest();
+        setIsMenuOpen(false);
+        setWide(true);
+        setModalItems([
+            { title: 'Your Folders', content: <OwnedDriveFolders /> },
+            { title: 'Joined Folders', content: <JoinedDriveFolders /> },
+        ]);
+    }, [driveFoldersRequested]);
 
     const state = isMenuOpen ? 'open' : 'close';
     return (
@@ -66,11 +85,7 @@ export default function BurgerMenu() {
                         <li onClick={() => open([{ title: 'Scripts', content: <ScriptsOptions /> }], true)}>
                             <Terminal size={15} /> Scripts
                         </li>
-                        <li onClick={() => open([
-                            { title: 'Your Folders', content: <OwnedDriveFolders /> },
-                            { title: 'Joined Folders', content: <JoinedDriveFolders /> },
-                        ], true)}
-                        >
+                        <li onClick={() => open(driveFolders, true)}>
                             <FolderTree size={15} /> Drive Folders
                         </li>
                         <li onClick={() => open([{ title: 'Preferences', content: <Preferences /> }])}>

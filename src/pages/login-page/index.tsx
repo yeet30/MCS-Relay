@@ -52,7 +52,7 @@ export default function LoginPage() {
         <div className='login-page'>
             <div className='login-card'>
                 <span className='login-mark' aria-hidden><Box size={34} strokeWidth={1.6} /></span>
-                <h1 className='login-title'>Drive Launcher</h1>
+                <h1 className='login-title'>MCS-Relay</h1>
                 <p className='login-tagline'>
                     Host a Minecraft server from a shared Google Drive. Whoever plays hosts it, and the world is saved for
                     the next one.

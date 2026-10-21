@@ -67,6 +67,10 @@ function setup(overrides: { report?: SyncReport; journal?: boolean } = {}) {
         baseRevision: vi.fn(() => 3),
         cleanupMyPlaceholders: vi.fn(async () => 0),
         unfinishedRepair: vi.fn(() => false),
+        commitPartial: vi.fn(async () => {
+            journal = false;
+            return { revision: 4, sent: 2, planned: 5 } as { revision: number; sent: number; planned: number | null } | null;
+        }),
     };
     const changes = { start: vi.fn(async () => undefined), stop: vi.fn(async () => undefined), clear: vi.fn(), all: vi.fn(() => []) };
     const minecraft = {
@@ -494,5 +498,49 @@ describe('SessionController: repairing another member\'s unfinished upload', () 
             expect(t.lock.claim).not.toHaveBeenCalled();
             expect(t.session.getState().phase).toBe('idle');
         }
+    });
+});
+
+describe('SessionController: cancelling an upload for good', () => {
+    async function uploadingSession() {
+        const t = setup();
+        await t.session.start('s1');
+        t.sync.uploadSession.mockImplementationOnce(((_: string, signal?: AbortSignal) => {
+            t.setJournal(true);
+            return untilAborted(signal);
+        }) as never);
+        const stopping = t.session.stop();
+        await vi.waitFor(() => expect(t.session.getState().phase).toBe('uploading'));
+        return { t, stopping };
+    }
+
+    it('saves what was sent as an incomplete revision and frees the server', async () => {
+        const { t, stopping } = await uploadingSession();
+        await t.session.abandonUpload();
+        await stopping;
+        expect(t.sync.commitPartial).toHaveBeenCalledWith('s1', expect.anything());
+        expect(t.session.getState().phase).toBe('idle');
+        expect(t.lock.releaseIfMine).toHaveBeenCalledWith('s1');
+        expect(t.notes.at(-1)).toMatchObject({ outcome: 'done', body: expect.stringContaining('incomplete') });
+    });
+
+    it('works on a paused upload too', async () => {
+        const { t, stopping } = await uploadingSession();
+        await t.session.cancel();
+        await stopping;
+        expect(t.session.getState().phase).toBe('upload-pending');
+        await t.session.abandonUpload();
+        expect(t.sync.commitPartial).toHaveBeenCalledTimes(1);
+        expect(t.session.getState().phase).toBe('idle');
+    });
+
+    it('keeps the upload waiting when saving fails, and never cancels a repair', async () => {
+        const { t, stopping } = await uploadingSession();
+        t.sync.commitPartial.mockRejectedValueOnce(new AppError('CONFLICT', 'The cloud changed meanwhile.'));
+        await t.session.abandonUpload();
+        await stopping;
+        expect(t.session.getState()).toMatchObject({ phase: 'upload-pending', error: { code: 'CONFLICT' } });
+        t.sync.unfinishedRepair.mockReturnValue(true);
+        await expect(t.session.abandonUpload()).rejects.toThrow(/repair/);
     });
 });

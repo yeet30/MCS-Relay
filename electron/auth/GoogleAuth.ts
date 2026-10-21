@@ -249,13 +249,13 @@ function waitForCallback(server: http.Server, state: string, timeoutMs: number, 
                 return;
             }
             if (settled || url.searchParams.get('state') !== state) {
-                void sendPage(res, 400, page('This sign-in link is no longer valid', 'Close this tab and start the sign-in again from Drive Launcher.'));
+                void sendPage(res, 400, page('This sign-in link is no longer valid', 'Close this tab and start the sign-in again from MCS-Relay.'));
                 return;
             }
             const error = url.searchParams.get('error');
             const code = url.searchParams.get('code');
             if (error || !code) {
-                void sendPage(res, 200, page('Sign-in cancelled', 'You can close this tab and go back to Drive Launcher.'));
+                void sendPage(res, 200, page('Sign-in cancelled', 'You can close this tab and go back to MCS-Relay.'));
                 const message = error === 'access_denied' ? 'Google sign-in was cancelled.' : 'Google sign-in failed. Please try again.';
                 finish(() => reject(notSignedIn(message, error ?? 'no code in the redirect')));
                 return;
@@ -568,10 +568,10 @@ export class GoogleAuth {
             try {
                 ({ tokens } = await client.getToken({ code, codeVerifier, redirect_uri: redirectUri }));
             } catch (err) {
-                await respond(500, page('Sign-in failed', 'Drive Launcher could not finish signing you in. Close this tab and try again.'));
+                await respond(500, page('Sign-in failed', 'MCS-Relay could not finish signing you in. Close this tab and try again.'));
                 throw notSignedIn('Google sign-in could not be completed. Please try again.', describe(err));
             }
-            await respond(200, page('You are signed in', 'You can close this tab and go back to Drive Launcher.'));
+            await respond(200, page('You are signed in', 'You can close this tab and go back to MCS-Relay.'));
             if (abort.signal.aborted) throw abort.signal.reason;
             return tokens;
         } finally {

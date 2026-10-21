@@ -143,13 +143,60 @@ export function stopControl(kind: RunKind | null, phase: SessionPhase): { label:
     }
 }
 
+/** "Cancel upload…" (for good) sits next to Pause while an upload of this PC runs; it works when Pause does. */
+export function abandonControl(kind: RunKind | null, phase: SessionPhase): { show: boolean; reason: string | null } {
+    const show = kind === 'stop' || kind === 'retry' || kind === 'resume' || (kind === 'up' && phase === 'uploading');
+    return { show, reason: show ? stopControl(kind, phase).reason : null };
+}
+
+function sameEmail(a: string, b: string | null): boolean {
+    return b !== null && a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+function changesSent(sent: number, planned: number | null): string {
+    return planned !== null ? `${formatCount(sent)} of ${formatCount(planned)} changes` : plural(sent, 'change');
+}
+
+/** The red box on the status card while the cloud's last revision comes from a cancelled upload. */
+export function incompleteWarning(report: SyncReport, ctx: CopyContext): { title: string; body: string } | null {
+    const inc = report.remoteIncomplete;
+    if (!inc) return null;
+    const mine = sameEmail(inc.by.email, ctx.myEmail);
+    const when = formatWhen(inc.at, ctx.now);
+    const amount = changesSent(inc.sent, inc.planned);
+    return {
+        title: `Revision ${report.remoteRevision ?? '?'} is incomplete`,
+        body: mine
+            ? `You cancelled your upload ${when} after ${amount} reached the cloud. Whoever plays it now gets a mix of your session and the one before; your next upload sends the rest and makes it complete.`
+            : `${inc.by.name || ctx.nameFor(inc.by.email)} cancelled their upload ${when} after ${amount} reached the cloud, so it mixes their session with the one before. It may have broken or regenerated chunks, lost or duplicated items, or players in old places.`,
+    };
+}
+
+/** Asked before starting a revision saved from a cancelled upload. null when there is nothing to ask: the uploader's
+ *  own PC still has the whole session, plays that, and its next upload completes the cloud. */
+export function incompleteStartQuestion(report: SyncReport | null, myEmail: string | null): Question | null {
+    const inc = report?.remoteIncomplete;
+    if (!report || !inc) return null;
+    const mine = sameEmail(inc.by.email, myEmail);
+    if (mine && report.status === 'local-changes' && report.baseRevision === report.remoteRevision) return null;
+    const who = mine ? 'you' : inc.by.name || inc.by.email;
+    const instead = mine
+        ? 'If the PC you uploaded from still has your session, start it there instead: its next upload makes the version complete.'
+        : `If ${who} can still finish their upload, wait for that instead: it makes the version complete.`;
+    return {
+        message: `Start an incomplete version?\n\nRevision ${report.remoteRevision ?? '?'} was saved from an upload ${who} cancelled half way (${changesSent(inc.sent, inc.planned)} reached the cloud), so the world mixes two sessions. It may have broken or regenerated chunks, lost or duplicated items, or players in old places. Whatever happens in it is kept.\n\n${instead}`,
+        confirmText: 'Start anyway',
+        cancelText: 'Don\'t start',
+    };
+}
+
 /** Asked before cancelling or pausing, so the user knows what happens to their files and to the server. */
 export function cancelQuestion(kind: RunKind | null, phase: SessionPhase): Question {
     const cancelText = 'Keep going';
     if (stopControl(kind, phase).label === 'Pause') {
         const what = kind === 'repair' ? 'repair' : 'upload';
         return {
-            message: `Pause the ${what}?\n\nWhat is already uploaded stays on Google Drive, and the server stays reserved for you: nobody else can start it until the ${what} is finished.\n\nUse this to switch to another network, for example. Press "Continue ${what}" when you are ready. If you close Drive Launcher meanwhile, it continues the next time you open it.`,
+            message: `Pause the ${what}?\n\nWhat is already uploaded stays on Google Drive, and the server stays reserved for you: nobody else can start it until the ${what} is finished.\n\nUse this to switch to another network, for example. Press "Continue ${what}" when you are ready. If you close MCS-Relay meanwhile, it continues the next time you open it.`,
             confirmText: `Pause ${what}`,
             cancelText,
         };
@@ -260,7 +307,7 @@ export function hostingMessage(view: LockView | null, myEmail: string | null): s
     const who = view.state === 'mine' ? 'you' : view.leftByThisPc ? 'this PC' : isMe ? 'you on another PC' : host.name;
     if (view.state === 'stale') {
         if (phase === 'uploading') return `has an unfinished upload from ${who}.`;
-        if (view.leftByThisPc) return 'was still reserved by this PC when Drive Launcher closed.';
+        if (view.leftByThisPc) return 'was still reserved by this PC when MCS-Relay closed.';
         return `was last used by ${who}, whose app stopped responding ${formatAgo(view.ageSeconds)} ago.`;
     }
     switch (phase) {
@@ -369,7 +416,7 @@ export function describeReport(report: SyncReport, ctx: CopyContext): CardCopy {
     if (report.unfinishedHere && report.status !== 'no-local-path' && report.status !== 'error' && report.status !== 'unfinished-upload') {
         return {
             tone: 'warn', pill: 'Unfinished upload', title: 'Your last upload didn\'t finish',
-            body: 'It stopped before everything was sent, for example because Drive Launcher was closed. Press Start or "Upload my changes" to finish it; until then nobody else can start this server.',
+            body: 'It stopped before everything was sent, for example because MCS-Relay was closed. Press Start or "Upload my changes" to finish it; until then nobody else can start this server.',
         };
     }
     const { tone, pill } = PILLS[report.status];
@@ -461,8 +508,8 @@ export function describeReport(report: SyncReport, ctx: CopyContext): CardCopy {
                 tone, pill,
                 title: mine ? 'Your last upload didn\'t finish' : `${name}'s last upload didn't finish`,
                 body: mine
-                    ? `It stopped halfway ${stopped}, so the cloud is a mix of old and new files. Drive Launcher finishes it on its own the next time it starts on the PC you played on.`
-                    : `It stopped halfway ${stopped}, so the cloud is a mix of old and new files. Ask ${name} to open Drive Launcher; it will finish the upload on its own.`,
+                    ? `It stopped halfway ${stopped}, so the cloud is a mix of old and new files. MCS-Relay finishes it on its own the next time it starts on the PC you played on.`
+                    : `It stopped halfway ${stopped}, so the cloud is a mix of old and new files. Ask ${name} to open MCS-Relay; it will finish the upload on its own.`,
             };
         }
         case 'no-local-path':
@@ -479,13 +526,13 @@ export function describeReport(report: SyncReport, ctx: CopyContext): CardCopy {
     }
 }
 
-/** "3 deleted files are waiting for Alex to open Drive Launcher", "Cleaning up 2 of your old files". */
+/** "3 deleted files are waiting for Alex to open MCS-Relay", "Cleaning up 2 of your old files". */
 export function cleanupLines(cleanup: PendingCleanup, nameFor: (email: string) => string): string[] {
     const lines: string[] = [];
     for (const other of cleanup.others) {
         if (other.count <= 0) continue;
         const files = other.count === 1 ? '1 deleted file is' : `${formatCount(other.count)} deleted files are`;
-        lines.push(`${files} waiting for ${nameFor(other.ownerEmail)} to open Drive Launcher.`);
+        lines.push(`${files} waiting for ${nameFor(other.ownerEmail)} to open MCS-Relay.`);
     }
     if (cleanup.mine > 0) lines.push(`Cleaning up ${formatCount(cleanup.mine)} of your old ${cleanup.mine === 1 ? 'file' : 'files'}.`);
     return lines;

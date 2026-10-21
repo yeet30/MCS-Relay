@@ -8,6 +8,11 @@
     background: var(--panel-2);
     border: 1px solid var(--line);
     text-align: left;
+    transition: border-color 0.2s ease;
+
+    &.renaming {
+        border-color: rgba(var(--accent-rgb), 0.6);
+    }
 
     .server-card-head {
         display: flex;

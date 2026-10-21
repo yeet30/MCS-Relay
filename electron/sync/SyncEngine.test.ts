@@ -619,6 +619,52 @@ describe('repairing another member\'s unfinished upload', () => {
     });
 });
 
+describe('cancelling an upload for good', () => {
+    beforeEach(async () => {
+        await put(alice, 'server.properties', 'motd=hi');
+        await put(alice, 'world/level.dat', 'level-1');
+        await put(alice, 'world/region/r.0.0.mca', 'region-1');
+        await session(alice);                                       // revision 1
+    });
+
+    it('saves what reached Drive as an incomplete revision; the rest goes up with the next upload', async () => {
+        await put(alice, 'world/level.dat', 'level-2');
+        await put(alice, 'world/region/r.0.0.mca', 'region-2');
+        await put(alice, 'world/region/r.9.9.mca', 'new');
+        const levelId = store.findPath(serverId, 'world/level.dat')!.id;
+        store.failNext('updateContent', 1, () => new DriveError('Forbidden', 403, 'forbidden'), (args) => args[0] === levelId);
+        await expect(alice.sync.uploadSession(serverId)).rejects.toMatchObject({ code: 'UPLOAD_INCOMPLETE' });
+
+        expect(await alice.sync.commitPartial(serverId)).toEqual({ revision: 2, sent: 2, planned: 3 });
+        const saved = (await readManifest(alice.launcher, serverId))!;
+        expect(saved.incomplete).toMatchObject({ by: { email: ALICE.email }, sent: 2, planned: 3 });
+        expect(store.text(saved.files['world/region/r.0.0.mca'].driveId)).toBe('region-2');
+        expect(store.text(saved.files['world/region/r.9.9.mca'].driveId)).toBe('new');
+        expect(store.text(saved.files['world/level.dat'].driveId)).toBe('level-1');     // never sent: still the old one
+        expect(alice.appData.readJournal(serverId)).toBeNull();
+
+        // The others are told before they play it.
+        expect((await bob.sync.preflight(serverId)).remoteIncomplete).toMatchObject({ sent: 2, planned: 3 });
+        // Alice still has the rest, and her next upload sends it and clears the mark.
+        const report = await alice.sync.preflight(serverId);
+        expect(report).toMatchObject({ status: 'local-changes', baseRevision: 2 });
+        expect(report.plan.upload).toEqual(['world/level.dat']);
+        await alice.sync.uploadSession(serverId);
+        const after = (await readManifest(alice.launcher, serverId))!;
+        expect(after.revision).toBe(3);
+        expect(after.incomplete).toBeUndefined();
+        expect(store.text(after.files['world/level.dat'].driveId)).toBe('level-2');
+    });
+
+    it('leaves the cloud alone when nothing had been sent', async () => {
+        await put(alice, 'world/level.dat', 'level-2');
+        alice.appData.writeJournal(serverId, { format: 1, serverId, startedAt: '2026-10-21T10:00:00Z', baseRevision: 1, sessionId: 'x', logged: true, planned: 1 });
+        expect(await alice.sync.commitPartial(serverId)).toBeNull();
+        expect((await readManifest(alice.launcher, serverId))?.revision).toBe(1);
+        expect(alice.appData.readJournal(serverId)).toBeNull();
+    });
+});
+
 describe('deleting a whole server', () => {
     it('hands every file the owner does not own back to its owner', async () => {
         await put(alice, 'a.txt', 'a');

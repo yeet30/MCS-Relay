@@ -26,6 +26,8 @@ export interface UploadJournal {
     logged?: boolean;
     /** The upload repairs another member's unfinished upload: resuming it checks the cloud again. */
     repair?: boolean;
+    /** How many changes (uploads and deletions) the upload means to send. */
+    planned?: number;
 }
 
 /** One line of journal.log. Appended as things happen, so after a crash the file says exactly what reached
@@ -463,6 +465,7 @@ function parseJournal(raw: unknown, id: string): UploadJournal | null {
     const journal: UploadJournal = { format: 1, serverId: id, startedAt: raw.startedAt, baseRevision: raw.baseRevision, sessionId: raw.sessionId };
     if (raw.logged === true) journal.logged = true;
     if (raw.repair === true) journal.repair = true;
+    if (isCount(raw.planned)) journal.planned = raw.planned;
     return journal;
 }
 

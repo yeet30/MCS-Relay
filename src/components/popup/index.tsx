@@ -21,8 +21,8 @@ export default function Popup({ isOpen, onClose, onAccept, confirmingOption, dec
             <div id='popup' onClick={(e) => e.stopPropagation()}>
                 <div id='children' style={{ whiteSpace: 'pre-line' }}>{children}</div>
                 <span id='popup-options'>
-                    <button onClick={onClose}>{decliningOption}</button>
-                    <button onClick={onAccept}>{confirmingOption}</button>
+                    <button className='popup-decline' onClick={onClose}>{decliningOption}</button>
+                    <button className='popup-accept' onClick={onAccept}>{confirmingOption}</button>
                 </span>
                 <button id='popup-close' onClick={onClose}>✕</button>
             </div>

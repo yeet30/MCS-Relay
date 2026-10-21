@@ -13,14 +13,15 @@
     color: var(--text);
     background-color: var(--bg);
 
-    /* Flat, dark greens: cards sit one step lighter than the page, nothing has depth or gradients. */
-    --bg: #111613;
-    --panel: #171d1a;
-    --panel-2: #1e2521;
-    --panel-3: #27302b;
-    --line: #29322d;
-    --text: #e3e8e5;
-    --muted: #8c9791;
+    /* Flat greens leaning to teal (not yellow): cards sit one step lighter than the page, nothing has depth
+       or gradients. */
+    --bg: #1b2822;
+    --panel: #213129;
+    --panel-2: #283b31;
+    --panel-3: #31473b;
+    --line: #35493e;
+    --text: #e6ece9;
+    --muted: #94a89d;
     --good: #98c379;
     --bad: #e06c75;
     --warn: #e5c07b;
@@ -125,6 +126,8 @@ button:focus-visible {
     font-size: 0.8rem;
     font-weight: 400;
     border-radius: 6px;
+    /* A faint outline, so it reads as a button on any background. */
+    border-color: rgba(255, 255, 255, 0.12);
     background-color: rgba(0, 0, 0, 0.3);
 }
 

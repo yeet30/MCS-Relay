@@ -1,9 +1,9 @@
 import './app-cockpit.css';
 import { useState } from 'react';
-import { CloudUpload, LoaderCircle, LogIn, Play, Plus, Power, Square } from 'lucide-react';
+import { Ban, CloudUpload, LoaderCircle, LogIn, Play, Plus, Power, Square } from 'lucide-react';
 import { invoke } from '../../api';
 import { useConfirm } from '../../hooks/useConfirm';
-import { powerMode } from '../../lib/sync';
+import { incompleteStartQuestion, powerMode } from '../../lib/sync';
 import type { PowerMode } from '../../lib/sync';
 import { useNoticeStore } from '../../stores/noticeStore';
 import { request } from '../../stores/request';
@@ -11,6 +11,8 @@ import { createServer } from '../../stores/serverActions';
 import { selectSelectedServer, useServersStore } from '../../stores/serversStore';
 import { lockFor, reportFor, useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useAuthStore } from '../../stores/authStore';
+import CancelUploadDialog from '../cancel-upload-dialog';
 import { DirectoryMenu, TransferMenu } from '../directory-menu';
 import FailedFiles from '../progress-card/failed-files';
 import JoinServer from '../join-server';
@@ -22,6 +24,7 @@ function PowerMessage({ mode }: { mode: Extract<PowerMode, { kind: 'failed' | 'u
     const failures = useSessionStore((s) => s.transfer?.failures);
     const repairing = useSessionStore((s) => s.progress?.kind === 'repair');
     const [busy, setBusy] = useState(false);
+    const [cancelOpen, setCancelOpen] = useState(false);
     const error = mode.error;
     const transferError = error?.code === 'UPLOAD_INCOMPLETE' || error?.code === 'DOWNLOAD_INCOMPLETE';
     const paused = mode.kind === 'upload-pending' && error === null;
@@ -44,12 +47,18 @@ function PowerMessage({ mode }: { mode: Extract<PowerMode, { kind: 'failed' | 'u
             </p>
             {paused && (
                 <p className='power-message-text'>
-                    What is already uploaded stays on Google Drive, so continuing only sends the rest. If you close Drive Launcher, it continues the next time you open it.
+                    What is already uploaded stays on Google Drive, so continuing only sends the rest. If you close MCS-Relay, it continues the next time you open it.
                 </p>
             )}
             {error && <p className='power-message-text'>{error.message}</p>}
             {transferError && failures && failures.length > 0 && <FailedFiles failures={failures} />}
+            <CancelUploadDialog isOpen={cancelOpen} running={false} onClose={() => setCancelOpen(false)} />
             <div className='power-message-buttons'>
+                {mode.kind === 'upload-pending' && !repairing && (
+                    <button className='text-button' disabled={busy} title='Stop for good and save what was sent' onClick={() => setCancelOpen(true)}>
+                        <Ban size={12} /> Cancel upload…
+                    </button>
+                )}
                 {mode.kind === 'failed'
                     ? <button className='text-button' disabled={busy} onClick={() => run('session:dismiss')}>Dismiss</button>
                     : (
@@ -98,7 +107,7 @@ export default function AppCockpit() {
         const prefs = store.settings ?? (await store.load());
         if (!prefs || !prefs.launchServer || prefs.eulaAccepted) return true;
         const accepted = await confirm({
-            message: 'A Minecraft server only runs after you accept the Minecraft End User License Agreement (EULA).\n\nDo you accept it? Drive Launcher remembers your answer for this Google account and writes eula=true into the server folder for you.',
+            message: 'A Minecraft server only runs after you accept the Minecraft End User License Agreement (EULA).\n\nDo you accept it? MCS-Relay remembers your answer for this Google account and writes eula=true into the server folder for you.',
             confirmText: 'I accept',
             cancelText: 'Cancel',
             link: { label: 'Read the Minecraft EULA', url: 'https://www.minecraft.net/en-us/eula' },
@@ -109,6 +118,9 @@ export default function AppCockpit() {
     async function handleStart() {
         if (!selectedId) return;
         if (!(await eulaAccepted())) return;
+        // A version saved from a cancelled upload is a mixed world: say so before anyone plays it.
+        const question = incompleteStartQuestion(reportFor(useSessionStore.getState(), selectedId), useAuthStore.getState().user?.email ?? null);
+        if (question && !(await confirm(question))) return;
         setRequesting(true);
         const res = await invoke('session:start', selectedId);
         setRequesting(false);
@@ -152,15 +164,20 @@ export default function AppCockpit() {
         return (
             <div className='initial-buttons-section'>
                 {dialogs}
-                <h3>You are not a member of any server, create or join one.</h3>
+                <h3 className='initial-title'>Let's get a server going</h3>
+                <p className='initial-text'>You are not in any server yet. Start one in your own Google Drive, or join one a friend shared with you.</p>
                 <div className='buttons-div'>
-                    <button className='initial-button' title='Create a server in your Google Drive' onClick={handleCreate} disabled={creating}>
-                        {creating ? <LoaderCircle size={52} strokeWidth={1.5} className='spinner' /> : <Plus size={52} strokeWidth={1.5} />}
-                        <span>Create a server</span>
+                    <button className='initial-button' onClick={handleCreate} disabled={creating}>
+                        <span className='initial-icon'>
+                            {creating ? <LoaderCircle size={26} className='spinner' /> : <Plus size={26} />}
+                        </span>
+                        <span className='initial-label'>Create a server</span>
+                        <span className='initial-hint'>A new world folder in your Google Drive. You name it next.</span>
                     </button>
-                    <button className='initial-button' title='Join a server from an invitation' onClick={() => setIsJoinOpen(true)}>
-                        <LogIn size={52} strokeWidth={1.5} />
-                        <span>Join a server</span>
+                    <button className='initial-button' onClick={() => setIsJoinOpen(true)}>
+                        <span className='initial-icon'><LogIn size={26} /></span>
+                        <span className='initial-label'>Join a server</span>
+                        <span className='initial-hint'>Paste the link from the invitation email Google Drive sent you.</span>
                     </button>
                 </div>
             </div>

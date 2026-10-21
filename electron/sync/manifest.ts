@@ -2,7 +2,8 @@
 // All Drive access goes through LauncherFiles.
 import { AppError } from '../errors';
 import { DEFAULT_SHARED_IGNORES, normalizeRule } from '../../shared/paths';
-import type { BaseSnapshot, Manifest, ManifestEntry, Snapshot, SnapshotEntry } from '../../shared/types';
+import type {
+    IncompleteUpload, BaseSnapshot, Manifest, ManifestEntry, Snapshot, SnapshotEntry } from '../../shared/types';
 import type { LauncherFiles } from './launcherFiles';
 
 const DAMAGED = "The server's manifest.json on Google Drive is damaged, so the app cannot tell which files belong to the server.";
@@ -56,7 +57,7 @@ export function parseManifest(text: string): Manifest {
         }
     }
 
-    return {
+    const manifest: Manifest = {
         format: 2,
         revision,
         parentRevision,
@@ -65,6 +66,17 @@ export function parseManifest(text: string): Manifest {
         files,
         folders,
     };
+    const incomplete = parseIncomplete(raw.incomplete);
+    if (incomplete) manifest.incomplete = incomplete;
+    return manifest;
+}
+
+/** Older apps do not write it; a damaged one is ignored rather than making the whole manifest unreadable. */
+function parseIncomplete(raw: unknown): IncompleteUpload | null {
+    if (!isRecord(raw) || !isRecord(raw.by) || typeof raw.by.name !== 'string' || typeof raw.by.email !== 'string') return null;
+    if (typeof raw.at !== 'string' || typeof raw.sent !== 'number' || !Number.isInteger(raw.sent) || raw.sent < 0) return null;
+    const planned = typeof raw.planned === 'number' && Number.isInteger(raw.planned) && raw.planned >= 0 ? raw.planned : null;
+    return { by: { name: raw.by.name, email: raw.by.email }, at: raw.at, sent: raw.sent, planned };
 }
 
 /** Stable output: fixed key order, files and folders sorted by path, 2-space JSON. */
@@ -85,6 +97,10 @@ export function serializeManifest(m: Manifest): string {
         files,
         folders,
     };
+    if (m.incomplete) {
+        const { by, at, sent, planned } = m.incomplete;
+        ordered.incomplete = { by: { name: by.name, email: by.email }, at, sent, planned };
+    }
     return JSON.stringify(ordered, null, 2);
 }
 

@@ -55,6 +55,8 @@ export interface Commands {
     'session:resolve': (serverId: ServerId, choice: ConflictChoice) => SyncReport;
     'session:retryUpload': () => void;
     'session:cancel': () => void;
+    /** Cancels the upload for good: what was sent is saved as an incomplete revision and the server is freed. */
+    'session:abandonUpload': () => void;
     'session:repair': (serverId: ServerId) => void;
     /** Sync without playing: download the latest version, or upload this PC's changes, under the lock. */
     'session:syncNow': (serverId: ServerId, direction: 'down' | 'up') => void;

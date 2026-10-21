@@ -1,10 +1,10 @@
 import './sync-status-card.css';
 import { useState } from 'react';
-import { FolderInput, Loader2, RefreshCw, Wrench } from 'lucide-react';
+import { FolderInput, Loader2, RefreshCw, TriangleAlert, Wrench } from 'lucide-react';
 import type { ConflictChoice, SyncReport } from '../../../shared/types';
 import { useConfirm } from '../../hooks/useConfirm';
 import { formatCount, formatWhen } from '../../lib/format';
-import { CHOICE_LABELS, FIRST_SYNC_CHOICE_LABELS, cleanupLines, describeReport, planHasFiles } from '../../lib/sync';
+import { CHOICE_LABELS, FIRST_SYNC_CHOICE_LABELS, cleanupLines, describeReport, incompleteWarning, planHasFiles } from '../../lib/sync';
 import type { IModalItems } from '../../lib/ui-types';
 import { useAuthStore } from '../../stores/authStore';
 import { request } from '../../stores/request';
@@ -70,6 +70,7 @@ export default function SyncStatusCard() {
     }
 
     const copy = describeReport(report, { myEmail, nameFor, now: Date.now() });
+    const incomplete = incompleteWarning(report, { myEmail, nameFor, now: Date.now() });
     const labels = report.firstSyncOnThisPc ? FIRST_SYNC_CHOICE_LABELS : CHOICE_LABELS;
     const choices = report.status === 'diverged' ? report.allowedChoices.filter((c) => c !== report.pendingChoice) : [];
     const cleanup = cleanupLines(report.cleanup, nameFor);
@@ -106,6 +107,15 @@ export default function SyncStatusCard() {
                 </button>
             </div>
             <p className='sync-body'>{copy.body}</p>
+            {incomplete && (
+                <div className='sync-danger'>
+                    <TriangleAlert size={16} />
+                    <div>
+                        <b>{incomplete.title}</b>
+                        <p>{incomplete.body}</p>
+                    </div>
+                </div>
+            )}
             {cleanup.map((line) => <p key={line} className='sync-cleanup'>{line}</p>)}
             {(checking || checkProgress) && <p className='sync-checking'><Loader2 size={12} className='spinner' /> {checkingLine}</p>}
             <div className='sync-actions'>
@@ -126,7 +136,7 @@ export default function SyncStatusCard() {
                     </button>
                 )}
                 {canRepair && (
-                    <button className='text-button' title='For when the other member cannot open Drive Launcher soon' onClick={() => setShowRepair(true)}>
+                    <button className='text-button' title='For when the other member cannot open MCS-Relay soon' onClick={() => setShowRepair(true)}>
                         <Wrench size={12} /> Repair from this PC…
                     </button>
                 )}

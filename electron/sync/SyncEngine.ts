@@ -142,6 +142,7 @@ export class SyncEngine {
             report.remoteRevision = a.remote?.revision ?? null;
             report.remoteAuthor = a.remote ? a.remote.author : null;
             report.remoteCreatedAt = a.remote?.createdAt ?? null;
+            report.remoteIncomplete = a.remote?.incomplete ?? null;
             report.plan = a.plan;
             report.downloadBytes = sumBytes([...a.plan.download, ...a.plan.conflicts], a.remoteSnap);
             report.uploadBytes = sumBytes(a.plan.upload, a.local);
@@ -398,6 +399,7 @@ export class SyncEngine {
         const memory = this.journalMemory(serverId, journal);
         this.d.appData.writeJournal(serverId, {
             format: 1, serverId, startedAt: journal?.startedAt ?? this.iso(), baseRevision, sessionId: this.d.lock.sessionId, logged: true,
+            planned: upload.length + deleteRemote.length,
             ...(repair ? { repair: true } : {}),
         });
         const log: Log = (entry) => this.d.appData.appendJournalLog(serverId, [entry]);
@@ -514,6 +516,109 @@ export class SyncEngine {
         progress.complete('cleanup', swept > 0 ? `Moved ${plural(swept, 'leftover file')} to the trash` : 'No leftovers on Google Drive');
         void this.cleanupMyPlaceholders().catch((err: unknown) => console.warn('[sync] placeholder cleanup failed:', toAppError(err).detail));
         return { uploaded: upload.length, deleted: deletions.length, revision: next.revision };
+    }
+
+    /** The user cancelled the upload for good. What reached Google Drive (journal.log says what; a few lookups
+     *  settle the files that were in flight) becomes the next revision, marked incomplete, so the cloud is
+     *  consistent again and the server can be freed. Changes that were not sent stay local changes for the next
+     *  upload. null when nothing of the world had been sent: the cloud is left as it was. */
+    async commitPartial(
+        serverId: string, progress: ProgressSink = NO_PROGRESS,
+    ): Promise<{ revision: number; sent: number; planned: number | null } | null> {
+        const journal = this.d.appData.readJournal(serverId);
+        if (!journal) return null;
+        if (journal.repair) throw new AppError('INVALID', 'A repair cannot be cancelled half way. Pause it and continue it later.');
+        if (!journal.logged) {
+            throw new AppError('INVALID', 'This upload was started by an older version of the app, so what it sent is not known. Continue it instead.');
+        }
+        const planned = journal.planned ?? null;
+        const remote = await readManifest(this.d.launcher, serverId);
+        const me = await this.d.me();
+        if (this.recoverCommitted(serverId, journal.baseRevision, remote, me)) {
+            return { revision: remote!.revision, sent: planned ?? 0, planned };        // it had all landed after all
+        }
+        const remoteRevision = remote?.revision ?? 0;
+        if (remoteRevision !== journal.baseRevision) {
+            throw new AppError('CONFLICT', 'The cloud changed since this upload started, so what it sent cannot be saved.');
+        }
+        progress.enter('commit', 'Looking at what reached Google Drive');
+        const memory = this.journalMemory(serverId, journal);
+        const remoteFiles: Record<string, ManifestEntry> = remote?.files ?? {};
+        const files: Record<string, ManifestEntry> = { ...remoteFiles };
+        let sent = 0;
+        for (const [p, e] of memory.done) {
+            files[p] = { size: e.size, md5: e.md5, driveId: e.id };
+            sent += 1;
+        }
+        for (const p of memory.gone) {
+            delete files[p];
+            sent += 1;
+        }
+        // In flight when the upload stopped: Drive has either the new content (the answer got lost) or the old.
+        const unsure = [...memory.started].filter((p) => !memory.done.has(p) && !memory.gone.has(p));
+        await eachLimited(unsure.filter((p) => remoteFiles[p]), LOOKUP_CONCURRENCY, async (p) => {
+            let meta: DriveFileMeta | null = null;
+            try {
+                meta = await this.d.drive.getMeta(remoteFiles[p].driveId);
+            } catch (err) {
+                if (!isNotFound(err)) throw err;
+            }
+            if (!meta || meta.trashed || meta.appProperties?.[APP_PROPS.tombstone] === '1') {
+                delete files[p];                                        // a deletion that landed
+                sent += 1;
+            } else if (meta.md5Checksum && meta.md5Checksum.toLowerCase() !== remoteFiles[p].md5.toLowerCase()) {
+                files[p] = { size: meta.size ?? 0, md5: meta.md5Checksum.toLowerCase(), driveId: meta.id };
+                sent += 1;
+            }
+        });
+        const created = unsure.filter((p) => !remoteFiles[p]);
+        if (created.length > 0) {
+            for (const [p, candidates] of await this.ownTaggedFiles(serverId, created)) {
+                const newest = [...candidates].reverse().find((c) => c.md5Checksum);
+                if (!newest?.md5Checksum) continue;
+                files[p] = { size: newest.size ?? 0, md5: newest.md5Checksum.toLowerCase(), driveId: newest.id };
+                sent += 1;
+            }
+        }
+        if (sent === 0) {
+            // Nothing of the world had changed in the cloud yet (folders it made are harmless and reused later).
+            this.d.appData.deleteJournal(serverId);
+            progress.complete('commit', 'Nothing had been sent, so the cloud stays as it was');
+            return null;
+        }
+
+        // This PC's copy decides what is still to send later; read it before the commit, which cannot fail half way.
+        const root = await this.requireRoot(serverId);
+        const isIgnored = await this.loadRules(serverId);
+        const local = await this.scan(serverId, root, baseToSnapshot(this.d.appData.readBase(serverId)), isIgnored, undefined);
+        const complete = planned !== null && sent >= planned;
+        const next: Manifest = {
+            format: 2, revision: remoteRevision + 1, parentRevision: remoteRevision,
+            author: { name: me.name, email: me.email }, createdAt: this.iso(), files,
+            folders: { ...(remote?.folders ?? {}), ...memory.folders },
+        };
+        if (!complete) next.incomplete = { by: { name: me.name, email: me.email }, at: this.iso(), sent, planned };
+        const latest = await readManifest(this.d.launcher, serverId);
+        if ((latest?.revision ?? 0) !== remoteRevision) {
+            throw new AppError('CONFLICT', 'The cloud changed meanwhile, so what was sent was not saved.');
+        }
+        await writeManifest(this.d.launcher, serverId, next);           // the commit
+        this.writeBaseFrom(serverId, next, local);
+        this.d.appData.deleteJournal(serverId);
+        progress.complete('commit', complete
+            ? `Saved revision ${next.revision}`
+            : `Saved revision ${next.revision} as incomplete (${count(sent)} of ${planned === null ? '?' : count(planned)} changes)`);
+
+        progress.enter('cleanup', 'Looking for leftovers on Google Drive');
+        let swept = 0;
+        try {
+            swept = await this.sweepLeftovers(serverId, next);
+        } catch (err) {
+            console.warn('[sync] could not look for leftovers:', toAppError(err).detail);
+        }
+        progress.complete('cleanup', swept > 0 ? `Moved ${plural(swept, 'leftover file')} to the trash` : 'No leftovers on Google Drive');
+        console.log(`[sync] cancelled upload of ${serverId} saved as revision ${next.revision}: ${sent} of ${planned ?? '?'} changes`);
+        return { revision: next.revision, sent, planned };
     }
 
     /** A journal plus a cloud revision one above it, written by me, means my commit landed but the
@@ -700,6 +805,10 @@ export class SyncEngine {
      *  exists twice. Newest last. */
     private async findOwnFiles(serverId: string, paths: string[], progress: ProgressSink): Promise<Map<string, DriveFileMeta[]>> {
         progress.enter('files', 'Checking what the interrupted upload already sent');
+        return this.ownTaggedFiles(serverId, paths);
+    }
+
+    private async ownTaggedFiles(serverId: string, paths: string[]): Promise<Map<string, DriveFileMeta[]>> {
         const byHash = new Map(paths.map((p) => [pathHash(p), p]));
         const wanted = new Set(paths);
         const found = new Map<string, DriveFileMeta[]>();

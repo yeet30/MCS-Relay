@@ -59,8 +59,8 @@
 .log-line.error   { color: #e06c75; }
 .log-line.success { color: #98c379; }
 .log-line.system  { color: #5c6370; font-style: italic; }
-.active{ color: #98c379; }
-.inactive{ color: #e06c75; }
+.java-state.active { color: #98c379; }
+.java-state.inactive { color: #e06c75; }
 
 #console-input-row {
     display: flex;

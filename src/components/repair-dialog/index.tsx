@@ -28,7 +28,7 @@ function RepairExplanation({ report, myEmail, nameFor, onClose }: RepairProps) {
 
     const whose = mine ? 'Your upload from another PC' : `${name}'s upload`;
     const thatPc = mine ? 'that PC' : `${name}'s PC`;
-    const whenOpened = mine ? 'you open Drive Launcher on that PC' : `${name} opens Drive Launcher`;
+    const whenOpened = mine ? 'you open MCS-Relay on that PC' : `${name} opens MCS-Relay`;
 
     async function handleRepair() {
         onClose();
@@ -79,7 +79,7 @@ function RepairExplanation({ report, myEmail, nameFor, onClose }: RepairProps) {
             <section>
                 <h5>When to use it</h5>
                 <p>
-                    Only when {mine ? 'you cannot get to that PC' : `${name} cannot open Drive Launcher`} soon, for example
+                    Only when {mine ? 'you cannot get to that PC' : `${name} cannot open MCS-Relay`} soon, for example
                     because of a broken or lost PC or a long trip. If {mine ? 'you can' : 'they can'},{' '}
                     {mine ? 'open it there instead' : `ask ${name} to open it instead`}: that keeps the unfinished session.
                 </p>

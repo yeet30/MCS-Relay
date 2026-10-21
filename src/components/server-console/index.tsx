@@ -54,7 +54,7 @@ export default function ServerConsole() {
     return (
         <div id='console-wrapper' onClick={() => inputRef.current?.focus()}>
             <span className='console-status'>
-                Java Console <span className={javaRunning ? 'active' : 'inactive'}>{javaRunning ? '● Running' : '● Offline'}</span>
+                Java Console <span className={javaRunning ? 'java-state active' : 'java-state inactive'}>{javaRunning ? '● Running' : '● Offline'}</span>
             </span>
             <div className='console-div'>
                 <div id='console-output' ref={outputRef} onScroll={handleScroll}>

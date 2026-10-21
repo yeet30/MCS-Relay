@@ -82,6 +82,14 @@ export interface PendingCleanup {
     others: Array<{ ownerEmail: string; count: number }>;
 }
 
+/** On a revision saved from an upload its uploader cancelled: only part of their session reached the cloud. */
+export interface IncompleteUpload {
+    by: { name: string; email: string };
+    at: string;                         // when the upload was cancelled
+    sent: number;                       // changes (uploads and deletions) that reached Google Drive
+    planned: number | null;             // changes the upload meant to send
+}
+
 export interface Manifest {
     format: 2;
     revision: number;                   // +1 on every successful commit
@@ -90,6 +98,7 @@ export interface Manifest {
     createdAt: string;                  // ISO time of the commit
     files: Record<string, ManifestEntry>;
     folders: Record<string, string>;    // relative folder path ("world/region") -> Drive folder id
+    incomplete?: IncompleteUpload;      // set when the uploader cancelled; the next full upload clears it
 }
 
 export interface BaseEntry extends ManifestEntry {
@@ -156,6 +165,8 @@ export interface SyncReport {
     error?: string;
     /** This PC has an upload of this server that did not finish; Start (or an upload) finishes it first. */
     unfinishedHere?: boolean;
+    /** The cloud's last revision was saved from a cancelled upload. */
+    remoteIncomplete?: IncompleteUpload | null;
 }
 
 /* ------------------------------------------------------------------ lock */

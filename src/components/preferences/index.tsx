@@ -28,7 +28,7 @@ function Toggle({ icon, title, text, checked, onChange, children }: {
     );
 }
 
-/** How Drive Launcher tells you that a start or stop finished, and the EULA answer of this account. */
+/** How MCS-Relay tells you that a start or stop finished, and the EULA answer of this account. */
 export default function Preferences() {
     const settings = useSettingsStore((s) => s.settings);
 
@@ -45,7 +45,7 @@ export default function Preferences() {
             <Toggle
                 icon={<Bell size={16} />}
                 title='Desktop notifications'
-                text='When a server has finished starting or stopping while Drive Launcher is in the background or in the tray.'
+                text='When a server has finished starting or stopping while MCS-Relay is in the background or in the tray.'
                 checked={settings.notifications}
                 onChange={(notifications) => set({ notifications })}
             />
@@ -68,7 +68,7 @@ export default function Preferences() {
                     <span className='pref-title'>{settings.eulaAccepted ? 'Accepted for this Google account' : 'Not accepted yet'}</span>
                     <span className='pref-help'>
                         {settings.eulaAccepted
-                            ? 'Drive Launcher writes eula=true into a server folder when the server needs it.'
+                            ? 'MCS-Relay writes eula=true into a server folder when the server needs it.'
                             : 'You will be asked the first time you start a server.'}
                     </span>
                     <span className='pref-actions'>
