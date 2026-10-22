@@ -2,7 +2,8 @@
 // runtime, so each one is checked here before a service sees it.
 import path from 'node:path';
 import type { AuthStatus } from '../../shared/ipc';
-import type { ConflictChoice } from '../../shared/types';
+import type { ConflictChoice, LogoState } from '../../shared/types';
+import { LOGO_STATES } from '../../shared/types';
 import { toPosix } from '../../shared/paths';
 import { AppError } from '../errors';
 import type { GoogleAuth } from '../auth/GoogleAuth';
@@ -28,7 +29,7 @@ export interface HandlerDeps {
     transfers: Pick<TransferEngine, 'snapshot'>;
     changes: Pick<ChangeTracker, 'all'>;
     dialogs: Pick<Dialogs, 'chooseFolder' | 'chooseFile'>;
-    app: { quitResponse(confirmed: boolean): void; openExternal(url: string): Promise<void> };
+    app: { quitResponse(confirmed: boolean): void; openExternal(url: string): Promise<void>; setLogoState(state: LogoState): void };
 }
 
 const CHOICES: readonly ConflictChoice[] = ['keep-cloud', 'keep-local', 'combine'];
@@ -183,4 +184,8 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
 
     handle('app:quitResponse', (confirmed) => d.app.quitResponse(bool(confirmed, 'answer')));
     handle('app:openExternal', (url) => d.app.openExternal(httpsUrl(url)));
+    handle('app:setLogoState', (state) => {
+        if (!LOGO_STATES.includes(state)) throw invalid('Unknown logo state.');
+        d.app.setLogoState(state);
+    });
 }

@@ -19,7 +19,7 @@ const ALL_COMMANDS: Record<CommandName, true> = {
     'settings:get': true, 'settings:set': true, 'settings:getServer': true, 'settings:setServer': true,
     'settings:choosePlayitPath': true,
     'rules:get': true, 'rules:set': true, 'rules:pickPath': true,
-    'app:quitResponse': true, 'app:openExternal': true,
+    'app:quitResponse': true, 'app:openExternal': true, 'app:setLogoState': true,
 };
 
 type Listener = (event: { senderFrame?: { url: string } | null }, ...args: unknown[]) => unknown;

@@ -1,7 +1,9 @@
 // Turns the 16x16 pixel logo (src/assets/logo.svg, one <rect> per patch of colour) into the icon files the app
 // and its installer use. Every size is a whole multiple of 16, so each logo pixel stays a sharp square.
+// The taskbar and the tray also get one icon per state of the comparator (public/state/), so they can show who
+// hosts the selected server; the files above stay the powered logo, as the desktop icon.
 // Run after changing the logo: node scripts/make-icons.mjs
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 
 const GRID = 16;
@@ -113,4 +115,15 @@ writeFileSync(new URL('../public/launcher.ico', import.meta.url), ico(ICO_SIZES.
 writeFileSync(new URL('../public/icon-16x16.png', import.meta.url), pngOf(16));
 writeFileSync(new URL('../public/icon-16x16@2x.png', import.meta.url), pngOf(32));   // the tray on scaled displays
 writeFileSync(new URL('../public/icon.png', import.meta.url), pngOf(256));
-console.log(`icons written: launcher.ico (${ICO_SIZES.join(', ')}), icon-16x16.png (+@2x), icon.png`);
+
+// off: nobody hosts the selected server; here: this PC does; elsewhere: someone else does.
+const STATES = { off: 'logo-off.svg', here: 'logo.svg', elsewhere: 'logo-front-lit.svg' };
+mkdirSync(new URL('../public/state/', import.meta.url), { recursive: true });
+for (const [state, file] of Object.entries(STATES)) {
+    const statePixels = rasterize(readFileSync(new URL(`../src/assets/${file}`, import.meta.url), 'utf8'));
+    const statePng = (size) => png(size, scale(statePixels, size));
+    writeFileSync(new URL(`../public/state/${state}.ico`, import.meta.url), ico(ICO_SIZES.map((size) => ({ size, data: statePng(size) }))));
+    writeFileSync(new URL(`../public/state/${state}.png`, import.meta.url), statePng(16));
+    writeFileSync(new URL(`../public/state/${state}@2x.png`, import.meta.url), statePng(32));
+}
+console.log(`icons written: launcher.ico (${ICO_SIZES.join(', ')}), icon-16x16.png (+@2x), icon.png, state/{off,here,elsewhere}.ico/.png`);

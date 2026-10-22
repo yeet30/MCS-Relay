@@ -4,7 +4,7 @@ import { app, BrowserWindow, ipcMain, Menu, nativeImage, Notification, safeStora
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { TITLE_BAR_HEIGHT, WINDOW_COLORS } from '../shared/types';
-import type { ThemeName } from '../shared/types';
+import type { LogoState, ThemeName } from '../shared/types';
 import { GoogleAuth } from './auth/GoogleAuth';
 import { DriveClient } from './drive/DriveClient';
 import { DriveFiles } from './drive/DriveFiles';
@@ -38,6 +38,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 
 let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
+let logoState: LogoState = 'off';
 
 /* ------------------------------------------------------------------ services (created once) */
 
@@ -195,7 +196,7 @@ function createWindow(): void {
         // Windows draws only the minimise and close buttons, in the theme's colours; the page draws the rest.
         titleBarStyle: 'hidden',
         titleBarOverlay: { color: colors.titleBar, symbolColor: colors.titleText, height: TITLE_BAR_HEIGHT },
-        icon: path.join(process.env.VITE_PUBLIC, 'launcher.ico'),
+        icon: stateIcon(logoState, 'ico'),
         // The chime is played by the page, also while the window is hidden in the tray.
         webPreferences: { preload: path.join(__dirname, 'preload.mjs'), autoplayPolicy: 'no-user-gesture-required', backgroundThrottling: false },
     });
@@ -222,9 +223,29 @@ function createWindow(): void {
     else void win.loadFile(path.join(RENDERER_DIST, 'index.html'));
 }
 
+const LOGO_TOOLTIPS: Record<LogoState, string> = {
+    off: 'MCS-Relay',
+    here: 'MCS-Relay: you are hosting the selected server',
+    elsewhere: 'MCS-Relay: someone else is hosting the selected server',
+};
+
+/** public/state/<state>.ico (taskbar) or .png (tray; Electron picks the @2x file on scaled displays). */
+function stateIcon(state: LogoState, kind: 'ico' | 'png'): string {
+    return path.join(process.env.VITE_PUBLIC, 'state', `${state}.${kind}`);
+}
+
+/** The taskbar and tray icons follow the comparator in the title bar; the desktop icon (launcher.ico) stays. */
+function applyLogoState(state: LogoState): void {
+    if (state === logoState) return;
+    logoState = state;
+    win?.setIcon(nativeImage.createFromPath(stateIcon(state, 'ico')));
+    tray?.setImage(nativeImage.createFromPath(stateIcon(state, 'png')));
+    tray?.setToolTip(LOGO_TOOLTIPS[state]);
+}
+
 function createTray(): void {
-    tray = new Tray(nativeImage.createFromPath(path.join(process.env.VITE_PUBLIC, 'icon-16x16.png')));
-    tray.setToolTip('MCS-Relay');
+    tray = new Tray(nativeImage.createFromPath(stateIcon(logoState, 'png')));
+    tray.setToolTip(LOGO_TOOLTIPS[logoState]);
     tray.setContextMenu(Menu.buildFromTemplate([
         { label: 'Open', click: showWindow },
         { label: 'Quit', click: requestQuit },
@@ -262,7 +283,7 @@ if (!app.requestSingleInstanceLock()) {
         appData.migrateLegacy();
         registerHandlers(createHandle(ipcMain, isTrustedUrl), {
             auth, servers, session, settings, sync, transfers, changes, dialogs,
-            app: { quitResponse, openExternal: (url) => shell.openExternal(url) },
+            app: { quitResponse, openExternal: (url) => shell.openExternal(url), setLogoState: applyLogoState },
         });
         createTray();
         createWindow();

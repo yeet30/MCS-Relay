@@ -3,7 +3,7 @@
 // The main process registers handlers with handle() (electron/ipc/handle.ts), the renderer
 // calls them with invoke() (src/api.ts). A renamed or mistyped channel is a compile error.
 import type {
-    AppErrorInfo, AppSettings, ChangeBatch, ConflictChoice, LockView, MemberRole, ServerId,
+    AppErrorInfo, AppSettings, ChangeBatch, ConflictChoice, LockView, LogoState, MemberRole, ServerId,
     ServerSettings, ServerSummary, SessionProgress, SessionState, StepMessage, SyncReport, SyncRules,
     TransferSnapshot, UserInfo,
 } from './types';
@@ -80,6 +80,8 @@ export interface Commands {
 
     'app:quitResponse': (confirmed: boolean) => void;
     'app:openExternal': (url: string) => void;
+    /** The taskbar and tray icons follow the comparator in the title bar. */
+    'app:setLogoState': (state: LogoState) => void;
 }
 
 /** Every event the main process pushes: channel -> payload. */

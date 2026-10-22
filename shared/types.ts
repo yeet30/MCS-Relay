@@ -40,6 +40,12 @@ export interface JavaFlags {
 }
 
 /** The app's colour themes: light grey with red (default, from the logo), the earlier mint green, and dark. */
+/** The comparator in the title bar, the taskbar and the tray: unpowered while nobody runs the selected server,
+ *  powered from behind while this PC runs it (the desktop icon's look), and with its front torch lit too while
+ *  someone else runs it. */
+export type LogoState = 'off' | 'here' | 'elsewhere';
+export const LOGO_STATES: readonly LogoState[] = ['off', 'here', 'elsewhere'];
+
 export type ThemeName = 'light' | 'mint' | 'dark';
 export const THEMES: readonly ThemeName[] = ['light', 'mint', 'dark'];
 

@@ -1,8 +1,8 @@
 // What the UI derives from the session phase, the SyncReport and the lock view. Pure, so the decisions
 // (can I start? what does the card say?) are tested without React or Electron.
 import type {
-    AppErrorInfo, ConflictChoice, LockPhase, LockView, PendingCleanup, RunKind, ServerId, SessionPhase, SessionState,
-    SyncReport, SyncStatus, TransferSnapshot,
+    AppErrorInfo, ConflictChoice, LockPhase, LockView, LogoState, PendingCleanup, RunKind, ServerId, SessionPhase,
+    SessionState, SyncReport, SyncStatus, TransferSnapshot,
 } from '../../shared/types';
 import { formatAgo, formatBytes, formatCount, formatWhen, listNames, plural } from './format';
 
@@ -329,10 +329,7 @@ export function livePresence(session: SessionState, serverId: ServerId | null, l
     return { players: lock.lock.players, startedAt: lock.lock.startedAt, address: lock.lock.address };
 }
 
-/** The comparator in the title bar: unpowered while nobody runs the selected server, powered from behind while
- *  this PC runs it (the desktop icon's look), and with its front torch lit too while someone else runs it. */
-export type LogoState = 'off' | 'here' | 'elsewhere';
-
+/** The comparator in the title bar, the taskbar and the tray (see LogoState). */
 export function logoState(session: SessionState, serverId: ServerId | null, lock: LockView | null): LogoState {
     if (livePresence(session, serverId, lock) === null) return 'off';
     return isMySession(session, serverId) ? 'here' : 'elsewhere';
