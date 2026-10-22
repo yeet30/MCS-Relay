@@ -1,6 +1,6 @@
 import './progress-card.css';
 import { useEffect, useState } from 'react';
-import { Ban, Check, ChevronRight, CirclePause, Clock, CloudUpload, Info, Loader2, Play, X } from 'lucide-react';
+import { Ban, Check, ChevronRight, CirclePause, CircleX, Clock, CloudUpload, Info, Loader2, Play, X } from 'lucide-react';
 import type {
     LaneView, RunKind, ServerId, SessionPhase, SessionProgress, StepMessage, TransferKind, TransferSnapshot,
 } from '../../../shared/types';
@@ -146,6 +146,11 @@ function outcomeWord(progress: SessionProgress, phase: SessionPhase): string {
     return progress.outcome === 'cancelled' && phase === 'upload-pending' ? 'paused' : OUTCOME_WORDS[progress.outcome];
 }
 
+/** A paused upload shows the pause sign; a cancelled start, download or upload a crossed circle. */
+function CancelledIcon({ phase, size }: { phase: SessionPhase; size: number }) {
+    return phase === 'upload-pending' ? <CirclePause size={size} /> : <CircleX size={size} />;
+}
+
 /** Cancel (a start, a download) or Pause (an upload), after saying what that means for the files. Shown for the
  *  whole run; while it cannot act (Java is saving the world, the server is being released) it says why. */
 function StopButton({ progress, phase }: { progress: SessionProgress; phase: SessionPhase }) {
@@ -164,7 +169,7 @@ function StopButton({ progress, phase }: { progress: SessionProgress; phase: Ses
         <>
             {popup}
             <button className='text-button' disabled={stopping || reason !== null} title={reason ?? undefined} onClick={handleClick}>
-                {stopping ? <Loader2 size={12} className='spinner' /> : <CirclePause size={12} />}
+                {stopping ? <Loader2 size={12} className='spinner' /> : label === 'Pause' ? <CirclePause size={12} /> : <CircleX size={12} />}
                 {stopping ? (label === 'Pause' ? 'Pausing…' : 'Cancelling…') : label}
             </button>
         </>
@@ -297,7 +302,7 @@ export default function ProgressCard({ compact = false }: { compact?: boolean })
             <div className={`progress-card compact ${progress.outcome}${action ? ' with-action' : ''}`}>
                 {modal}
                 <span className='compact-icon'>
-                    {progress.outcome === 'done' ? <Check size={13} /> : progress.outcome === 'cancelled' ? <CirclePause size={13} /> : <X size={13} />}
+                    {progress.outcome === 'done' ? <Check size={13} /> : progress.outcome === 'cancelled' ? <CancelledIcon phase={phase} size={13} /> : <X size={13} />}
                 </span>
                 <span className='compact-text'>
                     {progress.title}: {outcomeWord(progress, phase)}
@@ -328,7 +333,7 @@ export default function ProgressCard({ compact = false }: { compact?: boolean })
             <p className='progress-message'>
                 {progress.active
                     ? <Loader2 size={12} className='spinner' />
-                    : progress.outcome === 'cancelled' ? <CirclePause size={12} /> : failed ? <X size={12} /> : <Check size={12} />}
+                    : progress.outcome === 'cancelled' ? <CancelledIcon phase={phase} size={12} /> : failed ? <X size={12} /> : <Check size={12} />}
                 <span>{progress.message}</span>
             </p>
             {transfer && <TransferMeta transfer={transfer} />}
