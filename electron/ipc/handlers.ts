@@ -124,7 +124,13 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
         return d.servers.invite(id(serverId), address, oneOf(role, ['writer', 'reader'] as const, 'role'), text(message, 'message', { allowEmpty: true }));
     });
     handle('servers:removeMember', (serverId, permissionId) => d.servers.removeMember(id(serverId), text(permissionId, 'member', { max: 200 })));
-    handle('servers:leave', (serverId) => d.servers.leave(id(serverId)));
+    handle('servers:leave', (serverId) => {
+        const sid = id(serverId);
+        if (d.session.isBusy() && d.session.getState().serverId === sid) {
+            throw new AppError('BUSY', 'Stop this server before leaving it.');
+        }
+        return d.servers.leave(sid);
+    });
     handle('servers:join', (folderId) => d.servers.join(text(folderId, 'server link', { max: 500 }).trim()));
     handle('servers:chooseLocalPath', (serverId) => {
         const sid = id(serverId);
