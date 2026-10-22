@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import type { LockContent, LockView, SessionState, SyncPlan, SyncReport, TransferSnapshot } from '../../shared/types';
 import {
-    abandonControl, cancelMode, cancelQuestion, canStart, describeServerChanges, incompleteStartQuestion, incompleteWarning, cleanupLines, continueAction, describeReport, hostingMessage, isSessionBusy, livePresence,
+    abandonControl, cancelMode, cancelQuestion, canStart, describeServerChanges, incompleteStartQuestion, incompleteWarning, cleanupLines, continueAction, describeReport, hostingMessage, isSessionBusy, livePresence, logoState,
     manualSyncBlockers, planHasFiles, powerMode, repairBlocker, startBlocker, stopControl, transferFraction,
 } from './sync';
 
@@ -111,6 +111,18 @@ describe('livePresence', () => {
         expect(livePresence(session(), 'srv', held({ phase: 'downloading' }))).toBeNull();
         expect(livePresence(session(), 'srv', stale())).toBeNull();
         expect(livePresence(session(), 'srv', FREE)).toBeNull();
+    });
+});
+
+describe('logoState', () => {
+    test('off unless the selected server runs; here when this PC runs it, elsewhere when someone else does', () => {
+        expect(logoState(session(), null, null)).toBe('off');
+        expect(logoState(session(), 'srv', FREE)).toBe('off');
+        expect(logoState(session({ phase: 'downloading', serverId: 'srv' }), 'srv', held())).toBe('off');
+        expect(logoState(session({ phase: 'running', serverId: 'srv' }), 'srv', held())).toBe('here');
+        expect(logoState(session(), 'srv', held())).toBe('elsewhere');
+        expect(logoState(session(), 'srv', held({ phase: 'uploading' }))).toBe('off');
+        expect(logoState(session(), 'srv', stale())).toBe('off');
     });
 });
 

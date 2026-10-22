@@ -329,6 +329,15 @@ export function livePresence(session: SessionState, serverId: ServerId | null, l
     return { players: lock.lock.players, startedAt: lock.lock.startedAt, address: lock.lock.address };
 }
 
+/** The comparator in the title bar: unpowered while nobody runs the selected server, powered from behind while
+ *  this PC runs it (the desktop icon's look), and with its front torch lit too while someone else runs it. */
+export type LogoState = 'off' | 'here' | 'elsewhere';
+
+export function logoState(session: SessionState, serverId: ServerId | null, lock: LockView | null): LogoState {
+    if (livePresence(session, serverId, lock) === null) return 'off';
+    return isMySession(session, serverId) ? 'here' : 'elsewhere';
+}
+
 /** The line next to the server picker: "<server> is currently hosted by Alex at:". */
 export function hostingMessage(view: LockView | null, myEmail: string | null): string {
     if (!view || view.state === 'free') return 'is not being hosted right now.';
