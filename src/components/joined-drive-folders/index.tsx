@@ -2,7 +2,6 @@ import { Loader2 } from 'lucide-react';
 import { useConfirm } from '../../hooks/useConfirm';
 import { useServersStore } from '../../stores/serversStore';
 import JoinServer from '../join-server';
-import PermissionInformation from '../permission-information';
 import ServerSlot from '../server-slot';
 import '../owned-drive-folders/owned-drive-folders.css';
 
@@ -19,7 +18,6 @@ export default function JoinedDriveFolders() {
     return (
         <div className='folders-tab'>
             {popup}
-            <PermissionInformation />
             <p className='folders-intro'>
                 {joined.length === 0 ? 'Servers your friends share with you show up here.' : 'Servers your friends share with you.'}
             </p>

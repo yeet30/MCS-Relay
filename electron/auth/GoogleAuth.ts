@@ -15,15 +15,11 @@ const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
 const EMAIL_SCOPE = 'https://www.googleapis.com/auth/userinfo.email';
 const PROFILE_SCOPE = 'https://www.googleapis.com/auth/userinfo.profile';
 
-/** base: the one consent at login. The full drive scope is needed because drive.file cannot see files
- *  other members uploaded. collaboration: what tokens from the old two-step login may still lack. */
-export const SCOPES: { base: string[]; collaboration: string } = {
-    base: ['openid', EMAIL_SCOPE, PROFILE_SCOPE, DRIVE_SCOPE],
-    collaboration: DRIVE_SCOPE,
-};
+/** Everything is asked for once, at login. The full drive scope is needed because the narrower drive.file
+ *  cannot see files other members uploaded, nor a folder shared with you. */
+export const SCOPES: string[] = ['openid', EMAIL_SCOPE, PROFILE_SCOPE, DRIVE_SCOPE];
 
 const USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo';
-const REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 const EXPIRY_MARGIN_MS = 5 * 60 * 1000;            // refresh a little early so a request never starts with a dying token
 const HTTP_TIMEOUT_MS = 30_000;
@@ -39,7 +35,7 @@ export interface GoogleAuthDeps {
     credentialsPath: string;                        // config/client_secret.json
     openExternal: (url: string) => Promise<void>;
     safeStorage?: SafeStorageLike;
-    /** For tests: replaces fetch for userinfo, revoke and the OAuth client's token requests. */
+    /** For tests: replaces fetch for userinfo and the OAuth client's token requests. */
     fetchImpl?: typeof fetch;
     loginTimeoutMs?: number;
     now?: () => number;
@@ -47,7 +43,9 @@ export interface GoogleAuthDeps {
     onUserChanged?: (user: UserInfo | null) => void;
 }
 
-const LOGGED_OUT: AuthStatus = { loggedIn: false, user: null, collaborationEnabled: false };
+const LOGGED_OUT: AuthStatus = { loggedIn: false, user: null };
+
+const DRIVE_MISSING = 'MCS-Relay needs access to your Google Drive to keep the servers there. Sign in again, and on Google\'s page leave the Google Drive box ticked.';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -63,6 +61,12 @@ function notSignedIn(message = 'Please log in with Google.', detail?: string): A
 
 function scopesOf(tokens: Credentials | null): string[] {
     return (tokens?.scope ?? '').split(/\s+/).filter(Boolean);
+}
+
+/** Google lists what was granted; a token without that list is taken as complete. */
+function lacksDrive(tokens: Credentials | null): boolean {
+    const scopes = scopesOf(tokens);
+    return scopes.length > 0 && !scopes.includes(DRIVE_SCOPE);
 }
 
 /** Keeps only the known token fields with the right types; null when nothing usable is left. */
@@ -291,46 +295,28 @@ export class GoogleAuth {
         if (!this.tokens()) return LOGGED_OUT;
         try {
             const user = await this.me();
-            return { loggedIn: true, user, collaborationEnabled: this.hasScope(SCOPES.collaboration) };
+            return { loggedIn: true, user };
         } catch (err) {
             if (err instanceof AppError && err.code === 'NOT_SIGNED_IN') return LOGGED_OUT;
             throw err;
         }
     }
 
+    /** Google shows its permission page only the first time an account signs in (or after the access was removed
+     *  in the Google account); later logins only ask which account to use. */
     async login(): Promise<AuthStatus> {
-        const tokens = await this.authorize(SCOPES.base, { prompt: 'select_account consent' });
+        const tokens = await this.authorize(SCOPES, { prompt: 'select_account' });
+        // Google's page lets each permission be unticked; without Drive the app cannot do anything.
+        if (lacksDrive(tokens)) throw new AppError('SCOPE_MISSING', DRIVE_MISSING);
         this.replaceTokens(tokens);
         return this.status();
     }
 
-    /** Incremental consent for the full drive scope, for tokens from the old two-step login (drive.file only),
-     *  or when the Drive box was unticked on Google's consent screen. */
-    async enableCollaboration(): Promise<AuthStatus> {
-        const current = this.tokens();
-        if (!current) throw notSignedIn();
-        if (this.hasScope(SCOPES.collaboration)) return this.status();
-        const user = await this.me();
-        const granted = await this.authorize([SCOPES.collaboration], { prompt: 'consent', loginHint: user.email });
-        // include_granted_scopes returns everything this account granted; no email scope means another account was picked.
-        const grantedUser = granted.access_token && scopesOf(granted).includes(EMAIL_SCOPE)
-            ? await this.userInfo(granted.access_token)
-            : 'unauthorized';
-        const sameAccount = grantedUser !== 'unauthorized' && grantedUser.email === user.email;
-        if (!sameAccount) {
-            throw new AppError('SCOPE_MISSING', `Please choose ${user.email}, the Google account you are logged in with.`);
-        }
-        this.replaceTokens({ ...current, ...granted, refresh_token: granted.refresh_token ?? current.refresh_token }, user);
-        return this.status();
-    }
-
+    /** Forgets the tokens on this PC. The access stays granted in the Google account, so the next login of the
+     *  same account does not show Google's permission page again; it can be removed there at any time. */
     async logout(): Promise<void> {
         this.pendingLogin?.abort(notSignedIn('Signed out.'));
-        const current = this.tokens();
         this.clearTokens();
-        // Revoking the refresh token ends the grant (and its access tokens) at Google, not only on this PC.
-        const token = current?.refresh_token ?? current?.access_token;
-        if (token) await this.revoke(token);
     }
 
     async getAccessToken(): Promise<string> {
@@ -373,16 +359,18 @@ export class GoogleAuth {
         return this.userLoading;
     }
 
-    hasScope(scope: string): boolean {
-        return scopesOf(this.tokens()).includes(scope);
-    }
-
     /* ------------------------------------------------------------------ tokens */
 
     private tokens(): Credentials | null {
         if (!this.loaded) {
             this.loaded = true;
             this.creds = this.store.load();
+            if (lacksDrive(this.creds)) {
+                // From the old two-step login, which asked for Drive separately: sign in again.
+                console.log('[auth] the stored sign-in has no Google Drive access; signing in again is needed');
+                this.creds = null;
+                this.store.clear();
+            }
             if (this.creds) this.oauth?.setCredentials(this.creds);
         }
         return this.creds;
@@ -478,21 +466,6 @@ export class GoogleAuth {
         this.announce(null);
     }
 
-    private async revoke(token: string): Promise<void> {
-        try {
-            const res = await this.fetchImpl(REVOKE_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ token }).toString(),
-                signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
-            });
-            // 400 invalid_token = already revoked or expired: nothing left to do.
-            if (!res.ok) console.warn(`[auth] Google answered ${res.status} to the token revoke`);
-        } catch (err) {
-            console.warn('[auth] could not revoke the token at Google:', describe(err));
-        }
-    }
-
     /* ------------------------------------------------------------------ user info */
 
     private async loadUser(): Promise<UserInfo> {
@@ -537,7 +510,7 @@ export class GoogleAuth {
 
     /* ------------------------------------------------------------------ consent (loopback + PKCE) */
 
-    private async authorize(scopes: string[], opts: { prompt: string; loginHint?: string }): Promise<Credentials> {
+    private async authorize(scopes: string[], opts: { prompt: string }): Promise<Credentials> {
         const client = this.client();
         // A second click on "Log in" (the first tab was closed) restarts the flow instead of waiting 5 minutes.
         this.pendingLogin?.abort(notSignedIn('Sign-in was restarted.'));
@@ -553,12 +526,10 @@ export class GoogleAuth {
                 access_type: 'offline',
                 prompt: opts.prompt,
                 scope: scopes,
-                include_granted_scopes: true,
                 redirect_uri: redirectUri,
                 state,
                 code_challenge: codeChallenge,
                 code_challenge_method: CodeChallengeMethod.S256,
-                ...(opts.loginHint ? { login_hint: opts.loginHint } : {}),
             });
             const callback = waitForCallback(server, state, this.deps.loginTimeoutMs ?? LOGIN_TIMEOUT_MS, abort.signal);
             callback.catch(() => undefined);    // awaited below; this only keeps an early failure from being "unhandled"

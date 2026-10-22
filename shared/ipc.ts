@@ -15,7 +15,6 @@ export type Result<T> =
 export interface AuthStatus {
     loggedIn: boolean;
     user: UserInfo | null;
-    collaborationEnabled: boolean;      // the full Drive scope has been granted
 }
 
 export interface ServerInfo {
@@ -31,7 +30,6 @@ export interface QuitPrompt {
 export interface Commands {
     'auth:status': () => AuthStatus;
     'auth:login': () => AuthStatus;
-    'auth:enableCollaboration': () => AuthStatus;
     'auth:logout': () => void;
 
     'servers:list': () => ServerSummary[];

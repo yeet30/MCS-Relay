@@ -9,9 +9,20 @@
     box-sizing: border-box;
 }
 
+/* The sign-in card, and next to it (under it in a narrow window) what Google is about to ask. */
+.login-main {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: stretch;
+    gap: 18px;
+    width: 100%;
+}
+
 .login-card {
     width: 100%;
-    max-width: 400px;
+    max-width: 340px;
+    justify-content: center;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -68,6 +79,73 @@
 
 .google-button:disabled {
     opacity: 0.85;
+}
+
+.login-about {
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    padding: 20px 22px;
+    box-sizing: border-box;
+    border-radius: 22px;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    text-align: left;
+
+    h2 {
+        margin: 0;
+        font-size: 1rem;
+    }
+
+    .about-point {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+
+        > svg {
+            flex-shrink: 0;
+            margin-top: 2px;
+            color: var(--accent);
+        }
+    }
+
+    h3 {
+        margin: 0 0 3px;
+        font-size: 0.86rem;
+    }
+
+    p {
+        margin: 0;
+        font-size: 0.8rem;
+        line-height: 1.5;
+        color: var(--muted);
+    }
+
+    .about-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 4px;
+        padding: 0;
+        border: none;
+        background: none;
+        font-size: 0.78rem;
+        color: var(--accent);
+        cursor: pointer;
+    }
+
+    .about-link:hover {
+        text-decoration: underline;
+    }
+
+    .about-foot {
+        padding-top: 10px;
+        border-top: 1px solid var(--line);
+        font-size: 0.74rem;
+        color: var(--faint);
+    }
 }
 
 .login-note {

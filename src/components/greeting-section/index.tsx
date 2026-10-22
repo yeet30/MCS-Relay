@@ -2,7 +2,6 @@ import './greeting-section.css';
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Terminal } from 'lucide-react';
 import SelectServer from '../select-server';
-import PermissionInformation from '../permission-information';
 import ServerConsole from '../server-console';
 import PlayitggLink from '../playitgg-link';
 import AppCockpit from '../app-cockpit';
@@ -59,7 +58,6 @@ function rememberHintSeen(): void {
 export default function GreetingSection() {
     const authPhase = useAuthStore((s) => s.phase);
     const user = useAuthStore((s) => s.user);
-    const collaborationEnabled = useAuthStore((s) => s.collaborationEnabled);
     const consoleHasOutput = useSessionStore((s) => s.console.length > 0);
     const [notAtTop, setNotAtTop] = useState(false);
     // The red dot points out the console the first time it shows something; any scroll dismisses it for good.
@@ -85,14 +83,6 @@ export default function GreetingSection() {
         return (
             <section className='greeting-wrapper'>
                 <h2 className='greeting-title'>Loading user information...</h2>
-            </section>
-        );
-    }
-    if (!collaborationEnabled) {
-        return (
-            <section className='greeting-wrapper'>
-                <h2 className='greeting-title'>Welcome, {user.name}!</h2>
-                <PermissionInformation />
             </section>
         );
     }

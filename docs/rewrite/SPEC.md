@@ -289,13 +289,12 @@ Launch args (carried over from the old `main` commit eb7ec4f): if `run.bat` (win
 
 ### electron/auth/GoogleAuth.ts  (unit: drive-auth)
 ```ts
-export const SCOPES: { base: string[]; collaboration: string };
+export const SCOPES: string[];
 export class GoogleAuth {
     constructor(deps: { userDataDir: string; credentialsPath: string; openExternal: (url: string) => Promise<void>; safeStorage?: { isEncryptionAvailable(): boolean; encryptString(s: string): Buffer; decryptString(b: Buffer): string } });
     status(): Promise<AuthStatus>;
-    login(): Promise<AuthStatus>;               // ONE consent with drive + userinfo.email + userinfo.profile (research: drive.file cannot see other members' files); loopback on 127.0.0.1 with a random free port, PKCE + state, 5 min timeout, server always closed
-    enableCollaboration(): Promise<AuthStatus>; // only for tokens from the old two-step login that lack the drive scope: incremental auth (include_granted_scopes)
-    logout(): Promise<void>;                    // revoke the refresh token at Google (fixes F36's acces_token), delete stored tokens, clear caches
+    login(): Promise<AuthStatus>;               // ONE consent with drive + userinfo.email + userinfo.profile (research: drive.file cannot see other members' files); loopback on 127.0.0.1 with a random free port, PKCE + state, 5 min timeout, server always closed; prompt=select_account only (Google shows its consent page once per account); a grant without the drive scope (box unticked) is refused with SCOPE_MISSING
+    logout(): Promise<void>;                    // delete stored tokens, clear caches; the grant stays at Google so the next login skips the consent page
     getAccessToken(): Promise<string>;          // single in-flight refresh shared by all callers (F28); AppError('NOT_SIGNED_IN')
     invalidateAccessToken(): void;              // after a 401
     me(): Promise<UserInfo>;                    // cached per login

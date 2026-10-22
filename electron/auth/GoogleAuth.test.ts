@@ -6,7 +6,8 @@ import { GoogleAuth, SCOPES, TokenStore, parseStoredTokens } from './GoogleAuth'
 import type { SafeStorageLike } from './GoogleAuth';
 
 const NOW = Date.UTC(2026, 9, 16, 12, 0, 0);
-const FULL_SCOPE = [...SCOPES.base, SCOPES.collaboration].join(' ');
+const FULL_SCOPE = SCOPES.join(' ');
+const NO_DRIVE_SCOPE = SCOPES.filter((s) => !s.endsWith('/auth/drive')).join(' ');
 
 /** Reversible stand-in for Electron's safeStorage. */
 const fakeSafe = (available = true): SafeStorageLike => ({
@@ -25,7 +26,16 @@ let dir: string;
 let calls: Call[];
 let tokenAnswer: () => Response;
 
-function makeAuth(safe: SafeStorageLike = fakeSafe()): GoogleAuth {
+/** Plays the browser: answers Google's sign-in page by calling the app's local redirect with a code. */
+const browser = async (url: string): Promise<void> => {
+    opened.push(url);
+    const params = new URL(url).searchParams;
+    void fetch(`${params.get('redirect_uri')}/?code=the-code&state=${encodeURIComponent(params.get('state') ?? '')}`);
+};
+
+let opened: string[];
+
+function makeAuth(safe: SafeStorageLike = fakeSafe(), openExternal: (url: string) => Promise<void> = async () => undefined): GoogleAuth {
     const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
         calls.push({ url, body: init?.body ? String(init.body) : '' });
@@ -35,7 +45,7 @@ function makeAuth(safe: SafeStorageLike = fakeSafe()): GoogleAuth {
         return new Response('not found', { status: 404 });
     }) as typeof fetch;
     return new GoogleAuth({
-        userDataDir: dir, credentialsPath: path.join(dir, 'client_secret.json'), openExternal: async () => undefined,
+        userDataDir: dir, credentialsPath: path.join(dir, 'client_secret.json'), openExternal,
         safeStorage: safe, fetchImpl, now: () => NOW,
     });
 }
@@ -44,6 +54,7 @@ beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mdh-auth-'));
     fs.writeFileSync(path.join(dir, 'client_secret.json'), JSON.stringify({ installed: { client_id: 'cid', client_secret: 'secret' } }));
     calls = [];
+    opened = [];
     tokenAnswer = () => json(200, { access_token: 'fresh', expires_in: 3600, token_type: 'Bearer', scope: FULL_SCOPE });
 });
 
@@ -119,19 +130,43 @@ describe('GoogleAuth', () => {
         expect((await auth.status()).loggedIn).toBe(false);
     });
 
-    it('reports the user and whether collaboration (full Drive) was granted', async () => {
+    it('reports the user', async () => {
         const auth = signedIn({ access_token: 'valid', refresh_token: 'r', expiry_date: NOW + 30 * 60_000 });
         expect(await auth.status()).toEqual({
-            loggedIn: true, collaborationEnabled: true, user: { name: 'Steve', email: 'steve@example.com', picture: 'https://p' },
+            loggedIn: true, user: { name: 'Steve', email: 'steve@example.com', picture: 'https://p' },
         });
     });
 
-    it('logout revokes the grant at Google and forgets the tokens', async () => {
+    it('a stored sign-in from the old two-step login (no Drive access) has to sign in again', async () => {
+        new TokenStore(dir, fakeSafe()).save({ scope: NO_DRIVE_SCOPE, access_token: 'valid', refresh_token: 'r', expiry_date: NOW + 30 * 60_000 });
+        const auth = makeAuth();
+        expect((await auth.status()).loggedIn).toBe(false);
+        expect(new TokenStore(dir, fakeSafe()).load()).toBeNull();
+    });
+
+    it('logout forgets the tokens on this PC without revoking the access at Google', async () => {
         const auth = signedIn({ access_token: 'valid', refresh_token: 'refresh-me', expiry_date: NOW + 30 * 60_000 });
         await auth.logout();
-        const revoke = calls.find((c) => c.url.includes('revoke'));
-        expect(revoke?.body).toContain('token=refresh-me');
+        expect(calls.some((c) => c.url.includes('revoke'))).toBe(false);
         expect(new TokenStore(dir, fakeSafe()).load()).toBeNull();
         await expect(auth.getAccessToken()).rejects.toMatchObject({ code: 'NOT_SIGNED_IN' });
+    });
+
+    it('login asks for everything at once and shows only the account chooser, not the permission page every time', async () => {
+        tokenAnswer = () => json(200, { access_token: 'fresh', refresh_token: 'r', expires_in: 3600, token_type: 'Bearer', scope: FULL_SCOPE });
+        const auth = makeAuth(fakeSafe(), browser);
+        expect(await auth.login()).toMatchObject({ loggedIn: true, user: { email: 'steve@example.com' } });
+        const params = new URL(opened[0]).searchParams;
+        expect(params.get('prompt')).toBe('select_account');
+        expect(params.get('scope')?.split(' ')).toEqual(SCOPES);
+        expect(new TokenStore(dir, fakeSafe()).load()).toMatchObject({ refresh_token: 'r' });
+    });
+
+    it('login fails, keeping nothing, when the Google Drive box was unticked', async () => {
+        tokenAnswer = () => json(200, { access_token: 'fresh', refresh_token: 'r', expires_in: 3600, token_type: 'Bearer', scope: NO_DRIVE_SCOPE });
+        const auth = makeAuth(fakeSafe(), browser);
+        await expect(auth.login()).rejects.toMatchObject({ code: 'SCOPE_MISSING' });
+        expect(new TokenStore(dir, fakeSafe()).load()).toBeNull();
+        expect((await auth.status()).loggedIn).toBe(false);
     });
 });

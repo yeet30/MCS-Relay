@@ -1,9 +1,59 @@
 import './login-page.css';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LoaderCircle } from 'lucide-react';
+import { ExternalLink, FolderLock, HardDrive, LoaderCircle, ShieldCheck } from 'lucide-react';
+import { invoke } from '../../api';
 import logoUrl from '../../assets/logo.svg';
 import { useAuthStore } from '../../stores/authStore';
+
+const GOOGLE_ACCESS_PAGE = 'https://myaccount.google.com/connections';
+
+/** What Google's permission page is about to ask, before it does: why the whole Drive, what the app really
+ *  touches, and how to take the access back. */
+function BeforeSignIn() {
+    return (
+        <section className='login-about' aria-label='Before you sign in'>
+            <h2>Before you sign in</h2>
+            <div className='about-point'>
+                <HardDrive size={18} aria-hidden />
+                <div>
+                    <h3>Google asks for access to your whole Drive</h3>
+                    <p>
+                        Friends upload their changes to the shared folder, and those files are theirs. Google's smaller
+                        permission only shows an app the files it made itself, so it could not get their changes.
+                    </p>
+                </div>
+            </div>
+            <div className='about-point'>
+                <FolderLock size={18} aria-hidden />
+                <div>
+                    <h3>It only touches the server folders</h3>
+                    <p>
+                        The &quot;Minecraft Shared Servers&quot; folder it makes, and the servers you join. Your other files
+                        are never opened, listed or changed.
+                    </p>
+                </div>
+            </div>
+            <div className='about-point'>
+                <ShieldCheck size={18} aria-hidden />
+                <div>
+                    <h3>Nothing goes through anyone else</h3>
+                    <p>
+                        The app talks to Google straight from this PC and keeps your sign-in encrypted on it. You can take
+                        the access back at any time.
+                    </p>
+                    <button className='about-link' onClick={() => void invoke('app:openExternal', GOOGLE_ACCESS_PAGE)}>
+                        Apps with access to your Google Account <ExternalLink size={12} />
+                    </button>
+                </div>
+            </div>
+            <p className='about-foot'>
+                Google asks only once per account. It may first warn that it has not verified the app, as it does for
+                apps with full Drive access that have not been through its review.
+            </p>
+        </section>
+    );
+}
 
 /** Google's "G", as its sign-in buttons show it. */
 function GoogleMark() {
@@ -51,20 +101,23 @@ export default function LoginPage() {
 
     return (
         <div className='login-page'>
-            <div className='login-card'>
-                <img className='login-mark' src={logoUrl} alt='' width={72} height={72} />
-                <h1 className='login-title'>MCS-Relay</h1>
-                <p className='login-tagline'>
-                    Host a Minecraft server from a shared Google Drive. Whoever plays hosts it, and the world is saved for
-                    the next one.
-                </p>
-                <button className='google-button' onClick={handleLogin} disabled={loading}>
-                    {loading ? <LoaderCircle size={18} className='spinner' /> : <GoogleMark />}
-                    {loading ? 'Waiting for your browser…' : 'Sign in with Google'}
-                </button>
-                {loading && <p className='login-note'>Finish signing in in the browser window that opened, then come back here.</p>}
-                {signedOutReason && !error && !loading && <p className='login-note'>{signedOutReason}</p>}
-                {error && <p className='login-error'>{error}</p>}
+            <div className='login-main'>
+                <div className='login-card'>
+                    <img className='login-mark' src={logoUrl} alt='' width={72} height={72} />
+                    <h1 className='login-title'>MCS-Relay</h1>
+                    <p className='login-tagline'>
+                        Host a Minecraft server from a shared Google Drive. Whoever plays hosts it, and the world is saved for
+                        the next one.
+                    </p>
+                    <button className='google-button' onClick={handleLogin} disabled={loading}>
+                        {loading ? <LoaderCircle size={18} className='spinner' /> : <GoogleMark />}
+                        {loading ? 'Waiting for your browser…' : 'Sign in with Google'}
+                    </button>
+                    {loading && <p className='login-note'>Finish signing in in the browser window that opened, then come back here.</p>}
+                    {signedOutReason && !error && !loading && <p className='login-note'>{signedOutReason}</p>}
+                    {error && <p className='login-error'>{error}</p>}
+                </div>
+                <BeforeSignIn />
             </div>
             <p className='login-footer'>Your browser opens so you can sign in. Server files are kept in your Google Drive.</p>
             <p className='login-disclaimer'>Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.</p>

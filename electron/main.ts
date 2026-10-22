@@ -268,7 +268,7 @@ if (!app.requestSingleInstanceLock()) {
         createWindow();
         try {
             const status = await auth.status();
-            if (status.loggedIn && status.collaborationEnabled) await session.resumeUnfinishedUploads();
+            if (status.loggedIn) await session.resumeUnfinishedUploads();
         } catch (err) {
             console.warn('[main] could not resume unfinished uploads at startup:', err);
         }

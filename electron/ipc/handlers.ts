@@ -16,7 +16,7 @@ import type { TransferEngine } from '../transfer/TransferEngine';
 import type { Handle } from './handle';
 
 export interface HandlerDeps {
-    auth: Pick<GoogleAuth, 'status' | 'login' | 'enableCollaboration' | 'logout'>;
+    auth: Pick<GoogleAuth, 'status' | 'login' | 'logout'>;
     servers: Pick<ServersService,
         'list' | 'create' | 'delete' | 'rename' | 'invite' | 'removeMember' | 'leave' | 'join' | 'chooseLocalPath' | 'openFolder' | 'info'
         | 'isOwner'>;
@@ -91,7 +91,7 @@ export function ruleFromPick(root: string, picked: string, kind: 'file' | 'folde
 
 export function registerHandlers(handle: Handle, d: HandlerDeps): void {
     const afterLogin = (status: AuthStatus): AuthStatus => {
-        if (status.loggedIn && status.collaborationEnabled) {
+        if (status.loggedIn) {
             // Uploads a previous run could not finish are completed as soon as Drive is reachable.
             void d.session.resumeUnfinishedUploads().catch((err: unknown) => console.warn('[ipc] resuming uploads failed:', err));
         }
@@ -100,7 +100,6 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
 
     handle('auth:status', () => d.auth.status());
     handle('auth:login', async () => afterLogin(await d.auth.login()));
-    handle('auth:enableCollaboration', async () => afterLogin(await d.auth.enableCollaboration()));
     handle('auth:logout', async () => {
         if (d.session.isBusy()) throw new AppError('BUSY', 'Stop the server and wait for the upload before logging out.');
         await d.session.select(null);

@@ -10,8 +10,6 @@ export type AuthPhase = 'unknown' | 'signed-in' | 'signed-out';
 interface AuthStore {
     phase: AuthPhase;
     user: UserInfo | null;
-    /** false only for tokens from the old two-step login that lack the full Drive scope. */
-    collaborationEnabled: boolean;
     /** Set when a NOT_SIGNED_IN error ended a session; shown on the login page. */
     signedOutReason: string | null;
 
@@ -20,21 +18,19 @@ interface AuthStore {
     refresh: () => Promise<AuthStatus | null>;
     /** Errors are returned, not toasted: the login page shows them inline. */
     login: () => Promise<Result<AuthStatus>>;
-    enableCollaboration: () => Promise<boolean>;
     logout: () => Promise<boolean>;
 }
 
 export const useAuthStore = create<AuthStore>()((set, get) => ({
     phase: 'unknown',
     user: null,
-    collaborationEnabled: true,
     signedOutReason: null,
 
     apply: (status) => {
         if (status.loggedIn) {
-            set({ phase: 'signed-in', user: status.user, collaborationEnabled: status.collaborationEnabled, signedOutReason: null });
+            set({ phase: 'signed-in', user: status.user, signedOutReason: null });
         } else {
-            set({ phase: 'signed-out', user: null, collaborationEnabled: status.collaborationEnabled });
+            set({ phase: 'signed-out', user: null });
         }
     },
 
@@ -56,13 +52,6 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
         const res = await invoke('auth:login');
         if (res.ok) get().apply(res.value);
         return res;
-    },
-
-    enableCollaboration: async () => {
-        const res = await request('auth:enableCollaboration');
-        if (!res.ok) return false;
-        get().apply(res.value);
-        return res.value.collaborationEnabled;
     },
 
     logout: async () => {
