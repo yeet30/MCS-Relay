@@ -51,6 +51,9 @@ export const useSettingsStore = create<SettingsStore>()((set) => ({
 
     choosePlayitPath: async () => {
         const res = await request('settings:choosePlayitPath');
-        return res.ok ? res.value : null;
+        if (!res.ok || res.value === null) return null;
+        const playitggPath = res.value;
+        set((s) => (s.settings ? { settings: { ...s.settings, playitggPath } } : {}));
+        return playitggPath;
     },
 }));
