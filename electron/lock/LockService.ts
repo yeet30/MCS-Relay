@@ -5,7 +5,7 @@
 // Drive has no "write only if unchanged", so claim() writes, waits, reads back, and every renewal re-checks
 // that the session id in the file is still ours. inspect() never writes.
 import { createHash, randomUUID } from 'node:crypto';
-import type { LockContent, LockPhase, LockView, UserInfo } from '../../shared/types';
+import type { LockContent, LockPhase, LockView, PlayitTunnel, UserInfo } from '../../shared/types';
 import { DriveError } from '../drive/types';
 import type { DriveApi } from '../drive/types';
 import { AppError } from '../errors';
@@ -25,7 +25,7 @@ export interface LockServiceDeps {
     remember?: { read(serverId: string): string | null; write(serverId: string, sessionId: string | null): void };
 }
 
-export type LockPatch = Partial<Pick<LockContent, 'phase' | 'address' | 'players' | 'startedAt' | 'baseRevision'>>;
+export type LockPatch = Partial<Pick<LockContent, 'phase' | 'address' | 'players' | 'startedAt' | 'baseRevision' | 'tunnels'>>;
 
 const LOCK_FILE = 'lock.json';
 const LOST_REASON = 'Another member took over the server.';
@@ -63,7 +63,7 @@ function invalidLock(detail: string): AppError {
     return new AppError('INVALID', 'The lock file on Google Drive is damaged.', detail);
 }
 
-/** Validates lock.json (format 2). Missing startedAt/address/players default to null/null/[].
+/** Validates lock.json (format 2). Missing startedAt/address/players/tunnels default to null/null/[]/[].
  *  Throws AppError('INVALID') for anything else that is wrong. */
 export function parseLock(text: string): LockContent {
     let raw: unknown;
@@ -90,7 +90,12 @@ export function parseLock(text: string): LockContent {
         startedAt: typeof raw.startedAt === 'string' ? raw.startedAt : null,
         address: typeof raw.address === 'string' ? raw.address : null,
         players: Array.isArray(raw.players) ? raw.players.filter((p): p is string => typeof p === 'string') : [],
+        tunnels: Array.isArray(raw.tunnels) ? raw.tunnels.filter(isTunnel).map(({ address, type, local }) => ({ address, type, local })) : [],
     };
+}
+
+function isTunnel(value: unknown): value is PlayitTunnel {
+    return isRecord(value) && typeof value.address === 'string' && typeof value.type === 'string' && typeof value.local === 'string';
 }
 
 /** Stable key order, 2-space JSON. */
@@ -105,6 +110,7 @@ export function serializeLock(lock: LockContent): string {
         startedAt: lock.startedAt,
         address: lock.address,
         players: [...lock.players],
+        tunnels: lock.tunnels.map(({ address, type, local }) => ({ address, type, local })),
     };
     return JSON.stringify(ordered, null, 2);
 }
@@ -126,12 +132,13 @@ function md5Hex(text: string): string {
 }
 
 function applyPatch(content: LockContent, patch: LockPatch): LockContent {
-    const next: LockContent = { ...content, host: { ...content.host }, players: [...content.players] };
+    const next: LockContent = { ...content, host: { ...content.host }, players: [...content.players], tunnels: [...content.tunnels] };
     if (patch.phase !== undefined) next.phase = patch.phase;
     if (patch.address !== undefined) next.address = patch.address;
     if (patch.players !== undefined) next.players = [...patch.players];
     if (patch.startedAt !== undefined) next.startedAt = patch.startedAt;
     if (patch.baseRevision !== undefined) next.baseRevision = patch.baseRevision;
+    if (patch.tunnels !== undefined) next.tunnels = [...patch.tunnels];
     return next;
 }
 
@@ -242,7 +249,7 @@ export class LockService {
             sessionId,
             content: {
                 format: 2, sessionId, host: { name: me.name, email: me.email }, phase: opts.phase ?? 'claiming',
-                leaseSeconds: this.leaseSeconds, baseRevision, startedAt: null, address: null, players: [],
+                leaseSeconds: this.leaseSeconds, baseRevision, startedAt: null, address: null, players: [], tunnels: [],
             },
             active: false,
             stopped: false,
@@ -291,7 +298,7 @@ export class LockService {
             this.dropClaim(claim);
             return;
         }
-        const free: LockContent = { ...claim.content, phase: 'free', address: null, players: [] };
+        const free: LockContent = { ...claim.content, phase: 'free', address: null, players: [], tunnels: [] };
         // On failure the claim stays registered (inactive), so a later releaseIfMine() can still free it;
         // otherwise the lease simply runs out.
         await this.write(serverId, free);

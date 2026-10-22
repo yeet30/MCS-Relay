@@ -419,7 +419,7 @@ function inviteMessage(serverId: string, note: string): string {
 function freeLock(me: UserInfo): LockContent {
     return {
         format: 2, sessionId: '', host: { name: me.name, email: me.email }, phase: 'free', leaseSeconds: 45,
-        baseRevision: 0, startedAt: null, address: null, players: [],
+        baseRevision: 0, startedAt: null, address: null, players: [], tunnels: [],
     };
 }
 

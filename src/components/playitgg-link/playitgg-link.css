@@ -6,6 +6,16 @@
     padding-left: 12px;
     background-color: var(--panel);
     border: 1px solid var(--line);
+    overflow: hidden;
+
+    /* What the address is for ("Minecraft Java"), small, before it. */
+    .link-kind {
+        margin-right: 8px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--muted);
+        white-space: nowrap;
+    }
 
     pre{
         text-decoration: none;
@@ -25,4 +35,113 @@
         background-color: var(--panel-2);
     }
 
+    .tunnels-button {
+        gap: 4px;
+        border-left: 1px solid var(--line);
+        color: var(--muted);
+    }
+
+    .tunnels-button:hover {
+        color: var(--text);
+    }
+
+    .tunnels-count {
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+}
+
+/* The list of every tunnel, in its own window (outside .link-wrapper). */
+.tunnels-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    .tunnels-intro {
+        margin: 0;
+        font-size: 0.82rem;
+        line-height: 1.45;
+        color: var(--muted);
+    }
+
+    .tunnel-card {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: var(--panel-2);
+    }
+
+    .tunnel-card.primary {
+        border-color: rgba(var(--accent-rgb), 0.55);
+    }
+
+    .tunnel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    .tunnel-name {
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+
+    .tunnel-badge {
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: var(--accent);
+        background: rgba(var(--accent-rgb), 0.14);
+    }
+
+    .tunnel-address {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+
+        code {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            padding: 6px 10px;
+            border-radius: 8px;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            font-size: 0.85rem;
+            user-select: text;
+        }
+
+        .copy-button {
+            display: flex;
+            padding: 6px;
+            border: none;
+            border-radius: 8px;
+            background: none;
+            cursor: pointer;
+        }
+    }
+
+    .tunnel-help {
+        margin: 0;
+        font-size: 0.8rem;
+        line-height: 1.45;
+        color: var(--text-2);
+    }
+
+    .tunnel-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 0.74rem;
+        color: var(--faint);
+    }
 }

@@ -184,6 +184,7 @@ describe('legacy import', () => {
             notifications: true,
             notificationSound: true,
             theme: 'light',
+            playitPrimary: null,
         });
         const flags = { minRAM: 1024, maxRAM: 6144, customFlags: '' };
         expect(appData.readServerSettings('srvA')).toEqual({ localPath: local, javaFlags: flags });

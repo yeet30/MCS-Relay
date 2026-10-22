@@ -16,6 +16,7 @@ const ALL_COMMANDS: Record<CommandName, true> = {
     'session:resolve': true, 'session:retryUpload': true, 'session:dismiss': true, 'session:command': true,
     'session:changes': true, 'session:transfers': true, 'session:steps': true, 'session:console': true,
     'session:progress': true, 'session:syncNow': true, 'session:cancel': true, 'session:repair': true, 'session:abandonUpload': true,
+    'session:setPrimaryTunnel': true,
     'settings:get': true, 'settings:set': true, 'settings:getServer': true, 'settings:setServer': true,
     'settings:choosePlayitPath': true,
     'rules:get': true, 'rules:set': true, 'rules:pickPath': true,

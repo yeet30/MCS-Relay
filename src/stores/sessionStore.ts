@@ -17,6 +17,7 @@ export const IDLE_SESSION: SessionState = {
     serverId: null,
     startedAt: null,
     address: null,
+    tunnels: [],
     players: [],
     javaRunning: false,
     error: null,

@@ -23,7 +23,8 @@ export interface HandlerDeps {
         | 'isOwner'>;
     session: Pick<SessionController,
         'getState' | 'preflight' | 'lastReport' | 'start' | 'stop' | 'resolve' | 'retryUpload' | 'dismiss' | 'command'
-        | 'steps' | 'consoleLines' | 'select' | 'isBusy' | 'resumeUnfinishedUploads' | 'getProgress' | 'syncNow' | 'cancel' | 'repair' | 'abandonUpload'>;
+        | 'steps' | 'consoleLines' | 'select' | 'isBusy' | 'resumeUnfinishedUploads' | 'getProgress' | 'syncNow' | 'cancel' | 'repair' | 'abandonUpload'
+        | 'setPrimaryTunnel'>;
     settings: Pick<SettingsService, 'get' | 'set' | 'getServer' | 'setServer' | 'choosePlayitPath'>;
     sync: Pick<SyncEngine, 'getRules' | 'setRules'>;
     transfers: Pick<TransferEngine, 'snapshot'>;
@@ -144,6 +145,10 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
     handle('session:resolve', (serverId, choice) => d.session.resolve(id(serverId), oneOf(choice, CHOICES, 'choice')));
     handle('session:retryUpload', () => d.session.retryUpload());
     handle('session:cancel', () => d.session.cancel());
+    handle('session:setPrimaryTunnel', (address) => {
+        if (typeof address !== 'string' || address === '') throw invalid('Choose one of the playit.gg tunnels.');
+        return d.session.setPrimaryTunnel(address);
+    });
     handle('session:abandonUpload', () => d.session.abandonUpload());
     handle('session:repair', async (serverId) => {
         const sid = id(serverId);

@@ -1,7 +1,7 @@
 // What the UI derives from the session phase, the SyncReport and the lock view. Pure, so the decisions
 // (can I start? what does the card say?) are tested without React or Electron.
 import type {
-    AppErrorInfo, ConflictChoice, LockPhase, LockView, LogoState, PendingCleanup, RunKind, ServerId, SessionPhase,
+    AppErrorInfo, ConflictChoice, LockPhase, LockView, LogoState, PendingCleanup, PlayitTunnel, RunKind, ServerId, SessionPhase,
     SessionState, SyncReport, SyncStatus, TransferSnapshot,
 } from '../../shared/types';
 import { formatAgo, formatBytes, formatCount, formatWhen, listNames, plural } from './format';
@@ -314,6 +314,7 @@ export interface Presence {
     players: string[];
     startedAt: string | null;
     address: string | null;
+    tunnels: PlayitTunnel[];
 }
 
 /** Players, start time and address of the running server: from my session when I host it, otherwise from the
@@ -322,11 +323,11 @@ export function livePresence(session: SessionState, serverId: ServerId | null, l
     if (serverId === null) return null;
     if (isMySession(session, serverId)) {
         if (session.phase !== 'running') return null;
-        return { players: session.players, startedAt: session.startedAt, address: session.address };
+        return { players: session.players, startedAt: session.startedAt, address: session.address, tunnels: session.tunnels };
     }
     if (!lock || lock.state === 'free' || lock.state === 'stale') return null;
     if (lock.lock.phase !== 'running') return null;
-    return { players: lock.lock.players, startedAt: lock.lock.startedAt, address: lock.lock.address };
+    return { players: lock.lock.players, startedAt: lock.lock.startedAt, address: lock.lock.address, tunnels: lock.lock.tunnels };
 }
 
 /** The comparator in the title bar, the taskbar and the tray (see LogoState). */

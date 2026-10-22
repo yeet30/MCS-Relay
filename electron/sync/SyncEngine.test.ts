@@ -371,7 +371,7 @@ describe('failures and resuming', () => {
     it('a stale upload makes the server unfinished-upload, unless it is mine and this PC has its journal', async () => {
         const stale = (email: string): LockView => ({
             state: 'stale', ageSeconds: 300,
-            lock: { format: 2, sessionId: 'x', host: { name: 'X', email }, phase: 'uploading', leaseSeconds: 45, baseRevision: 1, startedAt: null, address: null, players: [] },
+            lock: { format: 2, sessionId: 'x', host: { name: 'X', email }, phase: 'uploading', leaseSeconds: 45, baseRevision: 1, startedAt: null, address: null, players: [], tunnels: [] },
         });
         alice.lockView = stale(BOB.email);
         expect((await alice.sync.preflight(serverId)).status).toBe('unfinished-upload');
@@ -554,7 +554,7 @@ describe('retrying and resuming an upload', () => {
 describe('repairing another member\'s unfinished upload', () => {
     const bobStale: LockView = {
         state: 'stale', ageSeconds: 600,
-        lock: { format: 2, sessionId: 'bob', host: { name: 'Bob', email: BOB.email }, phase: 'uploading', leaseSeconds: 45, baseRevision: 1, startedAt: null, address: null, players: [] },
+        lock: { format: 2, sessionId: 'bob', host: { name: 'Bob', email: BOB.email }, phase: 'uploading', leaseSeconds: 45, baseRevision: 1, startedAt: null, address: null, players: [], tunnels: [] },
     };
 
     beforeEach(async () => {

@@ -58,6 +58,11 @@ export class SettingsService {
         if ('eulaAccepted' in patch) next.eulaAccepted = requireBoolean(patch.eulaAccepted, 'eulaAccepted');
         if ('notifications' in patch) next.notifications = requireBoolean(patch.notifications, 'notifications');
         if ('notificationSound' in patch) next.notificationSound = requireBoolean(patch.notificationSound, 'notificationSound');
+        if ('playitPrimary' in patch) {
+            const address: unknown = patch.playitPrimary;
+            if (address !== null && (typeof address !== 'string' || address === '' || address.length > 300)) throw invalid('That playit.gg tunnel is not valid.');
+            next.playitPrimary = address;
+        }
         if ('theme' in patch) {
             if (!THEMES.includes(patch.theme as ThemeName)) throw invalid('That theme does not exist.');
             next.theme = patch.theme as ThemeName;

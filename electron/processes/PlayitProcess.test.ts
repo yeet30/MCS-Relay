@@ -4,7 +4,43 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeChildProcess, fakeExecFile, fakeSpawn, until } from '../../test/fakes/FakeChildProcess';
 import { AppError } from '../errors';
-import { PlayitProcess } from './PlayitProcess';
+import { stripAnsi } from './MinecraftProcess';
+import { PlayitProcess, parsePlayitScreen } from './PlayitProcess';
+
+/** One screen as playit.gg 0.15 draws it, with a Minecraft and a voice chat tunnel. */
+const SCREEN = [
+    '\x1b[2J\x1b[1;1Hplayit (v0.15.26): 1729600000000 tunnel running, 3 tunnels registered',
+    '',
+    '',
+    'TUNNELS',
+    '\x1b[1mfox-river.gl.joinmc.link\x1b[0m => 127.0.0.1:25565 (minecraft-java)',
+    'fox-voice.gl.at.ply.gg:41234 => 127.0.0.1:24454 (proto: Udp, port count: 1)',
+    'old-map.gl.at.ply.gg:5000 => 127.0.0.1:8123 (disabled)',
+    '\tsee: https://playit.gg/account/tunnels/abc',
+    'tunnel pending: https://playit.gg/account/tunnels/def',
+    '',
+].join('\n');
+
+const JAVA = { address: 'fox-river.gl.joinmc.link', type: 'minecraft-java', local: '127.0.0.1:25565' };
+const VOICE = { address: 'fox-voice.gl.at.ply.gg:41234', type: 'udp', local: '127.0.0.1:24454' };
+
+describe('parsePlayitScreen', () => {
+    it('lists every tunnel that is on, with its type, from the newest screen', () => {
+        const older = 'playit (v0.15.26): 1 tunnel running, 1 tunnels registered\n\nTUNNELS\nold.joinmc.link => 127.0.0.1:25565 (minecraft-java)\n';
+        const text = stripAnsi(older + SCREEN);
+        expect(parsePlayitScreen(text)).toEqual({ tunnels: [JAVA, VOICE], disabled: 1, addUrl: null });
+    });
+
+    it('names plain tunnels by protocol and keeps playit.gg types as they are', () => {
+        const text = 'TUNNELS\na.ply.gg:1 => 127.0.0.1:2 (proto: Both, port count: 1)\nb.ply.gg:3 => 127.0.0.1:19132 (minecraft-bedrock)\n';
+        expect(parsePlayitScreen(text).tunnels.map((t) => t.type)).toEqual(['tcp+udp', 'minecraft-bedrock']);
+    });
+
+    it('reports where to add a tunnel when there is none', () => {
+        const text = 'playit (v0.15.26): 1 tunnel running, 0 tunnels registered\n\nTUNNELS\nAdd tunnels here: https://playit.gg/account/agents/default\n';
+        expect(parsePlayitScreen(text)).toEqual({ tunnels: [], disabled: 0, addUrl: 'https://playit.gg/account/agents/default' });
+    });
+});
 
 let dir: string;
 let exe: string;
@@ -40,26 +76,53 @@ async function spawned(h: ReturnType<typeof harness>): Promise<FakeChildProcess>
 }
 
 describe('PlayitProcess.start', () => {
-    it('resolves with the joinmc.link address from coloured output', async () => {
+    it('resolves with every tunnel from coloured output', async () => {
         const h = harness();
         const started = h.playit.start(exe, 2000);
         const child = await spawned(h);
         expect(h.spawn.calls[0].command).toBe(exe);
         expect(h.spawn.calls[0].options).toMatchObject({ windowsHide: true });
-        child.print('\x1b[2J\x1b[1;1Hplayit (v0.15.26): agent running\n');
-        child.print('\x1b[32mtunnels\x1b[0m\n\x1b[1mfox-river.joinmc.link\x1b[0m => 127.0.0.1:25565 (minecraft-java)\n');
-        await expect(started).resolves.toBe('fox-river.joinmc.link');
+        child.print(SCREEN);
+        await expect(started).resolves.toEqual([JAVA, VOICE]);
         expect(h.playit.isRunning()).toBe(true);
     });
 
-    it('finds an address split across chunks and escape codes', async () => {
+    it('waits for a list that arrives in pieces', async () => {
         const h = harness();
         const started = h.playit.start(exe, 2000);
         const child = await spawned(h);
-        child.print('abc-12.joinmc.li');
+        child.print('TUNNELS\nabc-12.joinmc.li');
         child.print('nk \x1b');
-        child.print('[0m=> 127.0.0.1:25565\n');
-        await expect(started).resolves.toBe('abc-12.joinmc.link');
+        child.print('[0m=> 127.0.0.1:25565 (minecraft-java)\n');
+        await new Promise((r) => setTimeout(r, 50));
+        child.print('v.ply.gg:7 => 127.0.0.1:24454 (proto: Udp, port count: 1)\n');
+        await expect(started).resolves.toEqual([
+            { address: 'abc-12.joinmc.link', type: 'minecraft-java', local: '127.0.0.1:25565' },
+            { address: 'v.ply.gg:7', type: 'udp', local: '127.0.0.1:24454' },
+        ]);
+    });
+
+    it('tells about tunnels added while it runs', async () => {
+        const h = harness();
+        const changes: unknown[] = [];
+        const started = h.playit.start(exe, 2000, undefined, (tunnels) => changes.push(tunnels));
+        const child = await spawned(h);
+        child.print('playit (v0.15.26): 1 tunnel running\nTUNNELS\nfox-river.gl.joinmc.link => 127.0.0.1:25565 (minecraft-java)\n');
+        await expect(started).resolves.toEqual([JAVA]);
+        child.print('playit (v0.15.26): 1 tunnel running\nTUNNELS\nfox-river.gl.joinmc.link => 127.0.0.1:25565 (minecraft-java)\n');
+        child.print(SCREEN);
+        expect(changes).toEqual([[JAVA, VOICE]]);
+    });
+
+    it('fails at once with where to add one when the agent has no tunnels', async () => {
+        const h = harness();
+        const started = h.playit.start(exe, 5000);
+        const child = await spawned(h);
+        child.print('playit (v0.15.26): 1 tunnel running, 0 tunnels registered\n\nTUNNELS\nAdd tunnels here: https://playit.gg/account/agents/default\n');
+        const err = await expectAppError(started, 'PLAYIT');
+        expect(err.message).toContain('no tunnels');
+        expect(err.detail).toBe('https://playit.gg/account/agents/default');
+        expect(h.playit.isRunning()).toBe(false);
     });
 
     it('fails with PLAYIT when the executable does not exist', async () => {
@@ -137,7 +200,7 @@ describe('PlayitProcess.start', () => {
         const h = harness();
         const started = h.playit.start(exe, 2000);
         const child = await spawned(h);
-        child.print('x.joinmc.link => 127.0.0.1:25565\n');
+        child.print('x.joinmc.link => 127.0.0.1:25565 (minecraft-java)\n');
         await started;
         await expectAppError(h.playit.start(exe, 2000), 'BUSY');
     });
@@ -147,7 +210,7 @@ describe('PlayitProcess.stop', () => {
     async function running(h: ReturnType<typeof harness>): Promise<FakeChildProcess> {
         const started = h.playit.start(exe, 2000);
         const child = await spawned(h);
-        child.print('x.joinmc.link => 127.0.0.1:25565\n');
+        child.print('x.joinmc.link => 127.0.0.1:25565 (minecraft-java)\n');
         await started;
         return child;
     }

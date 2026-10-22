@@ -2,8 +2,8 @@
 // Every decision is taken from this.state.phase, never from a UI flag.
 import type { EventName, Events } from '../../shared/ipc';
 import type {
-    AppErrorInfo, ConflictChoice, LockPhase, LockView, RunKind, SessionPhase, SessionProgress, SessionState, StepMessage,
-    SyncReport, TransferSnapshot, UserInfo,
+    AppErrorInfo, ConflictChoice, LockPhase, LockView, PlayitTunnel, RunKind, SessionPhase, SessionProgress, SessionState,
+    StepMessage, SyncReport, TransferSnapshot, UserInfo,
 } from '../../shared/types';
 import { formatDuration } from '../../shared/duration';
 import { ancestorsOf, parentOf } from '../../shared/paths';
@@ -59,8 +59,16 @@ const KEPT_DOWNLOADS = 'Files that already arrived are kept, so the next run dow
 type UploadKind = Extract<RunKind, 'stop' | 'retry' | 'resume' | 'up' | 'repair'>;
 
 const IDLE: SessionState = {
-    phase: 'idle', serverId: null, startedAt: null, address: null, players: [], javaRunning: false, error: null,
+    phase: 'idle', serverId: null, startedAt: null, address: null, tunnels: [], players: [], javaRunning: false, error: null,
 };
+
+/** The tunnel shown first: the one this PC chose earlier, else the Minecraft Java one, else the first. */
+export function primaryTunnel(tunnels: PlayitTunnel[], preferred: string | null): PlayitTunnel | null {
+    return tunnels.find((t) => t.address === preferred)
+        ?? tunnels.find((t) => t.type === 'minecraft-java')
+        ?? tunnels[0]
+        ?? null;
+}
 
 function isCode(err: unknown, code: AppErrorInfo['code']): boolean {
     return err instanceof AppError && err.code === code;
@@ -126,7 +134,7 @@ export class SessionController {
     /* ------------------------------------------------------------------ queries */
 
     getState(): SessionState {
-        return { ...this.state, players: [...this.state.players] };
+        return { ...this.state, players: [...this.state.players], tunnels: [...this.state.tunnels] };
     }
 
     lastReport(): SyncReport | null {
@@ -282,9 +290,13 @@ export class SessionController {
             let address: string | null = null;
             if (usePlayit) {
                 this.progress.enter('playit', 'Starting playit.gg');
-                address = await this.d.playit.start(settings.playitggPath, this.d.timeouts?.playitMs ?? 60_000, signal);
-                this.setState({ address });
-                this.progress.complete('playit', `playit.gg is ready: ${address}`);
+                const tunnels = await this.d.playit.start(
+                    settings.playitggPath, this.d.timeouts?.playitMs ?? 60_000, signal, (next) => void this.tunnelsChanged(serverId, next),
+                );
+                address = primaryTunnel(tunnels, settings.playitPrimary)?.address ?? null;
+                this.setState({ address, tunnels });
+                const more = tunnels.length > 1 ? ` (and ${tunnels.length - 1} more)` : '';
+                this.progress.complete('playit', `playit.gg is ready: ${address}${more}`);
             }
             if (settings.launchServer) {
                 this.progress.enter('java', 'Waiting for the Minecraft server to finish loading');
@@ -303,13 +315,13 @@ export class SessionController {
             this.progress.enter('watch', 'Watching the folder for changes');
             const startedAt = new Date(this.now()).toISOString();
             this.setState({ phase: 'running', startedAt });
-            await this.d.lock.update(serverId, { phase: 'running', startedAt, address });
+            await this.d.lock.update(serverId, { phase: 'running', startedAt, address: this.state.address, tunnels: this.state.tunnels });
             this.d.changes.clear();
             if (server.localPath) await this.d.changes.start(server.localPath, await this.d.sync.loadRules(serverId));
             this.progress.complete('watch', 'Hosting');
             this.progress.finish('done');
             this.announce(serverId, 'done', `${this.nameOf(serverId)} is running`,
-                `${address ? `Friends can join at ${address}. ` : ''}Started in ${this.elapsed()}.`);
+                `${this.state.address ? `Friends can join at ${this.state.address}. ` : ''}Started in ${this.elapsed()}.`);
         } catch (err) {
             const info = this.lockLost ? this.lostInfo() : toAppError(err);
             const downloading = this.state.phase === 'downloading';
@@ -383,6 +395,32 @@ export class SessionController {
     /** Cancels what is running; resolves when it has stopped. A start or a download goes back to idle (files that
      *  already arrived stay). An upload pauses: the server stays reserved and Continue picks it up where it
      *  stopped, from the journal. Stopping the Minecraft server and releasing the server cannot be cancelled. */
+/** While this PC hosts: which playit.gg tunnel is shown first, here and to the other members (through the lock).
+     *  Remembered on this PC for the next sessions. */
+    async setPrimaryTunnel(address: string): Promise<void> {
+        const tunnel = this.state.tunnels.find((t) => t.address === address);
+        if (!tunnel) throw new AppError('INVALID', 'That playit.gg tunnel is not running any more.');
+        this.d.settings.set({ playitPrimary: tunnel.address });
+        if (this.state.address === tunnel.address) return;
+        this.setState({ address: tunnel.address });
+        const serverId = this.state.serverId;
+        if (serverId && this.state.phase === 'running') await this.d.lock.update(serverId, { address: tunnel.address });
+    }
+
+    /** playit.gg listed other tunnels while it runs (one was added or removed on playit.gg). */
+    private async tunnelsChanged(serverId: string, tunnels: PlayitTunnel[]): Promise<void> {
+        const { phase } = this.state;
+        if (this.state.serverId !== serverId || (phase !== 'launching' && phase !== 'running')) return;
+        const address = primaryTunnel(tunnels, this.d.settings.get().playitPrimary)?.address ?? null;
+        this.setState({ address, tunnels });
+        if (phase !== 'running') return;
+        try {
+            await this.d.lock.update(serverId, { address, tunnels });
+        } catch (err) {
+            console.warn('[session] could not write the new playit.gg tunnels into the lock:', toAppError(err).message);
+        }
+    }
+
     cancel(): Promise<void> {
         // While Java saves the world nothing is interrupted: the request is kept, and no upload starts afterwards.
         if (this.state.phase === 'stopping' && this.progress.snapshot().kind === 'stop') {
@@ -433,7 +471,7 @@ export class SessionController {
         if (javaRunning) this.progress.complete('stop-java', 'The Minecraft server has stopped');
         if (playitRunning) this.progress.enter('stop-playit', 'Stopping playit.gg');
         await this.d.playit.stop();
-        this.setState({ address: null });
+        this.setState({ address: null, tunnels: [] });
         if (playitRunning) this.progress.complete('stop-playit', 'playit.gg has stopped');
         if (this.lockLost) return;
         if (this.cancelled) {
@@ -1078,7 +1116,7 @@ export class SessionController {
             console.error('[session] the Minecraft server could not be stopped:', err);
         }
         await this.d.playit.stop();
-        this.setState({ javaRunning: this.d.minecraft.isRunning(), address: null, players: [] });
+        this.setState({ javaRunning: this.d.minecraft.isRunning(), address: null, tunnels: [], players: [] });
     }
 
     /** Sets the phase and writes it into the lock while we hold it. */

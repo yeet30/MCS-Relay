@@ -53,6 +53,7 @@ export interface Commands {
     'session:resolve': (serverId: ServerId, choice: ConflictChoice) => SyncReport;
     'session:retryUpload': () => void;
     'session:cancel': () => void;
+    'session:setPrimaryTunnel': (address: string) => void;
     /** Cancels the upload for good: what was sent is saved as an incomplete revision and the server is freed. */
     'session:abandonUpload': () => void;
     'session:repair': (serverId: ServerId) => void;

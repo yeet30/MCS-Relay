@@ -70,6 +70,8 @@ export interface AppSettings {
     notifications: boolean;             // a desktop notification when a start or stop finishes in the background
     notificationSound: boolean;         // a short chime when a start or stop finishes
     theme: ThemeName;                   // per PC, like the other display settings
+    /** The playit.gg tunnel shown first while this PC hosts (its address); null: the Minecraft Java one. */
+    playitPrimary: string | null;
 }
 
 export interface ServerSettings {
@@ -197,6 +199,17 @@ export type LockPhase =
     | 'free' | 'claiming' | 'downloading' | 'launching' | 'running'
     | 'stopping' | 'uploading' | 'releasing';
 
+/** One tunnel of the host's playit.gg agent, as the agent lists it. */
+export interface PlayitTunnel {
+    /** What players connect to: "name.joinmc.link" for Minecraft Java, otherwise "host:port". */
+    address: string;
+    /** The playit.gg tunnel type ("minecraft-java", "minecraft-bedrock", ...), or for a plain port tunnel its
+     *  protocol: "tcp", "udp" or "tcp+udp". */
+    type: string;
+    /** Where playit.gg sends it on the host's PC, such as 127.0.0.1:24454. */
+    local: string;
+}
+
 export interface LockContent {
     format: 2;
     sessionId: string;
@@ -205,8 +218,9 @@ export interface LockContent {
     leaseSeconds: number;
     baseRevision: number;
     startedAt: string | null;
-    address: string | null;
+    address: string | null;             // the tunnel the host shows first
     players: string[];
+    tunnels: PlayitTunnel[];            // every tunnel of the host's playit.gg (older apps write none)
 }
 
 /** `leftByThisPc`: a stale lock this PC claimed in an earlier run of the app that crashed or was killed (only one
@@ -225,7 +239,8 @@ export interface SessionState {
     phase: SessionPhase;
     serverId: ServerId | null;
     startedAt: string | null;           // when the server became "running"
-    address: string | null;             // playit.gg address
+    address: string | null;             // the playit.gg tunnel shown first
+    tunnels: PlayitTunnel[];            // every tunnel playit.gg reported
     players: string[];
     javaRunning: boolean;
     error: AppErrorInfo | null;         // set in "failed" and "upload-pending"

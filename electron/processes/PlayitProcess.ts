@@ -1,7 +1,8 @@
-// Runs the playit.gg agent and reads the tunnel address ("name.joinmc.link") from its output.
+// Runs the playit.gg agent and reads its tunnels ("name.joinmc.link", a voice chat port, ...) from its output.
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import type { PlayitTunnel } from '../../shared/types';
 import { AppError } from '../errors';
 import { abortError, defaultExecFile, killProcessTree, stripAnsi } from './MinecraftProcess';
 import type { ExecFileFn } from './MinecraftProcess';
@@ -13,12 +14,56 @@ export interface PlayitProcessDeps {
     platform?: NodeJS.Platform;
 }
 
-const ADDRESS_RE = /([a-zA-Z0-9.-]+\.joinmc\.link)\s*=>/;
+// The agent redraws a screen every few seconds; each one lists the tunnels as "<address> => <local> (<type>)",
+// a plain port tunnel as "(proto: Udp, port count: 1)" and a switched-off one as "(disabled)".
+const SCREEN_START_RE = /^playit \(v/;
+const TUNNEL_RE = /^(\S+)\s*=>\s*(\S+)(?:\s+\((.+)\))?$/;
+const PROTO_RE = /^proto:\s*(\w+)/;
+const PROTOCOLS: Record<string, string> = { tcp: 'tcp', udp: 'udp', both: 'tcp+udp' };
+const NO_TUNNELS_RE = /Add tunnels here:\s*(https?:\/\/\S+)/;
+/** After the first tunnels appear, how long to wait for the rest of the screen (output can arrive in pieces). */
+const SETTLE_MS = 300;
 // A fresh agent that was never linked to an account prints a claim link and waits for it forever.
 const CLAIM_RE = /https?:\/\/playit\.gg\/claim\/[A-Za-z0-9_-]+/;
 const BUFFER_CHARS = 16 * 1024;
 const TAIL_LINES = 20;
 const EXIT_WAIT_MS = 5_000;
+
+export interface PlayitScreen {
+    tunnels: PlayitTunnel[];
+    disabled: number;
+    /** Shown instead of tunnels when the agent has none: where to add one. */
+    addUrl: string | null;
+}
+
+/** The tunnels on the newest screen the agent drew (escape codes already removed). Disabled tunnels are counted,
+ *  not listed. */
+export function parsePlayitScreen(text: string): PlayitScreen {
+    const lines = text.split(/\r?\n|\r/).map((line) => line.trim());
+    let start = 0;
+    lines.forEach((line, index) => {
+        if (SCREEN_START_RE.test(line)) start = index;
+    });
+    const screen: PlayitScreen = { tunnels: [], disabled: 0, addUrl: null };
+    for (const line of lines.slice(start)) {
+        const add = NO_TUNNELS_RE.exec(line);
+        if (add) screen.addUrl = add[1];
+        const match = TUNNEL_RE.exec(line);
+        if (!match) continue;
+        const [, address, local, kind] = match;
+        if (kind === 'disabled') {
+            screen.disabled += 1;
+            continue;
+        }
+        const proto = kind ? PROTO_RE.exec(kind) : null;
+        const type = proto ? PROTOCOLS[proto[1].toLowerCase()] ?? proto[1].toLowerCase()
+            : kind ?? (address.endsWith('.joinmc.link') ? 'minecraft-java' : 'tcp');
+        if (!screen.tunnels.some((t) => t.address === address)) screen.tunnels.push({ address, type, local });
+    }
+    return screen;
+}
+
+const sameTunnels = (a: PlayitTunnel[], b: PlayitTunnel[]): boolean => JSON.stringify(a) === JSON.stringify(b);
 
 export class PlayitProcess {
     private readonly spawnImpl: typeof spawn;
@@ -37,8 +82,9 @@ export class PlayitProcess {
         this.platform = deps.platform ?? process.platform;
     }
 
-    /** Starts the agent and resolves with the "*.joinmc.link" address; AppError('PLAYIT'|'TIMEOUT') otherwise (kills it). */
-    async start(executable: string, timeoutMs: number, signal?: AbortSignal): Promise<string> {
+    /** Starts the agent and resolves with its tunnels once it lists at least one; AppError('PLAYIT'|'TIMEOUT')
+     *  otherwise (kills it). `onTunnels` hears about later changes (a tunnel added or removed while it runs). */
+    async start(executable: string, timeoutMs: number, signal?: AbortSignal, onTunnels?: (tunnels: PlayitTunnel[]) => void): Promise<PlayitTunnel[]> {
         if (this.child) throw new AppError('BUSY', 'playit.gg is already running.');
         if (signal?.aborted) throw abortError(signal);
         if (!executable || !existsSync(executable)) {
@@ -58,10 +104,21 @@ export class PlayitProcess {
 
         let spawnError: Error | null = null;
         let onText: () => void = () => undefined;
+        let reported: PlayitTunnel[] | null = null;
+        // After the start: tell the session when the list changes.
+        const followTunnels = () => {
+            if (!reported || !onTunnels) return;
+            const { tunnels } = parsePlayitScreen(stripAnsi(this.output));
+            if (tunnels.length === 0 || sameTunnels(tunnels, reported)) return;
+            reported = tunnels;
+            console.log(`[playit] tunnels now: ${tunnels.map((t) => `${t.address} (${t.type})`).join(', ')}`);
+            onTunnels(tunnels);
+        };
         // Output is always read, also after the address was found: a full pipe would block the agent.
         const onData = (chunk: Buffer | string) => {
             this.output = (this.output + chunk.toString()).slice(-BUFFER_CHARS);
             onText();
+            followTunnels();
         };
         child.stdout?.on('data', onData);
         child.stderr?.on('data', onData);
@@ -93,12 +150,14 @@ export class PlayitProcess {
             child.on('close', (code: number | null) => finish(code));
         });
 
-        return new Promise<string>((resolve, reject) => {
+        return new Promise<PlayitTunnel[]>((resolve, reject) => {
             let settled = false;
+            let settling: ReturnType<typeof setTimeout> | null = null;
             const settle = (): boolean => {
                 if (settled) return false;
                 settled = true;
                 clearTimeout(timer);
+                if (settling) clearTimeout(settling);
                 signal?.removeEventListener('abort', onAbort);
                 onText = () => undefined;
                 return true;
@@ -113,18 +172,35 @@ export class PlayitProcess {
                 if (!settle()) return;
                 failAfterStop(new AppError(
                     'TIMEOUT',
-                    `playit.gg did not report an address within ${Math.round(timeoutMs / 1000)} seconds, so it was stopped.`,
+                    `playit.gg did not list a tunnel within ${Math.round(timeoutMs / 1000)} seconds, so it was stopped.`,
                     this.tailText(),
                 ));
             }, timeoutMs);
             onText = () => {
                 const text = stripAnsi(this.output);
-                const address = ADDRESS_RE.exec(text);
-                if (address) {
-                    if (settle()) {
-                        console.log(`[playit] address ${address[1]}`);
-                        resolve(address[1]);
-                    }
+                const screen = parsePlayitScreen(text);
+                if (screen.tunnels.length > 0) {
+                    // The rest of the list may still be on its way: wait until the output is quiet for a moment.
+                    if (settling) clearTimeout(settling);
+                    settling = setTimeout(() => {
+                        const { tunnels } = parsePlayitScreen(stripAnsi(this.output));
+                        if (!settle()) return;
+                        console.log(`[playit] tunnels: ${tunnels.map((t) => `${t.address} (${t.type})`).join(', ')}`);
+                        reported = tunnels;
+                        resolve(tunnels);
+                    }, SETTLE_MS);
+                    return;
+                }
+                if (screen.addUrl && settle()) {
+                    failAfterStop(new AppError(
+                        'PLAYIT',
+                        'Your playit.gg agent has no tunnels yet. Add a "Minecraft Java" tunnel to it on playit.gg, then start again.',
+                        screen.addUrl,
+                    ));
+                    return;
+                }
+                if (screen.disabled > 0 && settle()) {
+                    failAfterStop(new AppError('PLAYIT', 'All of your playit.gg tunnels are disabled. Turn one on at playit.gg, then start again.', text.slice(-2000)));
                     return;
                 }
                 const claim = CLAIM_RE.exec(text);
@@ -140,8 +216,8 @@ export class PlayitProcess {
             void this.exitPromise.then((code) => {
                 if (!settle()) return;
                 if (spawnError) reject(new AppError('PLAYIT', 'playit.gg could not be started.', spawnError.message));
-                else if (this.stopRequested) reject(new AppError('PLAYIT', 'playit.gg was stopped before it reported an address.', this.tailText()));
-                else reject(new AppError('PLAYIT', `playit.gg stopped before it reported an address (exit code ${code ?? 'none'}).`, this.tailText()));
+                else if (this.stopRequested) reject(new AppError('PLAYIT', 'playit.gg was stopped before it listed its tunnels.', this.tailText()));
+                else reject(new AppError('PLAYIT', `playit.gg stopped before it listed its tunnels (exit code ${code ?? 'none'}).`, this.tailText()));
             });
             // Output that arrived while the listeners were being set up.
             onText();

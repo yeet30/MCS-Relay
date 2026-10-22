@@ -279,8 +279,10 @@ export class MinecraftProcess {
 }
 export class PlayitProcess {
     constructor(deps?: { spawnImpl?: typeof import('node:child_process').spawn });
-    /** Starts the agent and resolves with the "*.joinmc.link" address; AppError('PLAYIT'|'TIMEOUT') otherwise (kills it). */
-    start(executable: string, timeoutMs: number, signal?: AbortSignal): Promise<string>;
+    /** Starts the agent and resolves with every tunnel it lists ("<address> => <local> (<type>)", disabled ones left out) once at
+     *  least one shows; onTunnels hears about later changes. AppError('PLAYIT'|'TIMEOUT') otherwise (kills it). The session shows the
+     *  Minecraft Java tunnel first unless the host chose another (settings.playitPrimary); lock.json carries address + tunnels. */
+    start(executable: string, timeoutMs: number, signal?: AbortSignal, onTunnels?: (tunnels: PlayitTunnel[]) => void): Promise<PlayitTunnel[]>;
     stop(): Promise<void>;                        // Windows: `taskkill /PID <pid> /T /F` awaited; else SIGTERM then SIGKILL
     isRunning(): boolean;
 }

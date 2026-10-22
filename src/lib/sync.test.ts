@@ -14,7 +14,7 @@ function emptyPlan(): SyncPlan {
 function lockContent(patch: Partial<LockContent> = {}): LockContent {
     return {
         format: 2, sessionId: 's1', host: { name: 'Alex', email: 'alex@example.com' }, phase: 'running',
-        leaseSeconds: 45, baseRevision: 42, startedAt: null, address: null, players: [], ...patch,
+        leaseSeconds: 45, baseRevision: 42, startedAt: null, address: null, players: [], tunnels: [], ...patch,
     };
 }
 
@@ -38,7 +38,7 @@ function report(patch: Partial<SyncReport> = {}): SyncReport {
 }
 
 function session(patch: Partial<SessionState> = {}): SessionState {
-    return { phase: 'idle', serverId: null, startedAt: null, address: null, players: [], javaRunning: false, error: null, ...patch };
+    return { phase: 'idle', serverId: null, startedAt: null, address: null, tunnels: [], players: [], javaRunning: false, error: null, ...patch };
 }
 
 describe('the "can start" decision', () => {
@@ -101,13 +101,14 @@ test('isSessionBusy', () => {
 describe('livePresence', () => {
     test('from my own session when I host', () => {
         const mine = session({ phase: 'running', serverId: 'srv', players: ['Steve'], startedAt: 'T', address: 'x.joinmc.link' });
-        expect(livePresence(mine, 'srv', held({ players: ['old'] }))).toEqual({ players: ['Steve'], startedAt: 'T', address: 'x.joinmc.link' });
+        expect(livePresence(mine, 'srv', held({ players: ['old'] }))).toEqual({ players: ['Steve'], startedAt: 'T', address: 'x.joinmc.link', tunnels: [] });
         expect(livePresence(session({ phase: 'launching', serverId: 'srv' }), 'srv', held())).toBeNull();
     });
 
     test('from the lock when someone else hosts', () => {
-        const view = held({ players: ['Alex'], startedAt: 'S', address: 'a.joinmc.link' });
-        expect(livePresence(session(), 'srv', view)).toEqual({ players: ['Alex'], startedAt: 'S', address: 'a.joinmc.link' });
+        const tunnels = [{ address: 'a.joinmc.link', type: 'minecraft-java', local: '127.0.0.1:25565' }];
+        const view = held({ players: ['Alex'], startedAt: 'S', address: 'a.joinmc.link', tunnels });
+        expect(livePresence(session(), 'srv', view)).toEqual({ players: ['Alex'], startedAt: 'S', address: 'a.joinmc.link', tunnels });
         expect(livePresence(session(), 'srv', held({ phase: 'downloading' }))).toBeNull();
         expect(livePresence(session(), 'srv', stale())).toBeNull();
         expect(livePresence(session(), 'srv', FREE)).toBeNull();

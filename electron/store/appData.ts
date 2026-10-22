@@ -50,6 +50,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     notifications: true,
     notificationSound: true,
     theme: 'light',
+    playitPrimary: null,
 };
 
 const LEGACY_FILE = 'localStore.json';
@@ -410,6 +411,7 @@ function parseSettings(raw: unknown): AppSettings {
         notifications: typeof r.notifications === 'boolean' ? r.notifications : DEFAULT_SETTINGS.notifications,
         notificationSound: typeof r.notificationSound === 'boolean' ? r.notificationSound : DEFAULT_SETTINGS.notificationSound,
         theme: THEMES.includes(r.theme as ThemeName) ? (r.theme as ThemeName) : DEFAULT_SETTINGS.theme,
+        playitPrimary: typeof r.playitPrimary === 'string' && r.playitPrimary !== '' ? r.playitPrimary : null,
     };
 }
 

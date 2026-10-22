@@ -28,7 +28,7 @@ interface Member {
 function lockOf(user: UserInfo, sessionId: string, phase: LockPhase, extra: Partial<LockContent> = {}): LockContent {
     return {
         format: 2, sessionId, host: { name: user.name, email: user.email }, phase, leaseSeconds: 45,
-        baseRevision: 0, startedAt: null, address: null, players: [], ...extra,
+        baseRevision: 0, startedAt: null, address: null, players: [], tunnels: [], ...extra,
     };
 }
 
@@ -140,13 +140,25 @@ afterEach(() => {
 
 describe('parseLock / serializeLock', () => {
     it('round-trips a lock', () => {
-        const lock = lockOf(ALICE, 's1', 'running', { baseRevision: 4, startedAt: '2026-10-15T12:00:00.000Z', address: 'a.joinmc.link', players: ['Steve'] });
+        const tunnels = [
+            { address: 'a.joinmc.link', type: 'minecraft-java', local: '127.0.0.1:25565' },
+            { address: 'v.ply.gg:4100', type: 'udp', local: '127.0.0.1:24454' },
+        ];
+        const lock = lockOf(ALICE, 's1', 'running', { baseRevision: 4, startedAt: '2026-10-15T12:00:00.000Z', address: 'a.joinmc.link', players: ['Steve'], tunnels });
         expect(parseLock(serializeLock(lock))).toEqual(lock);
     });
 
     it('fills in missing optional fields', () => {
         const text = JSON.stringify({ format: 2, sessionId: '', host: { name: 'A', email: 'a@x' }, phase: 'free', leaseSeconds: 45, baseRevision: 0 });
-        expect(parseLock(text)).toMatchObject({ startedAt: null, address: null, players: [] });
+        expect(parseLock(text)).toMatchObject({ startedAt: null, address: null, players: [], tunnels: [] });
+    });
+
+    it('keeps only well-formed tunnels', () => {
+        const text = JSON.stringify({
+            format: 2, sessionId: '', host: { name: 'A', email: 'a@x' }, phase: 'running', leaseSeconds: 45, baseRevision: 0,
+            tunnels: [{ address: 'a.joinmc.link', type: 'minecraft-java', local: '127.0.0.1:25565', extra: 1 }, { address: 5 }, 'x'],
+        });
+        expect(parseLock(text).tunnels).toEqual([{ address: 'a.joinmc.link', type: 'minecraft-java', local: '127.0.0.1:25565' }]);
     });
 
     it.each([

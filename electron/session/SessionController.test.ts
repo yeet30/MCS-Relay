@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { EventName, Events } from '../../shared/ipc';
 import { DEFAULT_JAVA_FLAGS } from '../../shared/types';
-import type { LockView, SessionPhase, SessionProgress, SyncReport, UserInfo } from '../../shared/types';
+import type { LockView, PlayitTunnel, SessionPhase, SessionProgress, SyncReport, UserInfo } from '../../shared/types';
 import { AppError } from '../errors';
 import { SessionController } from './SessionController';
 import type { SessionDeps } from './SessionController';
@@ -28,6 +28,9 @@ function deferred<T = void>(): { promise: Promise<T>; resolve: (v: T) => void; r
     });
     return { promise, resolve, reject };
 }
+
+const JAVA: PlayitTunnel = { address: 'abc.joinmc.link', type: 'minecraft-java', local: '127.0.0.1:25565' };
+const VOICE: PlayitTunnel = { address: 'voice.ply.gg:4100', type: 'udp', local: '127.0.0.1:24454' };
 
 function setup(overrides: { report?: SyncReport; journal?: boolean } = {}) {
     const notes: Array<{ title: string; body: string; outcome: 'done' | 'failed' }> = [];
@@ -83,7 +86,12 @@ function setup(overrides: { report?: SyncReport; journal?: boolean } = {}) {
         isRunning: vi.fn(() => javaRunning),
         send: vi.fn(),
     };
-    const playit = { start: vi.fn(async () => 'abc.joinmc.link'), stop: vi.fn(async () => undefined) };
+    const playit = {
+        start: vi.fn<(path: string, ms: number, signal?: AbortSignal, onTunnels?: (tunnels: PlayitTunnel[]) => void) => Promise<PlayitTunnel[]>>(
+            async () => [VOICE, JAVA],
+        ),
+        stop: vi.fn(async () => undefined),
+    };
     const settings = {
         get: vi.fn(() => ({
             selectedServerId: 's1', playitggPath: 'C:/playit.exe', usePlayitgg: true, launchServer: true, joinedServerIds: [] as string[],
@@ -139,7 +147,7 @@ describe('SessionController: a normal session', () => {
         expect(t.lock.claim).toHaveBeenCalledWith('s1', 3);
         expect(t.lock.update.mock.calls.map((c) => (c as unknown[])[1])).toEqual([
             { phase: 'downloading' }, { phase: 'launching' },
-            { phase: 'running', startedAt: expect.any(String), address: 'abc.joinmc.link' },
+            { phase: 'running', startedAt: expect.any(String), address: 'abc.joinmc.link', tunnels: [VOICE, JAVA] },
         ]);
         expect(t.session.getState()).toMatchObject({ phase: 'running', javaRunning: true, address: 'abc.joinmc.link' });
         expect(t.changes.start).toHaveBeenCalledWith('C:/servers/s1', expect.any(Function));
@@ -202,7 +210,7 @@ describe('SessionController: refusing to start', () => {
         t.lock.claim.mockRejectedValueOnce(new AppError('LOCK_HELD', 'Alice is playing.'));
         t.lock.inspect.mockResolvedValueOnce({
             state: 'held', ageSeconds: 30,
-            lock: { format: 2, sessionId: 'old', host: { name: 'Alice', email: ME.email }, phase: 'running', leaseSeconds: 45, baseRevision: 3, startedAt: null, address: null, players: [] },
+            lock: { format: 2, sessionId: 'old', host: { name: 'Alice', email: ME.email }, phase: 'running', leaseSeconds: 45, baseRevision: 3, startedAt: null, address: null, players: [], tunnels: [] },
         });
         await t.session.start('s1');
         expect(t.lock.claim).toHaveBeenCalledTimes(2);
@@ -475,7 +483,7 @@ describe('SessionController: cancel and continue', () => {
 describe('SessionController: repairing another member\'s unfinished upload', () => {
     const bobStale: LockView = {
         state: 'stale', ageSeconds: 600,
-        lock: { format: 2, sessionId: 'bob', host: { name: 'Bob', email: 'bob@example.com' }, phase: 'uploading', leaseSeconds: 45, baseRevision: 3, startedAt: null, address: null, players: [] },
+        lock: { format: 2, sessionId: 'bob', host: { name: 'Bob', email: 'bob@example.com' }, phase: 'uploading', leaseSeconds: 45, baseRevision: 3, startedAt: null, address: null, players: [], tunnels: [] },
     };
 
     it('takes the server over, uploads in repair mode and frees it', async () => {
@@ -581,5 +589,43 @@ describe('SessionController: pause or cancel while the Minecraft server saves th
         expect(t.sync.uploadSession).not.toHaveBeenCalled();
         expect(t.session.getState().phase).toBe('idle');
         expect(t.lock.releaseIfMine).toHaveBeenCalledWith('s1');
+    });
+});
+
+describe('SessionController: playit.gg tunnels', () => {
+    it('shows the Minecraft Java tunnel first unless this PC chose another one', async () => {
+        const t = setup();
+        t.settings.get.mockReturnValue({ ...t.settings.get(), playitPrimary: VOICE.address } as ReturnType<typeof t.settings.get>);
+        await t.session.start('s1');
+        expect(t.session.getState()).toMatchObject({ address: VOICE.address, tunnels: [VOICE, JAVA] });
+    });
+
+    it('the host can show another tunnel first: remembered, and written into the lock for the others', async () => {
+        const t = setup();
+        await t.session.start('s1');
+        t.lock.update.mockClear();
+        await t.session.setPrimaryTunnel(VOICE.address);
+        expect(t.settings.set).toHaveBeenCalledWith({ playitPrimary: VOICE.address });
+        expect(t.session.getState().address).toBe(VOICE.address);
+        expect(t.lock.update).toHaveBeenCalledWith('s1', { address: VOICE.address });
+        await expect(t.session.setPrimaryTunnel('gone.ply.gg:1')).rejects.toMatchObject({ code: 'INVALID' });
+    });
+
+    it('a tunnel added on playit.gg while hosting reaches the lock', async () => {
+        const t = setup();
+        t.playit.start.mockResolvedValueOnce([JAVA]);
+        await t.session.start('s1');
+        const onTunnels = t.playit.start.mock.calls[0][3]!;
+        t.lock.update.mockClear();
+        onTunnels([JAVA, VOICE]);
+        await vi.waitFor(() => expect(t.lock.update).toHaveBeenCalledWith('s1', { address: JAVA.address, tunnels: [JAVA, VOICE] }));
+        expect(t.session.getState().tunnels).toEqual([JAVA, VOICE]);
+    });
+
+    it('stopping forgets the tunnels', async () => {
+        const t = setup();
+        await t.session.start('s1');
+        await t.session.stop();
+        expect(t.session.getState()).toMatchObject({ address: null, tunnels: [] });
     });
 });
