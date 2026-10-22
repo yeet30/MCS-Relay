@@ -205,16 +205,37 @@ describe('create', () => {
         await expectAppError(alice.servers.create(), 'INVALID');
     });
 
-    test('a new server needs no lookups inside its own folder', async () => {
+    test('a new server takes few requests: one check per level for copies, no lookups before creating', async () => {
         await alice.servers.create();
         store.calls.length = 0;
         const second = await alice.servers.create();
         const ops = store.calls.map((c) => c.op);
         expect(ops.filter((op) => op === 'createFile')).toHaveLength(2);
-        expect(store.calls.filter((c) => c.op === 'listChildren' && c.args[0] !== store.node(second.id).parentId)).toEqual([]);
-        expect(ops.length).toBeLessThanOrEqual(7);
+        expect(ops.filter((op) => op === 'listChildren')).toHaveLength(3);         // the root, the server folder, .launcher
+        expect(ops.length).toBeLessThanOrEqual(9);
         expect(launcherText(second.id, 'lock.json')).toBeDefined();
         expect(launcherText(second.id, 'sync-rules.json')).toBeDefined();
+    });
+
+    test('a lock.json made twice by a retried upload ends up once, the oldest, for every member', async () => {
+        const view = store.as(ALICE.email);
+        const retrying: typeof view = Object.create(view) as typeof view;
+        // The first create reached Drive but its answer was lost, so the request was sent again.
+        retrying.createFile = async (name, parent, source, opts, props) => {
+            const first = await view.createFile(name, parent, source, opts, props);
+            return name === 'lock.json' ? view.createFile(name, parent, source, opts, props) : first;
+        };
+        const launcher = new LauncherFiles(retrying);
+        const servers = new ServersService({
+            drive: alice.drive, launcher, auth: { me: alice.me }, settings: alice.settings, appData: alice.appData,
+            dialogs: alice.dialogs, beforeDelete: alice.beforeDelete,
+        });
+        const summary = await servers.create();
+        const folder = store.findPath(summary.id, '.launcher');
+        const locks = [...store.nodes.values()].filter((n) => n.name === 'lock.json' && n.parentId === folder?.id && !n.trashed);
+        expect(locks).toHaveLength(1);
+        expect(await launcher.findFile(summary.id, 'lock.json')).toBe(locks[0].id);
+        expect(await new LauncherFiles(store.as(ALICE.email)).findFile(summary.id, 'lock.json')).toBe(locks[0].id);
     });
 
     test('a failure while writing .launcher removes the half-created server', async () => {

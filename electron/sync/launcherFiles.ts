@@ -44,14 +44,25 @@ export class LauncherFiles {
     }
 
     /** For a server folder created a moment ago, which no other app can know yet: creates .launcher and the
-     *  files in it without first looking for older copies, the files side by side. */
+     *  files in it without first looking for them, the files side by side. Copies can still appear when a create
+     *  succeeded but its answer was lost and the request was retried, so one listing per level keeps the oldest,
+     *  as everywhere else: every member must read and write the same lock.json. */
     async createFresh(serverId: string, files: Partial<Record<LauncherFileName, string>>): Promise<void> {
-        const folder = await this.drive.createFolder(LAUNCHER_FOLDER, serverId);
-        this.folderIds.set(serverId, folder.id);
-        await Promise.all((Object.entries(files) as Array<[LauncherFileName, string]>).map(async ([name, text]) => {
-            const created = await this.drive.createFile(name, folder.id, { kind: 'bytes', data: new TextEncoder().encode(text) });
-            this.ids.set(`${serverId}/${name}`, created.id);
+        const created = await this.drive.createFolder(LAUNCHER_FOLDER, serverId);
+        const folder = await this.keepOldest(serverId, LAUNCHER_FOLDER, created.id, true);
+        this.folderIds.set(serverId, folder);
+        const made = await Promise.all((Object.entries(files) as Array<[LauncherFileName, string]>).map(async ([name, text]) => {
+            const file = await this.drive.createFile(name, folder, { kind: 'bytes', data: new TextEncoder().encode(text) });
+            return [name, file.id] as const;
         }));
+        const inFolder = (await this.drive.listChildren(folder)).filter((m) => m.mimeType !== FOLDER_MIME);   // oldest first
+        for (const [name, id] of made) {
+            const oldest = inFolder.find((m) => m.name === name)?.id ?? id;
+            if (oldest !== id) {
+                await this.drive.trash(id).catch((err: unknown) => console.warn(`[launcher] could not trash duplicate ${name}:`, err));
+            }
+            this.ids.set(`${serverId}/${name}`, oldest);
+        }
     }
 
     /** A file inside .launcher, or null when it (or the folder) does not exist. Read-only. */
