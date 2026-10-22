@@ -62,6 +62,18 @@ const IDLE: SessionState = {
     phase: 'idle', serverId: null, startedAt: null, address: null, tunnels: [], players: [], javaRunning: false, error: null,
 };
 
+const uploadFailed = (name: string): string => `The upload of ${name} did not finish`;
+/** The notification for a run that failed, by what the run was doing. */
+const FAILED_TITLES: Record<RunKind, (name: string) => string> = {
+    start: (name) => `${name} could not start`,
+    stop: uploadFailed,
+    retry: uploadFailed,
+    resume: uploadFailed,
+    up: uploadFailed,
+    down: (name) => `${name} could not be downloaded`,
+    repair: (name) => `The repair of ${name} did not finish`,
+};
+
 /** The tunnel shown first: the one this PC chose earlier, else the Minecraft Java one, else the first. */
 export function primaryTunnel(tunnels: PlayitTunnel[], preferred: string | null): PlayitTunnel | null {
     return tunnels.find((t) => t.address === preferred)
@@ -108,6 +120,8 @@ export class SessionController {
     /** The start / stop / upload that is running now; shutdown() waits for it. */
     private current: Promise<void> | null = null;
     private lockLost = false;
+    /** startedAt of the last run whose failure was announced (its final snapshot can be emitted more than once). */
+    private announcedFailure: string | null = null;
     private cancelled = false;
     /** The cancel is for good: what was sent is saved as an incomplete version instead of pausing. */
     private abandoning = false;
@@ -122,7 +136,10 @@ export class SessionController {
         this.now = d.now ?? Date.now;
         this.sleep = d.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
         this.progress = new OrchestrationProgress({
-            emit: (progress) => this.d.events.emit('session:progress', progress),
+            emit: (progress) => {
+                this.d.events.emit('session:progress', progress);
+                this.announceIfFailed(progress);
+            },
             log: {
                 open: (message, importance) => this.openTask(message, importance),
                 update: (id, message, status) => this.updateTask(id, message, status),
@@ -340,7 +357,6 @@ export class SessionController {
             }
             console.warn('[session] start failed:', info.detail ?? info.message);
             this.setState({ ...IDLE, phase: 'failed', serverId, error: info });
-            this.announce(serverId, 'failed', `${this.nameOf(serverId)} could not start`, info.message);
             throw new AppError(info.code, info.message, info.detail);
         }
     }
@@ -605,7 +621,6 @@ export class SessionController {
             }
             const info = toAppError(err);
             this.progress.finish('failed', info.message);
-            this.announce(serverId, 'failed', `The ${repair ? 'repair' : 'upload'} of ${this.nameOf(serverId)} did not finish`, info.message);
             if (info.code === 'CONFLICT') {
                 // Someone committed while we were not holding the lock: keep the files, let the user choose.
                 this.d.sync.discardJournal(serverId);
@@ -693,7 +708,6 @@ export class SessionController {
             const info = toAppError(err);
             this.progress.finish('failed', info.message);
             this.setState({ phase: 'upload-pending', error: info });
-            this.announce(serverId, 'failed', `The upload of ${this.nameOf(serverId)} could not be cancelled`, info.message);
             return;
         }
         if (!saved) {
@@ -825,7 +839,6 @@ export class SessionController {
             this.progress.finish('failed', info.message);
             await this.d.lock.releaseIfMine(serverId);
             this.setState({ ...IDLE, phase: 'failed', serverId, error: info });
-            this.announce(serverId, 'failed', `${this.nameOf(serverId)} could not be downloaded`, info.message);
             throw new AppError(info.code, info.message, info.detail);
         }
     }
@@ -946,6 +959,14 @@ export class SessionController {
         return formatDuration(started ? this.now() - Date.parse(started) : 0);
     }
 
+/** Every run that ends in failure is announced once (failure chime, notification), whatever failed in it. */
+    private announceIfFailed(progress: SessionProgress): void {
+        if (progress.active || progress.outcome !== 'failed' || !progress.serverId || !progress.kind) return;
+        if (progress.startedAt === this.announcedFailure) return;   // the same run, emitted again
+        this.announcedFailure = progress.startedAt;
+        this.announce(progress.serverId, 'failed', FAILED_TITLES[progress.kind](this.nameOf(progress.serverId)), progress.message);
+    }
+
     private announce(serverId: string, outcome: 'done' | 'failed', title: string, body: string): void {
         try {
             this.d.notify?.({ title, body, outcome });
@@ -992,6 +1013,10 @@ export class SessionController {
         this.onMinecraftOutput([`[System] The server stopped (exit code ${code ?? 'unknown'})`]);
         if (this.state.phase === 'running' && !expected) {
             this.step(`The Minecraft server stopped unexpectedly (exit code ${code ?? 'unknown'}); saving the world`, 'error', 'major');
+            if (this.state.serverId) {
+                this.announce(this.state.serverId, 'failed', `${this.nameOf(this.state.serverId)} stopped unexpectedly`,
+                    `The Minecraft server exited (code ${code ?? 'unknown'}). The world is being saved and uploaded.`);
+            }
             void this.stop().catch((err: unknown) => console.error('[session] stop after a crash failed:', err));
         }
     }
@@ -1012,6 +1037,8 @@ export class SessionController {
         this.lockLost = true;
         this.abort?.abort();
         const info = this.lostInfo(reason);
+        // During a run, its failure is announced with it; while the server just runs, say it here.
+        if (!this.progress.isActive()) this.announce(serverId, 'failed', `${this.nameOf(serverId)} was taken over`, info.message);
         this.progress.finish('failed', info.message);
         this.step(info.message, 'error', 'major');
         void (async () => {

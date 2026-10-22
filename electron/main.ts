@@ -111,12 +111,13 @@ const servers = new ServersService({
 
 /* ------------------------------------------------------------------ notifications */
 
-/** A start or stop finished: a chime (if on), and a desktop notification (if on) when the window is not in front. */
+/** A run finished: a chime (if on), and a desktop notification (if on). Success is only notified when the window is
+ *  not in front; a failure always is, so it is not missed. */
 function notifyUser(n: { title: string; body: string; outcome: 'done' | 'failed' }): void {
     const prefs = settings.get();
     if (prefs.notificationSound) events.emit('app:chime', { outcome: n.outcome });
     const inFront = win !== null && win.isVisible() && win.isFocused();
-    if (!prefs.notifications || inFront || !Notification.isSupported()) return;
+    if (!prefs.notifications || (inFront && n.outcome === 'done') || !Notification.isSupported()) return;
     // silent: the chime above is the sound, so Windows does not play its own on top of it.
     const notification = new Notification({ title: n.title, body: n.body, silent: true, icon: path.join(process.env.VITE_PUBLIC, 'launcher.ico') });
     notification.on('click', showWindow);

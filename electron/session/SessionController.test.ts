@@ -629,3 +629,21 @@ describe('SessionController: playit.gg tunnels', () => {
         expect(t.session.getState()).toMatchObject({ address: null, tunnels: [] });
     });
 });
+
+describe('SessionController: failures are announced', () => {
+    it('once per failed run, with the failure sound, whatever step failed', async () => {
+        const t = setup();
+        t.sync.preflight.mockRejectedValueOnce(new AppError('NETWORK', 'Google Drive could not be reached.'));
+        await expect(t.session.start('s1')).rejects.toMatchObject({ code: 'NETWORK' });
+        expect(t.notes).toEqual([{ title: 'Survival could not start', body: 'Google Drive could not be reached.', outcome: 'failed' }]);
+    });
+
+    it('a crash while hosting is announced too', async () => {
+        const t = setup();
+        await t.session.start('s1');
+        t.notes.length = 0;
+        t.setJava(false);
+        t.session.onMinecraftExit(1, false);
+        expect(t.notes[0]).toMatchObject({ title: 'Survival stopped unexpectedly', outcome: 'failed' });
+    });
+});
