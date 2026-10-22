@@ -14,7 +14,8 @@ interface SettingsStore {
     update: (patch: AppSettingsPatch) => Promise<boolean>;
     loadServer: (serverId: ServerId) => Promise<ServerSettings | null>;
     updateServer: (serverId: ServerId, patch: ServerSettingsPatch) => Promise<boolean>;
-    choosePlayitPath: () => Promise<string | null>;
+    /** The file picker for the playit.gg program; saving it is up to the caller. */
+    pickPlayitPath: () => Promise<string | null>;
 }
 
 export const useSettingsStore = create<SettingsStore>()((set) => ({
@@ -49,11 +50,8 @@ export const useSettingsStore = create<SettingsStore>()((set) => ({
         return true;
     },
 
-    choosePlayitPath: async () => {
-        const res = await request('settings:choosePlayitPath');
-        if (!res.ok || res.value === null) return null;
-        const playitggPath = res.value;
-        set((s) => (s.settings ? { settings: { ...s.settings, playitggPath } } : {}));
-        return playitggPath;
+    pickPlayitPath: async () => {
+        const res = await request('settings:pickPlayitPath');
+        return res.ok ? res.value : null;
     },
 }));

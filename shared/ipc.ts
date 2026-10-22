@@ -71,7 +71,8 @@ export interface Commands {
     'settings:set': (patch: Partial<Omit<AppSettings, 'joinedServerIds'>>) => AppSettings;
     'settings:getServer': (serverId: ServerId) => ServerSettings;
     'settings:setServer': (serverId: ServerId, patch: Partial<Omit<ServerSettings, 'localPath'>>) => ServerSettings;
-    'settings:choosePlayitPath': () => string | null;
+    /** Opens the file picker; the path is stored only with settings:set. */
+    'settings:pickPlayitPath': () => string | null;
 
     'rules:get': (serverId: ServerId) => SyncRules;
     'rules:set': (serverId: ServerId, ignore: string[]) => SyncRules;

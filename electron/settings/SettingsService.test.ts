@@ -146,22 +146,22 @@ describe('local paths', () => {
 });
 
 describe('playit.gg path', () => {
-    test('stores the chosen program', async () => {
+    test('picks the program without storing it (the Scripts panel saves it)', async () => {
         const exe = path.join(root, 'playit.exe');
         dialogs.chooseFile.mockResolvedValueOnce(exe);
-        await expect(settings.choosePlayitPath()).resolves.toBe(exe);
-        expect(settings.get().playitggPath).toBe(exe);
+        await expect(settings.pickPlayitPath()).resolves.toBe(exe);
+        expect(settings.get().playitggPath).toBe('');
         expect(dialogs.chooseFile).toHaveBeenCalledWith('Choose the playit.gg program', [{ name: 'Programs', extensions: ['exe'] }]);
     });
 
-    test('cancel keeps the old value', async () => {
-        await expect(settings.choosePlayitPath()).resolves.toBeNull();
+    test('cancel picks nothing', async () => {
+        await expect(settings.pickPlayitPath()).resolves.toBeNull();
         expect(settings.get().playitggPath).toBe('');
     });
 
     test('no extension filter outside Windows', async () => {
         const linux = new SettingsService({ appData, dialogs, platform: 'linux' });
-        await linux.choosePlayitPath();
+        await linux.pickPlayitPath();
         expect(dialogs.chooseFile).toHaveBeenCalledWith('Choose the playit.gg program', undefined);
     });
 });

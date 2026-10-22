@@ -23,10 +23,11 @@ const linesToFlags = (text: string): string => text.split(/\s+/).filter(Boolean)
  *  breaks alone are no change. */
 function hasChanges(
     saved: AppSettings | null, server: ServerSettings | null,
-    edited: { usePlayit: boolean; launchServer: boolean; flags: JavaFlags | null; flagsText: string },
+    edited: { usePlayit: boolean; playitPath: string; launchServer: boolean; flags: JavaFlags | null; flagsText: string },
 ): boolean {
     if (!saved) return false;
     if (edited.usePlayit !== saved.usePlayitgg || edited.launchServer !== saved.launchServer) return true;
+    if (edited.playitPath !== saved.playitggPath) return true;
     if (!server || !edited.flags) return false;
     return edited.flags.maxRAM !== server.javaFlags.maxRAM || edited.flags.minRAM !== server.javaFlags.minRAM
         || linesToFlags(edited.flagsText) !== linesToFlags(server.javaFlags.customFlags);
@@ -74,6 +75,7 @@ export default function ScriptsOptions() {
     const serverSettings = useSettingsStore((s) => (server ? s.servers[server.id] ?? null : null));
     const busy = useSessionStore((s) => isSessionBusy(s.state.phase));
     const [usePlayit, setUsePlayit] = useState(false);
+    const [playitPath, setPlayitPath] = useState('');
     const [launchServer, setLaunchServer] = useState(true);
     const [flags, setFlags] = useState<JavaFlags | null>(null);
     const [flagsText, setFlagsText] = useState('');
@@ -81,7 +83,7 @@ export default function ScriptsOptions() {
     const flagsRef = useRef<HTMLTextAreaElement>(null);
     const hasFlags = flags !== null;
     const { ask, popup } = useConfirm();
-    const dirty = hasChanges(settings, serverSettings, { usePlayit, launchServer, flags, flagsText });
+    const dirty = hasChanges(settings, serverSettings, { usePlayit, playitPath, launchServer, flags, flagsText });
 
     // The flags box grows with its text, so even a long list of flags is readable without scrolling inside it.
     useLayoutEffect(() => {
@@ -99,6 +101,7 @@ export default function ScriptsOptions() {
     useEffect(() => {
         if (!settings) return;
         setUsePlayit(settings.usePlayitgg);
+        setPlayitPath(settings.playitggPath);
         setLaunchServer(settings.launchServer);
     }, [settings]);
 
@@ -109,17 +112,22 @@ export default function ScriptsOptions() {
 
     /** true when everything was saved. */
     async function handleSave(): Promise<boolean> {
-        if (usePlayit && !settings?.playitggPath) {
+        if (usePlayit && !playitPath) {
             useNoticeStore.getState().error('Choose the playit.gg program first, or turn playit.gg off.');
             return false;
         }
         setSaving(true);
         const store = useSettingsStore.getState();
-        let ok = await store.update({ usePlayitgg: usePlayit, launchServer });
+        let ok = await store.update({ usePlayitgg: usePlayit, playitggPath: playitPath, launchServer });
         if (ok && server && flags) ok = await store.updateServer(server.id, { javaFlags: { ...flags, customFlags: linesToFlags(flagsText) } });
         setSaving(false);
         if (ok) useNoticeStore.getState().success('Settings saved. They apply to the next session.');
         return ok;
+    }
+
+    async function handlePickPlayit() {
+        const picked = await useSettingsStore.getState().pickPlayitPath();
+        if (picked) setPlayitPath(picked);
     }
 
     // Closing the window with unsaved changes asks first: save them, throw them away, or keep editing.
@@ -146,7 +154,6 @@ export default function ScriptsOptions() {
     useCloseGuard(dirty ? guard : null);
 
     if (!settings) return <p className='scripts-loading'><Loader2 size={14} className='spinner' /> Loading…</p>;
-    const playitPath = settings.playitggPath;
     // The maximum pulls the minimum down with it, and the other way round, so min <= max always holds.
     const setMax = (maxRAM: number) => flags && setFlags({ ...flags, maxRAM, minRAM: Math.min(flags.minRAM, maxRAM) });
     const setMin = (minRAM: number) => flags && setFlags({ ...flags, minRAM, maxRAM: Math.max(flags.maxRAM, minRAM) });
@@ -160,7 +167,7 @@ export default function ScriptsOptions() {
                     <span className={`path-text ${playitPath ? '' : 'missing'}`} title={playitPath || undefined}>
                         {playitPath || 'No playit.gg program chosen yet'}
                     </span>
-                    <button className='text-button' onClick={() => void useSettingsStore.getState().choosePlayitPath()}>
+                    <button className='text-button' onClick={() => void handlePickPlayit()}>
                         <FolderInput size={12} /> {playitPath ? 'Change' : 'Choose'}
                     </button>
                 </div>

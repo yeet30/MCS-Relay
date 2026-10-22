@@ -122,13 +122,12 @@ export class SettingsService {
         this.appData.writeSettings(settings);
     }
 
-    /** Asks for the playit.gg program and stores it. null when cancelled. */
-    async choosePlayitPath(): Promise<string | null> {
+    /** Asks for the playit.gg program; null when cancelled. Nothing is stored: the Scripts panel saves it with
+     *  its other changes (settings:set validates it then). */
+    async pickPlayitPath(): Promise<string | null> {
         const filters = this.platform === 'win32' ? [{ name: 'Programs', extensions: ['exe'] }] : undefined;
         const chosen = await this.dialogs.chooseFile('Choose the playit.gg program', filters);
-        if (!chosen) return null;
-        this.set({ playitggPath: chosen });
-        return this.get().playitggPath;
+        return chosen ? chosen.trim() : null;
     }
 
     /** Two servers syncing the same folder (or one inside the other) would overwrite each other's worlds. */
