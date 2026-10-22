@@ -13,21 +13,25 @@
     font-family: 'JetBrains Mono', monospace;
 }
 
+/* The header row: always light text on the dark console, whatever the theme. */
 .console-status{
-    position: absolute;
+    flex-shrink: 0;
     display: flex;
     align-items: center;
-    padding-left: 1rem;
     gap: 2rem;
-    width: 66%;
+    padding: 0.5rem 1rem;
     background-color: rgba(10, 10, 10, 0.9);
+    border-bottom: 1px solid #1f1f1f;
+    color: #c8c8c8;
+    font-weight: 500;
 }
 
 .console-div{
+    flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    height: 100%;
     width: 100%;
 }
 
@@ -71,6 +75,7 @@
 }
 
 #console-prompt {
+    color: #c8c8c8;
     font-size: 0.85rem;
     user-select: none;
 }
