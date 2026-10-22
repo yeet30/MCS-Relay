@@ -14,6 +14,8 @@ export default function TunnelsList({ tunnels, primary, host }: {
     host: string | null;
 }) {
     const [choosing, setChoosing] = useState<string | null>(null);
+    // The one shown first is also first here, whatever order playit.gg lists them in.
+    const ordered = [...tunnels.filter((t) => t.address === primary), ...tunnels.filter((t) => t.address !== primary)];
 
     async function choose(address: string) {
         setChoosing(address);
@@ -28,7 +30,7 @@ export default function TunnelsList({ tunnels, primary, host }: {
                     ? 'Everything your playit.gg shares while you host. The one shown first is the address under the server picker, for you and the other members; they see this list too.'
                     : `Everything ${host}'s playit.gg shares. ${host} chose which one is shown first.`}
             </p>
-            {tunnels.map((tunnel) => {
+            {ordered.map((tunnel) => {
                 const info = describeTunnel(tunnel);
                 const isPrimary = tunnel.address === primary;
                 return (
