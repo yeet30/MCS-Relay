@@ -408,10 +408,7 @@ export class SessionController {
         return run;
     }
 
-    /** Cancels what is running; resolves when it has stopped. A start or a download goes back to idle (files that
-     *  already arrived stay). An upload pauses: the server stays reserved and Continue picks it up where it
-     *  stopped, from the journal. Stopping the Minecraft server and releasing the server cannot be cancelled. */
-/** While this PC hosts: which playit.gg tunnel is shown first, here and to the other members (through the lock).
+    /** While this PC hosts: which playit.gg tunnel is shown first, here and to the other members (through the lock).
      *  Remembered on this PC for the next sessions. */
     async setPrimaryTunnel(address: string): Promise<void> {
         const tunnel = this.state.tunnels.find((t) => t.address === address);
@@ -437,6 +434,9 @@ export class SessionController {
         }
     }
 
+    /** Cancels what is running; resolves when it has stopped. A start or a download goes back to idle (files that
+     *  already arrived stay). An upload pauses: the server stays reserved and Continue picks it up where it
+     *  stopped, from the journal. Stopping the Minecraft server and releasing the server cannot be cancelled. */
     cancel(): Promise<void> {
         // While Java saves the world nothing is interrupted: the request is kept, and no upload starts afterwards.
         if (this.state.phase === 'stopping' && this.progress.snapshot().kind === 'stop') {
@@ -959,7 +959,7 @@ export class SessionController {
         return formatDuration(started ? this.now() - Date.parse(started) : 0);
     }
 
-/** Every run that ends in failure is announced once (failure chime, notification), whatever failed in it. */
+    /** Every run that ends in failure is announced once (failure chime, notification), whatever failed in it. */
     private announceIfFailed(progress: SessionProgress): void {
         if (progress.active || progress.outcome !== 'failed' || !progress.serverId || !progress.kind) return;
         if (progress.startedAt === this.announcedFailure) return;   // the same run, emitted again

@@ -36,7 +36,3 @@ function driveErrorInfo(err: DriveError): AppErrorInfo {
     if (err.status === 404) return { code: 'NOT_FOUND', message: 'The file or folder was not found on Google Drive.', detail };
     return { code: 'NETWORK', message: 'Google Drive returned an error. Try again.', detail };
 }
-
-export function errorMessage(err: unknown): string {
-    return toAppError(err).message;
-}

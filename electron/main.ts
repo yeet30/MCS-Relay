@@ -32,13 +32,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // └─┬ dist-electron   main.js, preload.mjs
 process.env.APP_ROOT = path.join(__dirname, '..');
 export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL'];
-export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron');
 export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist');
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST;
 
 let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let logoState: LogoState = 'off';
+/** The theme the window was last painted in: other settings changes (a selected server, ...) leave it alone. */
+let windowTheme: ThemeName | null = null;
 
 /* ------------------------------------------------------------------ services (created once) */
 
@@ -178,7 +179,8 @@ function isTrustedUrl(url: string): boolean {
 
 /** The title bar and the window's background follow the theme (the page draws the bar's left part itself). */
 function applyWindowTheme(theme: ThemeName): void {
-    if (!win) return;
+    if (!win || theme === windowTheme) return;
+    windowTheme = theme;
     const colors = WINDOW_COLORS[theme];
     win.setBackgroundColor(colors.page);
     if (process.platform === 'win32') {
@@ -187,7 +189,8 @@ function applyWindowTheme(theme: ThemeName): void {
 }
 
 function createWindow(): void {
-    const colors = WINDOW_COLORS[settings.get().theme];
+    windowTheme = settings.get().theme;
+    const colors = WINDOW_COLORS[windowTheme];
     win = new BrowserWindow({
         width: 800,
         height: 600,

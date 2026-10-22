@@ -37,7 +37,7 @@ function Toggle({ icon, title, text, checked, onChange, children }: {
     );
 }
 
-/** How MCS-Relay tells you that a start or stop finished, and the EULA answer of this account. */
+/** The theme, how MCS-Relay tells you that something finished or failed, and the EULA answer of this account. */
 export default function Preferences() {
     const settings = useSettingsStore((s) => s.settings);
 
@@ -81,20 +81,25 @@ export default function Preferences() {
             <Toggle
                 icon={<Bell size={16} />}
                 title='Desktop notifications'
-                text='When a server has finished starting or stopping while MCS-Relay is in the background or in the tray.'
+                text='When a start, stop or upload finishes while MCS-Relay is in the background or in the tray, and whenever something fails.'
                 checked={settings.notifications}
                 onChange={(notifications) => set({ notifications })}
             />
             <Toggle
                 icon={<Volume2 size={16} />}
                 title='Notification sound'
-                text='A short chime when a server has finished starting or stopping.'
+                text='A short chime when something finishes, and a lower one when something fails.'
                 checked={settings.notificationSound}
                 onChange={(notificationSound) => set({ notificationSound })}
             >
-                <button className='text-button pref-test' onClick={() => playChime('done')}>
-                    <Play size={11} /> Play it
-                </button>
+                <span className='pref-actions'>
+                    <button className='text-button pref-test' onClick={() => playChime('done')}>
+                        <Play size={11} /> Finished
+                    </button>
+                    <button className='text-button pref-test' onClick={() => playChime('failed')}>
+                        <Play size={11} /> Failed
+                    </button>
+                </span>
             </Toggle>
 
             <h4 className='pref-section'>Minecraft EULA</h4>
