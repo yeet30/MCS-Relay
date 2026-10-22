@@ -10,38 +10,45 @@ export interface ConfirmOptions {
     link?: { label: string; url: string };
 }
 
+/** yes, no, or null when the question was put away with the X or a click beside it. */
+export type Answer = 'yes' | 'no' | null;
+
 /** A promise-based confirm dialog. Render `popup` somewhere that stays mounted while the dialog is open.
- *  `confirm` is stable across renders, so it is safe in effect dependencies. */
+ *  `confirm` (true only for yes) and `ask` (all three answers) are stable across renders, so they are safe in
+ *  effect dependencies. */
 export function useConfirm() {
     const [options, setOptions] = useState<ConfirmOptions | null>(null);
-    const resolverRef = useRef<((value: boolean) => void) | null>(null);
+    const resolverRef = useRef<((value: Answer) => void) | null>(null);
 
-    const settle = useCallback((value: boolean) => {
+    const settle = useCallback((value: Answer) => {
         const resolve = resolverRef.current;
         resolverRef.current = null;
         setOptions(null);
         resolve?.(value);
     }, []);
 
-    const confirm = useCallback((next: ConfirmOptions) => {
-        // A newer question replaces an unanswered one; the old caller gets "no" instead of waiting forever.
-        resolverRef.current?.(false);
+    const ask = useCallback((next: ConfirmOptions) => {
+        // A newer question replaces an unanswered one; the old caller gets "put away" instead of waiting forever.
+        resolverRef.current?.(null);
         setOptions(next);
-        return new Promise<boolean>((resolve) => {
+        return new Promise<Answer>((resolve) => {
             resolverRef.current = resolve;
         });
     }, []);
 
+    const confirm = useCallback(async (next: ConfirmOptions) => (await ask(next)) === 'yes', [ask]);
+
     useEffect(() => () => {
-        resolverRef.current?.(false);
+        resolverRef.current?.(null);
         resolverRef.current = null;
     }, []);
 
     const popup = (
         <Popup
             isOpen={options !== null}
-            onClose={() => settle(false)}
-            onAccept={() => settle(true)}
+            onClose={() => settle('no')}
+            onAccept={() => settle('yes')}
+            onDismiss={() => settle(null)}
             confirmingOption={options?.confirmText ?? 'Confirm'}
             decliningOption={options?.cancelText ?? 'Cancel'}
         >
@@ -54,5 +61,5 @@ export function useConfirm() {
         </Popup>
     );
 
-    return { confirm, popup };
+    return { confirm, ask, popup };
 }

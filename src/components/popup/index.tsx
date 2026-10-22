@@ -7,26 +7,28 @@ interface PopupProps {
     isOpen: boolean;
     onClose: () => void;
     onAccept: () => void;
+    /** The X and a click beside the popup; the "no" button when not given. */
+    onDismiss?: () => void;
     confirmingOption: string;
     decliningOption: string;
     children: ReactNode;
 }
 
-export default function Popup({ isOpen, onClose, onAccept, confirmingOption, decliningOption, children }: PopupProps) {
+export default function Popup({ isOpen, onClose, onAccept, onDismiss = onClose, confirmingOption, decliningOption, children }: PopupProps) {
     useScrollLock(isOpen);
     if (!isOpen) return null;
 
     // At the end of <body>, above everything, wherever the component that asks sits (see Modal).
     return createPortal(
         <div className='popup-wrapper'>
-            <div id='popup-overlay' onClick={(e) => { e.stopPropagation(); onClose(); }} />
+            <div id='popup-overlay' onClick={(e) => { e.stopPropagation(); onDismiss(); }} />
             <div id='popup' onClick={(e) => e.stopPropagation()}>
                 <div id='children' style={{ whiteSpace: 'pre-line' }}>{children}</div>
                 <span id='popup-options'>
                     <button className='popup-decline' onClick={onClose}>{decliningOption}</button>
                     <button className='popup-accept' onClick={onAccept}>{confirmingOption}</button>
                 </span>
-                <button id='popup-close' onClick={onClose}>✕</button>
+                <button id='popup-close' onClick={onDismiss}>✕</button>
             </div>
         </div>,
         document.body,

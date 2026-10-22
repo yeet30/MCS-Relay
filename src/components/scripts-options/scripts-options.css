@@ -149,6 +149,11 @@
         font-size: 0.78rem;
         color: var(--muted);
 
+        .unsaved {
+            color: var(--warn);
+            font-weight: 600;
+        }
+
         .text-button {
             flex: none;
             padding: 6px 14px;
