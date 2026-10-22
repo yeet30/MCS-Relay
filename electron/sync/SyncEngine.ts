@@ -199,7 +199,7 @@ export class SyncEngine {
     async setRules(serverId: string, ignore: string[]): Promise<SyncRules> {
         const rules = [...new Set(ignore.map(normalizeRule).filter((r): r is string => r !== null))];
         await writeRules(this.d.launcher, serverId, rules);
-        return this.getRules(serverId);
+        return { format: 1, ignore: rules, builtin: [...BUILTIN_IGNORES] };
     }
 
     /** Builtin rules plus the shared ones. With `create`, a missing sync-rules.json is written (under the lock). */
@@ -267,10 +267,10 @@ export class SyncEngine {
     /* ------------------------------------------------------------------ download (under the lock) */
 
     async download(serverId: string, _report: SyncReport, signal?: AbortSignal, progress: ProgressSink = NO_PROGRESS): Promise<void> {
-        const lock = await this.d.lock.inspect(serverId);
-        // Plan again: the cloud may have changed since the preflight the user looked at.
+        // Plan again: the cloud may have changed since the preflight the user looked at. This PC holds the lock
+        // now, so lock.json has nothing new to say (it only matters for what a preflight reports).
         progress.enter('scan', 'Checking your files');
-        const a = await this.analyze(serverId, true, signal, lock, progress, 'scan');
+        const a = await this.analyze(serverId, true, signal, FREE_LOCK, progress, 'scan');
         progress.complete('scan', `Checked ${plural(a.local.size, 'file')}`);
         const choice = this.choices.get(serverId) ?? null;
         if (!a.remote) {
@@ -987,7 +987,6 @@ export class SyncEngine {
         return deleted;
     }
 
-    /** Before an owner trashes a whole server: hand every file someone else owns back to its owner for deletion. */
     /** Before the owner deletes a whole server, every file another member owns is handed back to them (emptied
      *  into a placeholder their app deletes for good). One search finds the files the app tagged; only older
      *  files without the tag are looked up one by one. onProgress(done, total) counts the files handed back. */
