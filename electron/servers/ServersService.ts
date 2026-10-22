@@ -13,7 +13,7 @@ import type { AppData } from '../store/appData';
 import { isValidServerId } from '../store/appData';
 import type { Dialogs, SettingsService } from '../settings/SettingsService';
 import type { LauncherFiles } from '../sync/launcherFiles';
-import { writeRules } from '../sync/manifest';
+import { serializeRules } from '../sync/manifest';
 
 export const ROOT_FOLDER_NAME = 'Minecraft Shared Servers';
 export const MAX_OWNED_SERVERS = 3;
@@ -121,8 +121,10 @@ export class ServersService {
         }
         const folder = await this.drive.createFolder(nextServerName(existing.map((f) => f.name)), rootId);
         try {
-            await this.launcher.ensureFile(folder.id, 'lock.json', JSON.stringify(freeLock(me), null, 2));
-            await writeRules(this.launcher, folder.id, initialRules(this.appData.legacyBlacklist()));
+            await this.launcher.createFresh(folder.id, {
+                'lock.json': JSON.stringify(freeLock(me), null, 2),
+                'sync-rules.json': serializeRules(initialRules(this.appData.legacyBlacklist())),
+            });
         } catch (err) {
             // A server folder without its .launcher files would look like a broken server; undo it.
             this.launcher.forget(folder.id);

@@ -205,6 +205,18 @@ describe('create', () => {
         await expectAppError(alice.servers.create(), 'INVALID');
     });
 
+    test('a new server needs no lookups inside its own folder', async () => {
+        await alice.servers.create();
+        store.calls.length = 0;
+        const second = await alice.servers.create();
+        const ops = store.calls.map((c) => c.op);
+        expect(ops.filter((op) => op === 'createFile')).toHaveLength(2);
+        expect(store.calls.filter((c) => c.op === 'listChildren' && c.args[0] !== store.node(second.id).parentId)).toEqual([]);
+        expect(ops.length).toBeLessThanOrEqual(7);
+        expect(launcherText(second.id, 'lock.json')).toBeDefined();
+        expect(launcherText(second.id, 'sync-rules.json')).toBeDefined();
+    });
+
     test('a failure while writing .launcher removes the half-created server', async () => {
         store.failNext('createFile', 1, () => new DriveError('backend error', 500, 'backendError'));
         await expect(alice.servers.create()).rejects.toBeInstanceOf(DriveError);

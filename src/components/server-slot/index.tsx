@@ -7,7 +7,7 @@ import { formatCount } from '../../lib/format';
 import { isMySession } from '../../lib/sync';
 import { useNoticeStore } from '../../stores/noticeStore';
 import { request } from '../../stores/request';
-import { chooseLocalPath } from '../../stores/serverActions';
+import { askForServerFolder, chooseLocalPath } from '../../stores/serverActions';
 import { useServersStore } from '../../stores/serversStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useUiStore } from '../../stores/uiStore';
@@ -32,6 +32,8 @@ export default function ServerSlot({ server }: { server: ServerSummary }) {
     const leaveProgress = useServersStore((s) => s.leaving[server.id] ?? null);
     const renameId = useUiStore((s) => s.renameId);
     const cardRef = useRef<HTMLDivElement>(null);
+    /** The server was just created: once it is named, its folder on this PC is asked for. */
+    const namingNew = useRef(false);
 
     useEffect(() => {
         if (!isEditing) setNameBuffer(server.name);
@@ -39,13 +41,24 @@ export default function ServerSlot({ server }: { server: ServerSummary }) {
 
     async function handleSave() {
         const name = nameBuffer.trim();
+        let saved = true;
         if (name && name !== server.name) {
             setLoading('edit');
             const res = await request('servers:rename', server.id, name);
-            if (res.ok) await useServersStore.getState().reload();
+            if (res.ok) useServersStore.getState().setName(server.id, name);
             else setNameBuffer(server.name);
+            saved = res.ok;
             setLoading(null);
         }
+        setIsEditing(false);
+        if (namingNew.current && saved) {
+            namingNew.current = false;
+            await askForServerFolder({ ...server, name: name || server.name }, confirm);
+        }
+    }
+
+    function cancelEditing() {
+        namingNew.current = false;
         setIsEditing(false);
     }
 
@@ -82,6 +95,7 @@ World files you uploaded stay in the server, because the others still need them,
     useEffect(() => {
         if (renameId !== server.id || !useUiStore.getState().takeRename(server.id)) return;
         cardRef.current?.scrollIntoView({ block: 'nearest' });
+        namingNew.current = true;
         startEditing();
     }, [renameId, server.id]);
 
@@ -100,7 +114,7 @@ World files you uploaded stay in the server, because the others still need them,
                     onChange={(e) => setNameBuffer(e.currentTarget.value)}
                     onKeyDown={(e) => {
                         if (e.key === 'Enter') void handleSave();
-                        if (e.key === 'Escape') setIsEditing(false);
+                        if (e.key === 'Escape') cancelEditing();
                     }}
                 />
                 {isOwner && (isEditing

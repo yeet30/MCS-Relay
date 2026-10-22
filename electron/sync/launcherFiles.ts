@@ -43,6 +43,17 @@ export class LauncherFiles {
         return result.id;
     }
 
+    /** For a server folder created a moment ago, which no other app can know yet: creates .launcher and the
+     *  files in it without first looking for older copies, the files side by side. */
+    async createFresh(serverId: string, files: Partial<Record<LauncherFileName, string>>): Promise<void> {
+        const folder = await this.drive.createFolder(LAUNCHER_FOLDER, serverId);
+        this.folderIds.set(serverId, folder.id);
+        await Promise.all((Object.entries(files) as Array<[LauncherFileName, string]>).map(async ([name, text]) => {
+            const created = await this.drive.createFile(name, folder.id, { kind: 'bytes', data: new TextEncoder().encode(text) });
+            this.ids.set(`${serverId}/${name}`, created.id);
+        }));
+    }
+
     /** A file inside .launcher, or null when it (or the folder) does not exist. Read-only. */
     async findFile(serverId: string, name: LauncherFileName): Promise<string | null> {
         const key = `${serverId}/${name}`;

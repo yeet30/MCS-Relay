@@ -23,6 +23,11 @@ interface ServersStore {
     load: () => Promise<boolean>;
     /** Shows a newly chosen folder at once, without listing every server from Drive again. */
     setLocalPath: (serverId: ServerId, localPath: string) => void;
+    /** Shows a new name at once, without listing every server from Drive again. */
+    setName: (serverId: ServerId, name: string) => void;
+    /** Adds a server that was just created or joined (the main process answered with it), without listing every
+     *  server from Drive again; when nothing is selected yet, it is selected. */
+    add: (server: ServerSummary) => void;
     /** Selects a server: the main process remembers it, checks it (sync:report) and watches its lock. */
     select: (serverId: ServerId | null) => Promise<void>;
     /** After the first load: the server of a running session, else the remembered one, else the first. */
@@ -67,6 +72,16 @@ export const useServersStore = create<ServersStore>()((set, get) => ({
     setLocalPath: (serverId, localPath) => set((s) => ({
         servers: s.servers.map((server) => (server.id === serverId ? { ...server, localPath } : server)),
     })),
+
+    setName: (serverId, name) => set((s) => ({
+        servers: s.servers.map((server) => (server.id === serverId ? { ...server, name } : server)),
+    })),
+
+    add: (server) => {
+        set((s) => ({ servers: [...s.servers.filter((other) => other.id !== server.id), server], loaded: true }));
+        // Checking the new server (Drive requests) runs in the background, so nothing waits for it.
+        if (get().selectedId === null && !isSessionBusy(useSessionStore.getState().state.phase)) void get().select(server.id);
+    },
 
     select: async (serverId) => {
         set({ selectedId: serverId });
