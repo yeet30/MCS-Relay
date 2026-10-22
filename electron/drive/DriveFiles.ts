@@ -14,7 +14,7 @@ import { APP_PROPS } from '../../shared/types';
 import type { DriveClient } from './DriveClient';
 import { ChecksumError, DriveError, FOLDER_MIME } from './types';
 import type {
-    DownloadResult, DriveApi, DriveCapabilities, DriveFileMeta, DriveOwner, MetaWithClock, TransferOptions,
+    DownloadResult, DriveApi, DriveCapabilities, DriveFileMeta, DriveOwner, DrivePermission, MetaWithClock, TransferOptions,
     UploadResult, UploadSource,
 } from './types';
 
@@ -26,7 +26,8 @@ export const META_FIELDS = 'id,name,mimeType,size,md5Checksum,createdTime,modifi
     + 'capabilities(canTrash,canDelete,canModifyContent,canRename,canAddChildren,canMoveItemWithinDrive,canRemoveMyDriveParent),'
     + 'parents,appProperties';
 const UPLOAD_FIELDS = 'id,md5Checksum,size';
-const PERMISSION_FIELDS = 'nextPageToken,permissions(id,type,emailAddress,displayName,role,photoLink)';
+const ONE_PERMISSION_FIELDS = 'id,type,emailAddress,displayName,role,photoLink';
+const PERMISSION_FIELDS = `nextPageToken,permissions(${ONE_PERMISSION_FIELDS})`;
 
 /** Google's line between one-request and resumable uploads. */
 export const SIMPLE_UPLOAD_LIMIT = 5 * 1024 * 1024;
@@ -34,14 +35,6 @@ export const SIMPLE_UPLOAD_LIMIT = 5 * 1024 * 1024;
 export const CHUNK_SIZE = 8 * 1024 * 1024;
 /** Chunk failures in a row (without new bytes confirmed) before a resumable upload gives up. */
 const MAX_RESUMES = 3;
-
-export interface DrivePermission {
-    id: string;
-    emailAddress: string;
-    displayName: string;
-    role: string;
-    photoLink?: string;
-}
 
 /** Escapes a value for use inside '...' in a Drive query. */
 export function escapeQueryValue(value: string): string {
@@ -107,6 +100,19 @@ export function parseMeta(raw: unknown): DriveFileMeta {
         meta.appProperties = props;
     }
     return meta;
+}
+
+function parsePermission(raw: Record<string, unknown>): DrivePermission | null {
+    const id = str(raw.id);
+    if (!id) return null;
+    const permission: DrivePermission = {
+        id,
+        emailAddress: str(raw.emailAddress) ?? '',
+        displayName: str(raw.displayName) ?? '',
+        role: str(raw.role) ?? '',
+    };
+    if (str(raw.photoLink)) permission.photoLink = str(raw.photoLink);
+    return permission;
 }
 
 function parseUploadResult(raw: unknown): UploadResult {
@@ -358,32 +364,30 @@ export class DriveFiles implements DriveApi {
             });
             if (!isRecord(data)) throw malformed('permission list');
             for (const raw of Array.isArray(data.permissions) ? data.permissions : []) {
-                if (!isRecord(raw) || !str(raw.id) || !str(raw.emailAddress)) continue;
-                const permission: DrivePermission = {
-                    id: str(raw.id) ?? '',
-                    emailAddress: str(raw.emailAddress) ?? '',
-                    displayName: str(raw.displayName) ?? '',
-                    role: str(raw.role) ?? '',
-                };
-                if (str(raw.photoLink)) permission.photoLink = str(raw.photoLink);
-                out.push(permission);
+                if (!isRecord(raw) || !str(raw.emailAddress)) continue;
+                const permission = parsePermission(raw);
+                if (permission) out.push(permission);
             }
             pageToken = str(data.nextPageToken);
         } while (pageToken);
         return out;
     }
 
-    async addPermission(fileId: string, email: string, role: 'writer' | 'reader', message: string): Promise<void> {
-        await this.client.request('POST', `${fileUrl(fileId)}/permissions`, {
+    /** Shares the file and returns the new member as Drive describes it, so nobody has to list the members again. */
+    async addPermission(fileId: string, email: string, role: 'writer' | 'reader', message: string): Promise<DrivePermission> {
+        const { data } = await this.client.request('POST', `${fileUrl(fileId)}/permissions`, {
             query: {
                 sendNotificationEmail: true,
                 emailMessage: message.trim() ? message : undefined,
-                fields: 'id',
+                fields: ONE_PERMISSION_FIELDS,
                 supportsAllDrives: true,
             },
             json: { type: 'user', role, emailAddress: email },
-            expect: 'none',
         });
+        const permission = isRecord(data) ? parsePermission(data) : null;
+        if (!permission) throw malformed('permission');
+        // Drive leaves the address out for some accounts; it is the one we invited.
+        return { ...permission, emailAddress: permission.emailAddress || email, role: permission.role || role };
     }
 
     async deletePermission(fileId: string, permissionId: string): Promise<void> {

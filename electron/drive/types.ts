@@ -3,6 +3,15 @@
 
 export const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
+/** Someone with access to a file (permissions without an email address are left out). */
+export interface DrivePermission {
+    id: string;
+    emailAddress: string;
+    displayName: string;
+    role: string;
+    photoLink?: string;
+}
+
 export interface DriveOwner {
     emailAddress: string;
     displayName?: string;

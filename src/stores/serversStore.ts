@@ -1,6 +1,6 @@
 // The servers I own or joined, and which one is selected.
 import { create } from 'zustand';
-import type { ServerId, ServerSummary } from '../../shared/types';
+import type { ServerId, ServerMember, ServerSummary } from '../../shared/types';
 import { invoke } from '../api';
 import { isSessionBusy } from '../lib/sync';
 import { useNoticeStore } from './noticeStore';
@@ -28,6 +28,12 @@ interface ServersStore {
     /** Adds a server that was just created or joined (the main process answered with it), without listing every
      *  server from Drive again; when nothing is selected yet, it is selected. */
     add: (server: ServerSummary) => void;
+    /** Takes a deleted or left server off the list (the main process forgot it already); when it was selected, the
+     *  first server left is selected instead. */
+    remove: (serverId: ServerId) => void;
+    /** A member added (or given another role) or removed, without listing every server on Drive again. */
+    putMember: (serverId: ServerId, member: ServerMember) => void;
+    dropMember: (serverId: ServerId, permissionId: string) => void;
     /** Selects a server: the main process remembers it, checks it (sync:report) and watches its lock. */
     select: (serverId: ServerId | null) => Promise<void>;
     /** After the first load: the server of a running session, else the remembered one, else the first. */
@@ -75,6 +81,24 @@ export const useServersStore = create<ServersStore>()((set, get) => ({
 
     setName: (serverId, name) => set((s) => ({
         servers: s.servers.map((server) => (server.id === serverId ? { ...server, name } : server)),
+    })),
+
+    remove: (serverId) => {
+        const servers = get().servers.filter((server) => server.id !== serverId);
+        set({ servers });
+        if (get().selectedId === serverId) void get().select(servers[0]?.id ?? null);
+    },
+
+    putMember: (serverId, member) => set((s) => ({
+        servers: s.servers.map((server) => (server.id !== serverId ? server : {
+            ...server,
+            members: [...server.members.filter((m) => m.permissionId !== member.permissionId && m.email !== member.email), member],
+        })),
+    })),
+
+    dropMember: (serverId, permissionId) => set((s) => ({
+        servers: s.servers.map((server) => (server.id !== serverId ? server
+            : { ...server, members: server.members.filter((m) => m.permissionId !== permissionId) })),
     })),
 
     add: (server) => {

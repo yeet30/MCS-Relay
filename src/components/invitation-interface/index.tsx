@@ -25,7 +25,7 @@ export default function InvitationInterface({ serverId, serverName, onDone }: { 
         setSending(false);
         if (!res.ok) return;
         useNoticeStore.getState().success(`Invitation sent to ${email.trim()}.`);
-        await useServersStore.getState().reload();
+        useServersStore.getState().putMember(serverId, res.value);
         onDone();
     }
 

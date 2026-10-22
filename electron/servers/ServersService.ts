@@ -7,7 +7,7 @@ import type { ServerInfo } from '../../shared/ipc';
 import type { LockContent, MemberRole, ServerMember, ServerSummary, UserInfo } from '../../shared/types';
 import { DEFAULT_SHARED_IGNORES } from '../../shared/paths';
 import { DriveError, FOLDER_MIME } from '../drive/types';
-import type { DriveApi, DriveFileMeta } from '../drive/types';
+import type { DriveApi, DriveFileMeta, DrivePermission } from '../drive/types';
 import { AppError } from '../errors';
 import type { AppData } from '../store/appData';
 import { isValidServerId } from '../store/appData';
@@ -20,19 +20,11 @@ export const MAX_OWNED_SERVERS = 3;
 const MAX_NAME_LENGTH = 100;
 const MAX_MESSAGE_LENGTH = 2000;
 
-export interface DrivePermission {
-    id: string;
-    emailAddress: string;
-    displayName: string;
-    role: string;
-    photoLink?: string;
-}
-
 /** The part of DriveFiles this service uses (DriveFiles satisfies it; tests pass a fake). */
 export interface ServersDrive extends Pick<DriveApi, 'getMeta' | 'listChildren' | 'createFolder' | 'trash' | 'rename'> {
     findFolders(query: string): Promise<DriveFileMeta[]>;
     listPermissions(fileId: string): Promise<DrivePermission[]>;
-    addPermission(fileId: string, email: string, role: 'writer' | 'reader', message: string): Promise<void>;
+    addPermission(fileId: string, email: string, role: 'writer' | 'reader', message: string): Promise<DrivePermission>;
     deletePermission(fileId: string, permissionId: string): Promise<void>;
 }
 
@@ -186,14 +178,15 @@ export class ServersService {
         return this.names.get(id) ?? null;
     }
 
-    async invite(id: string, email: string, role: 'writer' | 'reader', message: string): Promise<void> {
+    /** Returns the new member, so the list can show them without asking Drive for every member again. */
+    async invite(id: string, email: string, role: 'writer' | 'reader', message: string): Promise<ServerMember> {
         requireId(id);
         const address = typeof email === 'string' ? email.trim() : '';
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) throw new AppError('INVALID', 'Enter a valid email address.');
         if (role !== 'writer' && role !== 'reader') throw new AppError('INVALID', 'Choose whether the member may change the server or only view it.');
         const note = typeof message === 'string' ? message.trim() : '';
         if (note.length > MAX_MESSAGE_LENGTH) throw new AppError('INVALID', `The message can be at most ${MAX_MESSAGE_LENGTH} characters long.`);
-        await this.drive.addPermission(id, address, role, inviteMessage(id, note));
+        return toMember(await this.drive.addPermission(id, address, role, inviteMessage(id, note)));
     }
 
     async removeMember(id: string, permissionId: string): Promise<void> {

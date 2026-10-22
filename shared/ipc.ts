@@ -3,7 +3,7 @@
 // The main process registers handlers with handle() (electron/ipc/handle.ts), the renderer
 // calls them with invoke() (src/api.ts). A renamed or mistyped channel is a compile error.
 import type {
-    AppErrorInfo, AppSettings, ChangeBatch, ConflictChoice, LockView, LogoState, MemberRole, ServerId,
+    AppErrorInfo, AppSettings, ChangeBatch, ConflictChoice, LockView, LogoState, MemberRole, ServerId, ServerMember,
     ServerSettings, ServerSummary, SessionProgress, SessionState, StepMessage, SyncReport, SyncRules,
     TransferSnapshot, UserInfo,
 } from './types';
@@ -36,7 +36,8 @@ export interface Commands {
     'servers:create': () => ServerSummary;
     'servers:delete': (serverId: ServerId) => void;
     'servers:rename': (serverId: ServerId, name: string) => void;
-    'servers:invite': (serverId: ServerId, email: string, role: Extract<MemberRole, 'writer' | 'reader'>, message: string) => void;
+    /** The new member, as Drive describes them. */
+    'servers:invite': (serverId: ServerId, email: string, role: Extract<MemberRole, 'writer' | 'reader'>, message: string) => ServerMember;
     'servers:removeMember': (serverId: ServerId, permissionId: string) => void;
     'servers:leave': (serverId: ServerId) => void;
     'servers:join': (folderId: string) => ServerSummary;

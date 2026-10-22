@@ -42,7 +42,7 @@ export default function PermissionsList({ server }: { server: ServerSummary }) {
         setRemoving(null);
         if (!res.ok) return;
         useNoticeStore.getState().success(`${member.name || member.email} was removed.`);
-        await useServersStore.getState().reload();
+        useServersStore.getState().dropMember(server.id, member.permissionId);
     }
 
     return (

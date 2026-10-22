@@ -83,7 +83,7 @@ World files you uploaded stay in the server, because the others still need them,
         servers.setLeaving(server.id, undefined);
         if (!res.ok) return;
         useNoticeStore.getState().success(isOwner ? `"${server.name}" was deleted.` : `You left "${server.name}".`);
-        await useServersStore.getState().reload();
+        servers.remove(server.id);
     }
 
     function startEditing() {

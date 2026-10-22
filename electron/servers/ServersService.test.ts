@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { LockContent, UserInfo } from '../../shared/types';
 import { FakeDriveStore } from '../../test/fakes/FakeDrive';
 import { DriveError, FOLDER_MIME } from '../drive/types';
-import type { DriveApi, DriveFileMeta } from '../drive/types';
+import type { DriveApi, DriveFileMeta, DrivePermission } from '../drive/types';
 import { AppError } from '../errors';
 import { SettingsService } from '../settings/SettingsService';
 import type { Dialogs } from '../settings/SettingsService';
@@ -14,7 +14,7 @@ import { LauncherFiles } from '../sync/launcherFiles';
 import {
     MAX_OWNED_SERVERS, ROOT_FOLDER_NAME, ServersService, nextServerName, parseFolderId, parseMaxPlayers,
 } from './ServersService';
-import type { DrivePermission, ServersDrive } from './ServersService';
+import type { ServersDrive } from './ServersService';
 
 const ALICE: UserInfo = { name: 'Alice', email: 'alice@example.com', picture: '' };
 const BOB: UserInfo = { name: 'Bob', email: 'bob@example.com', picture: '' };
@@ -92,10 +92,10 @@ class FakeAdminDrive implements ServersDrive {
         return [...(this.sharing.perms.get(fileId) ?? [])];
     }
 
-    async addPermission(fileId: string, email: string, role: 'writer' | 'reader', message: string): Promise<void> {
+    async addPermission(fileId: string, email: string, role: 'writer' | 'reader', message: string): Promise<DrivePermission> {
         if (!this.canSee(fileId)) throw notFound(fileId);
         this.sharing.invites.push({ fileId, email, role, message });
-        this.sharing.add(fileId, email, role);
+        return this.sharing.add(fileId, email, role);
     }
 
     async deletePermission(fileId: string, permissionId: string): Promise<void> {
@@ -356,7 +356,8 @@ describe('join', () => {
 describe('members', () => {
     test('invite uses the chosen role and includes the server id in the email', async () => {
         const s1 = await alice.servers.create();
-        await alice.servers.invite(s1.id, '  bob@example.com ', 'reader', 'Come play!');
+        await expect(alice.servers.invite(s1.id, '  bob@example.com ', 'reader', 'Come play!'))
+            .resolves.toEqual({ permissionId: expect.any(String), email: BOB.email, name: 'bob', role: 'reader' });
         expect(sharing.invites).toEqual([{ fileId: s1.id, email: BOB.email, role: 'reader', message: expect.stringContaining('Come play!') }]);
         expect(sharing.invites[0].message).toContain(s1.id);
     });
