@@ -1,12 +1,14 @@
 import './sync-rules.css';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { File, Folder, Loader2, Plus, X } from 'lucide-react';
 import type { SyncRules as Rules } from '../../../shared/types';
 import { invoke } from '../../api';
+import { useConfirm } from '../../hooks/useConfirm';
 import { DISTANT_HORIZONS_RULE, RULE_HELP, addRule, cleanRuleInput, hasRule, sameRules } from '../../lib/rules';
 import { useNoticeStore } from '../../stores/noticeStore';
 import { request } from '../../stores/request';
 import { useSessionStore } from '../../stores/sessionStore';
+import { useCloseGuard } from '../modal/close-guard';
 
 /** The files every member's app leaves out of the sync. Stored in the server's .launcher/sync-rules.json,
  *  so it is the same list on every PC. */
@@ -16,6 +18,8 @@ export default function SyncRules({ serverId }: { serverId: string }) {
     const [input, setInput] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
+    const { ask, popup } = useConfirm();
+    const changed = rules !== null && !sameRules(draft, rules.ignore);
 
     useEffect(() => {
         let cancelled = false;
@@ -49,24 +53,41 @@ export default function SyncRules({ serverId }: { serverId: string }) {
         if (res.ok && res.value) add(res.value);
     }
 
-    async function save() {
+    /** true when the rules were saved. */
+    async function save(): Promise<boolean> {
         setSaving(true);
         const res = await request('rules:set', serverId, draft);
         setSaving(false);
-        if (!res.ok) return;
+        if (!res.ok) return false;
         setRules(res.value);
         setDraft(res.value.ignore);
         useNoticeStore.getState().success('Saved. Every member\'s app uses these rules from its next sync.');
         void useSessionStore.getState().preflight(serverId);
+        return true;
     }
+
+    // Closing with unsaved rules asks first: save them, throw them away, or keep editing.
+    const saveRef = useRef(save);
+    saveRef.current = save;
+    const guard = useCallback(async (): Promise<boolean> => {
+        const answer = await ask({
+            message: 'You changed the ignored files but did not save them.\n\nSave them for everyone before closing?',
+            confirmText: 'Save and close',
+            cancelText: 'Discard changes',
+        });
+        if (answer === 'no') return true;
+        if (answer === 'yes') return saveRef.current();
+        return false;
+    }, [ask]);
+    useCloseGuard(changed ? guard : null);
 
     if (!rules) {
         return <div className='sync-rules'>{error ? <p className='rules-error'>{error}</p> : <Loader2 size={18} className='spinner' />}</div>;
     }
-    const changed = !sameRules(draft, rules.ignore);
 
     return (
         <div className='sync-rules'>
+            {popup}
             <p className='rules-help'>{RULE_HELP}</p>
             <ul className='rules-list'>
                 {draft.map((rule) => (
