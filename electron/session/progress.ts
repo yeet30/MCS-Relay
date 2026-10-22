@@ -91,6 +91,13 @@ export class OrchestrationProgress implements ProgressSink {
         return this.active;
     }
 
+    /** The hint under the bar, changed while the run goes on (null removes it). */
+    setNote(note: string | null): void {
+        if (!this.active) return;
+        this.note = note;
+        this.flush();
+    }
+
     enter(key: ProgressStageKey, message: string): void {
         if (!this.active) return;
         const stage = this.stage(key);

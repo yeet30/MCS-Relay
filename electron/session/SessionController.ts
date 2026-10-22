@@ -50,6 +50,7 @@ const IDLE_PHASES = new Set<SessionPhase>(['idle', 'failed']);
 const STARTING_PHASES = new Set<SessionPhase>(['checking', 'claiming', 'downloading', 'launching']);
 /** A start or a download is cancelled (back to idle); an upload is paused (Continue resumes it). */
 const CANCELLABLE_PHASES = new Set<SessionPhase>([...STARTING_PHASES, 'uploading']);
+const JAVA_NOTE = 'This takes a minute or two, longer with mods or a big world. The server console further down this page shows what the server is doing; the button at the bottom right takes you there.';
 const FIRST_UPLOAD_NOTE = 'First upload of this server: every folder and file has to be created on Google Drive, so this takes much longer than later uploads.';
 const REPAIR_NOTE = 'Every file of the last saved version is checked on Google Drive first, so a repair takes a while even when little is broken.';
 const CHECK_EMIT_MS = 200;
@@ -286,13 +287,15 @@ export class SessionController {
                 this.progress.complete('playit', `playit.gg is ready: ${address}`);
             }
             if (settings.launchServer) {
-                this.progress.enter('java', 'Starting the Minecraft server');
+                this.progress.enter('java', 'Waiting for the Minecraft server to finish loading');
+                this.progress.setNote(JAVA_NOTE);
                 this.onMinecraftOutput([`[System] Starting the Minecraft server (${new Date(this.now()).toLocaleTimeString()})`]);
                 await this.d.minecraft.start({
                     serverPath: server.localPath ?? '', javaFlags: server.javaFlags,
                     readyTimeoutMs: this.d.timeouts?.minecraftMs ?? 180_000, signal, acceptEula: settings.eulaAccepted,
                 });
                 this.setState({ javaRunning: true });
+                this.progress.setNote(null);
                 this.progress.complete('java', 'The Minecraft server is ready');
             }
             this.throwIfLost();
