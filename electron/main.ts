@@ -1,6 +1,7 @@
 // Composition root: creates every service once, wires them together, and owns the window, the tray
 // and the quit flow. No business logic lives here.
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, Notification, safeStorage, shell, Tray } from 'electron';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { TITLE_BAR_HEIGHT, WINDOW_COLORS } from '../shared/types';
@@ -23,6 +24,8 @@ import { ChangeTracker } from './sync/changeTracker';
 import { LauncherFiles } from './sync/launcherFiles';
 import { SyncEngine } from './sync/SyncEngine';
 import { TransferEngine } from './transfer/TransferEngine';
+import { Updates } from './updates/Updates';
+import type { UpdaterLike } from './updates/Updates';
 
 const DATA_FOLDER = 'minecraft-distributed-hosting';
 
@@ -99,6 +102,15 @@ const session: SessionController = new SessionController({
     notify: (n) => notifyUser(n),
     serverName: (serverId) => servers.nameOf(serverId),
 });
+/** electron-updater, loaded at run time instead of bundled: it reads the update settings electron-builder puts next to
+ *  the installed app. A development build has none, so it gets no updater. */
+function loadUpdater(): UpdaterLike | null {
+    if (!app.isPackaged) return null;
+    const { autoUpdater } = createRequire(import.meta.url)('electron-updater') as { autoUpdater: UpdaterLike };
+    return autoUpdater;
+}
+const updates = new Updates({ updater: loadUpdater(), current: app.getVersion(), emit: (state) => events.emit('app:update', state) });
+
 const servers = new ServersService({
     drive, launcher, auth, settings, appData, dialogs,
     beforeDelete: async (serverId) => {
@@ -155,7 +167,8 @@ function quitResponse(confirmed: boolean): void {
     if (confirmed) void quit();
 }
 
-async function quit(): Promise<void> {
+/** With `install`, the downloaded update is installed and the app starts again (see installUpdate). */
+async function quit(opts: { install?: boolean } = {}): Promise<void> {
     if (quitting) return;
     quitting = true;
     events.emit('app:quitting', null);
@@ -166,8 +179,20 @@ async function quit(): Promise<void> {
     }
     session.dispose();
     lock.dispose();
+    updates.dispose();
     quitAllowed = true;
+    // A plain quit installs a downloaded update too (autoInstallOnAppQuit), just without starting the app again.
+    if (opts.install && updates.install()) return;
     app.quit();
+}
+
+/** "Restart to update": only between sessions, so a running server is never cut off. */
+function installUpdate(): void {
+    if (session.isBusy()) {
+        throw new AppError('BUSY', 'Stop the server and let the upload finish first. The update also installs by itself when you quit MCS-Relay.');
+    }
+    if (updates.get().status !== 'ready') throw new AppError('INVALID', 'No update has been downloaded yet.');
+    void quit({ install: true });
 }
 
 /* ------------------------------------------------------------------ window and tray */
@@ -287,10 +312,14 @@ if (!app.requestSingleInstanceLock()) {
         appData.migrateLegacy();
         registerHandlers(createHandle(ipcMain, isTrustedUrl), {
             auth, servers, session, settings, sync, transfers, changes, dialogs,
-            app: { quitResponse, openExternal: (url) => shell.openExternal(url), setLogoState: applyLogoState },
+            app: {
+                quitResponse, openExternal: (url) => shell.openExternal(url), setLogoState: applyLogoState,
+                updateState: () => updates.get(), checkForUpdates: () => updates.check(), installUpdate,
+            },
         });
         createTray();
         createWindow();
+        updates.start();
         try {
             const status = await auth.status();
             if (status.loggedIn) await session.resumeUnfinishedUploads();

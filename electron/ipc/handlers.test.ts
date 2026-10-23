@@ -21,6 +21,7 @@ const ALL_COMMANDS: Record<CommandName, true> = {
     'settings:pickPlayitPath': true,
     'rules:get': true, 'rules:set': true, 'rules:pickPath': true,
     'app:quitResponse': true, 'app:openExternal': true, 'app:setLogoState': true,
+    'app:updateState': true, 'app:checkForUpdates': true, 'app:installUpdate': true,
 };
 
 type Listener = (event: { senderFrame?: { url: string } | null }, ...args: unknown[]) => unknown;

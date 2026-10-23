@@ -46,6 +46,15 @@ export interface JavaFlags {
 export type LogoState = 'off' | 'here' | 'elsewhere';
 export const LOGO_STATES: readonly LogoState[] = ['off', 'here', 'elsewhere'];
 
+/** The app's own update. 'unavailable': a development build, which never checks. */
+export interface UpdateState {
+    current: string;                    // the version running now
+    status: 'unavailable' | 'idle' | 'checking' | 'up-to-date' | 'downloading' | 'ready' | 'error';
+    version: string | null;             // the newer version, while it downloads and once it is ready
+    percent: number;                    // download progress, 0..100
+    error: string | null;
+}
+
 export type ThemeName = 'light' | 'mint' | 'dark';
 export const THEMES: readonly ThemeName[] = ['light', 'mint', 'dark'];
 

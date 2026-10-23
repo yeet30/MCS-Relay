@@ -5,6 +5,7 @@ import { playChime } from '../lib/chime';
 import { useAuthStore } from './authStore';
 import { useServersStore } from './serversStore';
 import { useSessionStore } from './sessionStore';
+import { useUpdateStore } from './updateStore';
 
 /** The active unsubscribe functions; null while not subscribed. Module singleton (one renderer, one bridge). */
 let unsubscribers: Array<() => void> | null = null;
@@ -29,6 +30,7 @@ export function startEventSubscriptions(): void {
         on('app:confirmQuit', (prompt) => session().setQuitPrompt(prompt)),
         on('app:quitting', () => session().setQuitting(true)),
         on('app:chime', ({ outcome }) => playChime(outcome)),
+        on('app:update', (state) => useUpdateStore.getState().apply(state)),
         onSignedOut((message) => {
             useAuthStore.getState().markSignedOut(message);
             useServersStore.getState().reset();
@@ -36,6 +38,7 @@ export function startEventSubscriptions(): void {
     ];
     // Catch up with anything that happened before this window subscribed (e.g. after a reload).
     void session().resync();
+    void useUpdateStore.getState().load();
 }
 
 export function stopEventSubscriptions(): void {

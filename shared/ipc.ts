@@ -5,7 +5,7 @@
 import type {
     AppErrorInfo, AppSettings, ChangeBatch, ConflictChoice, LockView, LogoState, MemberRole, ServerId, ServerMember,
     ServerSettings, ServerSummary, SessionProgress, SessionState, StepMessage, SyncReport, SyncRules,
-    TransferSnapshot, UserInfo,
+    TransferSnapshot, UpdateState, UserInfo,
 } from './types';
 
 export type Result<T> =
@@ -85,6 +85,10 @@ export interface Commands {
     'app:openExternal': (url: string) => void;
     /** The taskbar and tray icons follow the comparator in the title bar. */
     'app:setLogoState': (state: LogoState) => void;
+    'app:updateState': () => UpdateState;
+    'app:checkForUpdates': () => UpdateState;
+    /** Quits, installs the downloaded update and starts the app again. Refused while a session is busy. */
+    'app:installUpdate': () => void;
 }
 
 /** Every event the main process pushes: channel -> payload. */
@@ -106,6 +110,8 @@ export interface Events {
     'app:quitting': null;
     /** A start or stop finished: play the chime (sent only when the sound is on). */
     'app:chime': { outcome: 'done' | 'failed' };
+    /** The app's own update: checking, downloading, ready to install. */
+    'app:update': UpdateState;
 }
 
 export type CommandName = keyof Commands;

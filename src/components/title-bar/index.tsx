@@ -7,6 +7,7 @@ import logoHere from '../../assets/logo.svg';
 import logoElsewhere from '../../assets/logo-front-lit.svg';
 import { logoState } from '../../lib/sync';
 import { useServersStore } from '../../stores/serversStore';
+import { useUpdateStore } from '../../stores/updateStore';
 import { lockFor, useSessionStore } from '../../stores/sessionStore';
 
 const LOGOS: Record<LogoState, { src: string; title: string }> = {
@@ -22,6 +23,7 @@ export default function TitleBar() {
     const selectedId = useServersStore((s) => s.selectedId);
     const session = useSessionStore((s) => s.state);
     const lock = useSessionStore((s) => lockFor(s, selectedId));
+    const update = useUpdateStore((s) => (s.state?.status === 'ready' ? s.state : null));
     const state = logoState(session, selectedId, lock);
     const logo = LOGOS[state];
 
@@ -33,6 +35,15 @@ export default function TitleBar() {
         <header className='title-bar'>
             <img src={logo.src} alt='' title={logo.title} width={16} height={16} />
             <span>MCS-Relay</span>
+            {update && (
+                <button
+                    className='title-update'
+                    title='Quit, install the new version and start again. It also installs by itself when you quit.'
+                    onClick={() => void useUpdateStore.getState().install()}
+                >
+                    Version {update.version} is ready · Restart
+                </button>
+            )}
         </header>
     );
 }

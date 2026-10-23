@@ -18,4 +18,22 @@
     img {
         image-rendering: pixelated;
     }
+
+    /* Buttons in a drag region must opt out of dragging, or clicks only move the window. */
+    .title-update {
+        -webkit-app-region: no-drag;
+        margin-left: 6px;
+        padding: 2px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(var(--accent-rgb), 0.6);
+        background: rgba(var(--accent-rgb), 0.14);
+        color: inherit;
+        font-size: 0.72rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .title-update:hover {
+        background: rgba(var(--accent-rgb), 0.24);
+    }
 }

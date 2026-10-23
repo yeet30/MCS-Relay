@@ -1,13 +1,15 @@
 import './preferences.css';
 import { useEffect } from 'react';
-import { Bell, ExternalLink, Play, ScrollText, Volume2 } from 'lucide-react';
+import { Bell, Download, ExternalLink, Loader2, Play, RefreshCw, ScrollText, Volume2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { THEMES } from '../../../shared/types';
 import type { AppSettings, ThemeName } from '../../../shared/types';
 import { invoke } from '../../api';
 import { playChime } from '../../lib/chime';
 import { applyTheme } from '../../lib/theme';
+import { updateLine } from '../../lib/updates';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useUpdateStore } from '../../stores/updateStore';
 
 const EULA_URL = 'https://www.minecraft.net/en-us/eula';
 
@@ -37,7 +39,39 @@ function Toggle({ icon, title, text, checked, onChange, children }: {
     );
 }
 
-/** The theme, how MCS-Relay tells you that something finished or failed, and the EULA answer of this account. */
+/** The running version and its update. */
+function AboutRow() {
+    const update = useUpdateStore((s) => s.state);
+    if (!update) return null;
+    const busy = update.status === 'checking' || update.status === 'downloading';
+    return (
+        <div className='pref-row'>
+            <span className='pref-icon'><Download size={16} /></span>
+            <div className='pref-text'>
+                <span className='pref-title'>MCS-Relay {update.current}</span>
+                <span className='pref-help'>{updateLine(update)}</span>
+                {update.status !== 'unavailable' && (
+                    <span className='pref-actions'>
+                        {update.status === 'ready'
+                            ? (
+                                <button className='text-button primary' onClick={() => void useUpdateStore.getState().install()}>
+                                    <RefreshCw size={11} /> Restart to update
+                                </button>
+                            )
+                            : (
+                                <button className='text-button' disabled={busy} onClick={() => void useUpdateStore.getState().check()}>
+                                    {busy ? <Loader2 size={11} className='spinner' /> : <RefreshCw size={11} />} Check for updates
+                                </button>
+                            )}
+                    </span>
+                )}
+            </div>
+        </div>
+    );
+}
+
+/** The theme, how MCS-Relay tells you that something finished or failed, the EULA answer of this account, and the
+ *  version with its updates. */
 export default function Preferences() {
     const settings = useSettingsStore((s) => s.settings);
 
@@ -122,6 +156,9 @@ export default function Preferences() {
                     </span>
                 </div>
             </div>
+
+            <h4 className='pref-section'>About</h4>
+            <AboutRow />
         </div>
     );
 }

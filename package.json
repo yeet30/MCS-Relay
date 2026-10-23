@@ -1,7 +1,7 @@
 {
   "name": "mcs-relay",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "MCS-Relay: host a Minecraft server from a shared Google Drive, taking turns with friends",
   "author": "Yeet30",
   "type": "module",
@@ -9,7 +9,9 @@
     "dev": "vite",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "build": "tsc && vite build && electron-builder",
+    "clean": "node scripts/clean.mjs",
+    "build": "npm run clean && tsc && vite build && electron-builder --win --publish never",
+    "release": "npm run clean && tsc && vite build && electron-builder --win --publish always",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },
@@ -28,6 +30,17 @@
       "target": "nsis",
       "icon": "public/launcher.ico"
     },
+    "nsis": {
+      "artifactName": "MCS-Relay-Setup-${version}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "yeet30",
+        "repo": "minecraft-distributed-hosting",
+        "releaseType": "release"
+      }
+    ],
     "extraResources": [
       {
         "from": "public",
@@ -36,33 +49,38 @@
     ]
   },
   "dependencies": {
-    "@fontsource-variable/inter": "^5.3.0",
-    "@fontsource-variable/jetbrains-mono": "^5.3.0",
-    "bottleneck": "^2.19.5",
-    "chokidar": "^4.0.3",
-    "google-auth-library": "^10.9.1",
-    "lucide-react": "^0.577.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^7.13.0",
-    "zustand": "^5.0.12"
+    "electron-updater": "~6.1.8"
   },
   "devDependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@types/react": "^18.2.64",
     "@types/react-dom": "^18.2.21",
     "@typescript-eslint/eslint-plugin": "^7.1.1",
     "@typescript-eslint/parser": "^7.1.1",
     "@vitejs/plugin-react": "^4.2.1",
+    "bottleneck": "^2.19.5",
+    "chokidar": "^4.0.3",
     "electron": "^30.0.1",
     "electron-builder": "^24.13.3",
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
+    "google-auth-library": "^10.9.1",
+    "lucide-react": "^0.577.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^7.13.0",
     "typescript": "^5.2.2",
     "vite": "^5.1.6",
     "vite-plugin-electron": "^0.28.6",
     "vite-plugin-electron-renderer": "^0.14.5",
-    "vitest": "^3.2.7"
+    "vitest": "^3.2.7",
+    "zustand": "^5.0.12"
   },
-  "main": "dist-electron/main.js"
+  "main": "dist-electron/main.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yeet30/minecraft-distributed-hosting.git"
+  }
 }

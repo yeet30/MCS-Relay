@@ -2,7 +2,7 @@
 // runtime, so each one is checked here before a service sees it.
 import path from 'node:path';
 import type { AuthStatus } from '../../shared/ipc';
-import type { ConflictChoice, LogoState } from '../../shared/types';
+import type { ConflictChoice, LogoState, UpdateState } from '../../shared/types';
 import { LOGO_STATES } from '../../shared/types';
 import { toPosix } from '../../shared/paths';
 import { AppError } from '../errors';
@@ -30,7 +30,14 @@ export interface HandlerDeps {
     transfers: Pick<TransferEngine, 'snapshot'>;
     changes: Pick<ChangeTracker, 'all'>;
     dialogs: Pick<Dialogs, 'chooseFolder' | 'chooseFile'>;
-    app: { quitResponse(confirmed: boolean): void; openExternal(url: string): Promise<void>; setLogoState(state: LogoState): void };
+    app: {
+        quitResponse(confirmed: boolean): void;
+        openExternal(url: string): Promise<void>;
+        setLogoState(state: LogoState): void;
+        updateState(): UpdateState;
+        checkForUpdates(): Promise<UpdateState>;
+        installUpdate(): void;
+    };
 }
 
 const CHOICES: readonly ConflictChoice[] = ['keep-cloud', 'keep-local', 'combine'];
@@ -199,4 +206,7 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
         if (!LOGO_STATES.includes(state)) throw invalid('Unknown logo state.');
         d.app.setLogoState(state);
     });
+    handle('app:updateState', () => d.app.updateState());
+    handle('app:checkForUpdates', () => d.app.checkForUpdates());
+    handle('app:installUpdate', () => d.app.installUpdate());
 }
