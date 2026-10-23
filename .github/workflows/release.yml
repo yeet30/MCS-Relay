@@ -1,0 +1,58 @@
+# Builds the Windows installer and publishes it as a GitHub Release whenever a version tag is pushed:
+#   1. set "version" in package.json (for example 1.0.1) and commit it
+#   2. git tag v1.0.1 && git push origin v1.0.1
+# The installed apps find the new release by themselves (electron-updater reads latest.yml from it).
+#
+# Needs one repository secret, GOOGLE_CLIENT_SECRET_JSON: the whole content of config/client_secret.json, which is
+# never committed (Settings > Secrets and variables > Actions > New repository secret).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write          # to create the release and upload the installer
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Check that the tag matches package.json
+        shell: bash
+        run: |
+          version="v$(node -p "require('./package.json').version")"
+          if [ "$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::The tag is $GITHUB_REF_NAME but package.json says $version. Change one of them so they match."
+            exit 1
+          fi
+
+      - run: npm ci
+
+      - name: Google sign-in settings
+        shell: bash
+        env:
+          CLIENT_SECRET_JSON: ${{ secrets.GOOGLE_CLIENT_SECRET_JSON }}
+        run: |
+          if [ -z "$CLIENT_SECRET_JSON" ]; then
+            echo "::error::Add the GOOGLE_CLIENT_SECRET_JSON repository secret first."
+            exit 1
+          fi
+          mkdir -p config
+          printf '%s' "$CLIENT_SECRET_JSON" > config/client_secret.json
+          node -e "JSON.parse(require('fs').readFileSync('config/client_secret.json', 'utf8')).installed.client_id"
+
+      - run: npm run lint
+      - run: npm test
+
+      - name: Build and publish the installer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run release
