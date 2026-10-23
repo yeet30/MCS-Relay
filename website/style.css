@@ -1,0 +1,316 @@
+/* MCS-Relay website: the app's Light theme (grey page, white cards, red accent), and a dark version. */
+:root {
+    --page: #e6e6e8;
+    --card: #ffffff;
+    --card-2: #f3f3f4;
+    --line: #d6d6da;
+    --text: #1c1c20;
+    --muted: #5c5c66;
+    --accent: #c23b30;
+    --accent-text: #ffffff;
+    --shadow: 0 10px 30px rgba(20, 20, 30, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --page: #141416;
+        --card: #1c1c1f;
+        --card-2: #242428;
+        --line: #33333a;
+        --text: #e7e7ea;
+        --muted: #a1a1aa;
+        --accent: #e2574c;
+        --accent-text: #ffffff;
+        --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text);
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+}
+
+a {
+    color: var(--accent);
+}
+
+img {
+    max-width: 100%;
+}
+
+.wrap {
+    width: 100%;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 16px;
+}
+
+/* ---------------------------------------------------------------- header */
+
+.site-header {
+    padding: 18px 0;
+}
+
+.site-header .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text);
+    font-weight: 700;
+    font-size: 1.1rem;
+    text-decoration: none;
+}
+
+.pixel {
+    image-rendering: pixelated;
+    border-radius: 4px;
+}
+
+.site-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    font-size: 0.95rem;
+}
+
+.site-nav a {
+    color: var(--muted);
+    text-decoration: none;
+}
+
+.site-nav a:hover {
+    color: var(--text);
+}
+
+/* ---------------------------------------------------------------- hero */
+
+/* Only top and bottom: the sides keep .wrap's gutter. */
+.hero {
+    padding-top: 40px;
+    padding-bottom: 24px;
+    text-align: center;
+}
+
+.hero h1 {
+    margin: 0 auto 14px;
+    max-width: 720px;
+    font-size: clamp(2rem, 5vw, 3rem);
+    line-height: 1.15;
+}
+
+.hero p {
+    margin: 0 auto;
+    max-width: 640px;
+    color: var(--muted);
+    font-size: 1.1rem;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+    margin: 28px 0 10px;
+}
+
+.button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 22px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--text);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.button.primary {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-text);
+}
+
+.button:hover {
+    filter: brightness(1.05);
+}
+
+.fine-print {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.screenshot {
+    display: block;
+    margin: 28px auto 0;
+    width: 100%;
+    max-width: 800px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow);
+}
+
+/* ---------------------------------------------------------------- sections */
+
+section {
+    padding: 36px 0;
+}
+
+h2 {
+    margin: 0 0 18px;
+    font-size: 1.6rem;
+}
+
+.cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 14px;
+}
+
+.card {
+    padding: 20px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: var(--card);
+}
+
+.card h3 {
+    margin: 0 0 6px;
+    font-size: 1.05rem;
+}
+
+.card p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.95rem;
+}
+
+.step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin-bottom: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-text);
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.panel {
+    padding: 22px 24px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: var(--card);
+}
+
+.panel p:first-child {
+    margin-top: 0;
+}
+
+.panel p:last-child,
+.panel ul:last-child {
+    margin-bottom: 0;
+}
+
+ul.plain {
+    padding-left: 20px;
+}
+
+ul.plain li {
+    margin: 4px 0;
+}
+
+/* ---------------------------------------------------------------- privacy policy */
+
+.policy {
+    padding-top: 24px;
+    padding-bottom: 40px;
+}
+
+.policy h1 {
+    margin: 10px 0 4px;
+    font-size: 2rem;
+}
+
+.policy .updated {
+    margin: 0 0 24px;
+    color: var(--muted);
+}
+
+.policy h2 {
+    margin: 32px 0 10px;
+    font-size: 1.25rem;
+}
+
+.policy table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+}
+
+.policy th,
+.policy td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+}
+
+.policy th {
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.table-scroll {
+    overflow-x: auto;
+}
+
+.policy code {
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: var(--card-2);
+    font-size: 0.9em;
+}
+
+/* ---------------------------------------------------------------- footer */
+
+.site-footer {
+    padding: 28px 0 40px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.site-footer .wrap {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 10px 24px;
+}
+
+.site-footer a {
+    color: var(--muted);
+}

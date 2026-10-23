@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MCS-Relay: host a Minecraft server together</title>
+    <meta name="description" content="MCS-Relay is a free, open-source Windows app that lets friends take turns hosting the same Minecraft server, with the world kept in a shared Google Drive folder.">
+    <link rel="icon" href="logo.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="wrap">
+            <a class="brand" href="./">
+                <img class="pixel" src="logo.svg" alt="" width="32" height="32">
+                MCS-Relay
+            </a>
+            <nav class="site-nav">
+                <a href="#how-it-works">How it works</a>
+                <a href="#your-data">Your Google data</a>
+                <a href="privacy.html">Privacy policy</a>
+                <a href="https://github.com/yeet30/MCS-Relay">GitHub</a>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <div class="hero wrap">
+            <h1>Host your Minecraft server together, from a shared Google Drive</h1>
+            <p>
+                Whoever wants to play hosts it. MCS-Relay downloads the latest world, runs the server on your PC, and
+                saves it back to Google Drive for the next friend. No rented server, no passing files around.
+            </p>
+            <div class="actions">
+                <a class="button primary" href="https://github.com/yeet30/MCS-Relay/releases/latest">Download for Windows</a>
+                <a class="button" href="https://github.com/yeet30/MCS-Relay">Source code</a>
+            </div>
+            <p class="fine-print">Free and open source · Windows 10 and 11 · Updates itself</p>
+            <img class="screenshot" src="screenshot.png" alt="The MCS-Relay window while hosting a server: the stop button, two players online and the address friends join with." width="1200" height="900">
+        </div>
+
+        <section id="how-it-works">
+            <div class="wrap">
+                <h2>How it works</h2>
+                <div class="cards">
+                    <div class="card">
+                        <span class="step">1</span>
+                        <h3>Create a server</h3>
+                        <p>MCS-Relay makes a server folder in your Google Drive. Invite your friends; Google Drive emails them a link to join.</p>
+                    </div>
+                    <div class="card">
+                        <span class="step">2</span>
+                        <h3>Press Start</h3>
+                        <p>The newest world is downloaded and the server runs on your PC. It is reserved for you, so nobody else starts it at the same time.</p>
+                    </div>
+                    <div class="card">
+                        <span class="step">3</span>
+                        <h3>Play</h3>
+                        <p>Friends join with your address. With playit.gg they can join from anywhere without port forwarding.</p>
+                    </div>
+                    <div class="card">
+                        <span class="step">4</span>
+                        <h3>Press Stop</h3>
+                        <p>The world is uploaded and the server is free again. Next time, any of you can host it.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="your-data">
+            <div class="wrap">
+                <h2>Your Google data</h2>
+                <div class="panel">
+                    <p>
+                        When you sign in, Google asks you to let MCS-Relay see, edit, create and delete your Google Drive
+                        files. The app needs that to read the world files your friends upload: Google's smaller permission
+                        only shows an app the files it made itself.
+                    </p>
+                    <ul class="plain">
+                        <li>MCS-Relay only works in the "Minecraft Shared Servers" folder it makes in your Drive and in the servers you join. It does not open, list or change your other files.</li>
+                        <li>There is no MCS-Relay server: the app talks to Google straight from your PC, and your sign-in is stored encrypted on it.</li>
+                        <li>Nothing is sold, shared for advertising or collected for statistics.</li>
+                    </ul>
+                    <p>
+                        The <a href="privacy.html">privacy policy</a> lists exactly what the app uses and where it is kept.
+                        You can take the access back at any time in your
+                        <a href="https://myaccount.google.com/connections">Google Account</a>.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <section id="requirements">
+            <div class="wrap">
+                <h2>What you need</h2>
+                <div class="panel">
+                    <ul class="plain">
+                        <li>Windows 10 or 11 and a Google account.</li>
+                        <li>Java, in the version your Minecraft server needs.</li>
+                        <li>A Minecraft Java server folder (a server .jar, or run.bat for Forge and NeoForge). An existing world works too.</li>
+                        <li>Optional: <a href="https://playit.gg">playit.gg</a>, so friends can join from anywhere.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="wrap">
+            <span>
+                <a href="privacy.html">Privacy policy</a> ·
+                <a href="https://github.com/yeet30/MCS-Relay/issues">Report a problem</a> ·
+                <a href="https://github.com/yeet30/MCS-Relay">GitHub</a>
+            </span>
+            <span>Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.</span>
+        </div>
+    </footer>
+</body>
+</html>
