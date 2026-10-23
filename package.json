@@ -23,8 +23,7 @@
     },
     "files": [
       "dist/**/*",
-      "dist-electron/**/*",
-      "config/**/*"
+      "dist-electron/**/*"
     ],
     "win": {
       "target": "nsis",

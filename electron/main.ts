@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { TITLE_BAR_HEIGHT, WINDOW_COLORS } from '../shared/types';
 import type { LogoState, ThemeName } from '../shared/types';
+import { unscrambleClient } from './auth/embeddedClient';
 import { GoogleAuth } from './auth/GoogleAuth';
 import { DriveClient } from './drive/DriveClient';
 import { DriveFiles } from './drive/DriveFiles';
@@ -56,7 +57,7 @@ const events = createEventSink(() => win);
 const settings = new SettingsService({ appData, dialogs, onChange: (s) => applyWindowTheme(s.theme) });
 const auth = new GoogleAuth({
     userDataDir: userData,
-    credentialsPath: path.join(app.getAppPath(), 'config', 'client_secret.json'),
+    client: unscrambleClient(__MCS_RELAY_CLIENT__),
     openExternal: (url) => shell.openExternal(url),
     safeStorage,
     // Server folders, bases and journals are kept per Google account.

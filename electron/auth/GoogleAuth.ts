@@ -1,6 +1,6 @@
 // Google sign-in for the whole app: one OAuth2Client for the app's lifetime, one consent screen,
 // tokens stored encrypted (Electron safeStorage), and one shared in-flight refresh.
-// No electron import: main.ts passes openExternal, safeStorage and the folders in.
+// No electron import: main.ts passes the client, openExternal, safeStorage and the folders in.
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -10,6 +10,7 @@ import type { Credentials } from 'google-auth-library';
 import type { AuthStatus } from '../../shared/ipc';
 import type { UserInfo } from '../../shared/types';
 import { AppError } from '../errors';
+import type { ClientCredentials } from './embeddedClient';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
 const EMAIL_SCOPE = 'https://www.googleapis.com/auth/userinfo.email';
@@ -32,7 +33,8 @@ export interface SafeStorageLike {
 
 export interface GoogleAuthDeps {
     userDataDir: string;
-    credentialsPath: string;                        // config/client_secret.json
+    /** The app's Google OAuth client (built in, see embeddedClient.ts); null when this build has none. */
+    client: ClientCredentials | null;
     openExternal: (url: string) => Promise<void>;
     safeStorage?: SafeStorageLike;
     /** For tests: replaces fetch for userinfo and the OAuth client's token requests. */
@@ -178,20 +180,6 @@ export class TokenStore {
             return null;
         }
     }
-}
-
-function readClientSecrets(file: string): { clientId: string; clientSecret: string } {
-    let parsed: unknown;
-    try {
-        parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
-    } catch (err) {
-        throw new AppError('UNKNOWN', "The app's Google sign-in settings are missing or damaged.", `${file}: ${describe(err)}`);
-    }
-    const section = isRecord(parsed) ? (isRecord(parsed.installed) ? parsed.installed : parsed.web) : null;
-    if (!isRecord(section) || typeof section.client_id !== 'string') {
-        throw new AppError('UNKNOWN', "The app's Google sign-in settings are missing or damaged.", `${file}: no installed.client_id`);
-    }
-    return { clientId: section.client_id, clientSecret: typeof section.client_secret === 'string' ? section.client_secret : '' };
 }
 
 function page(title: string, text: string): string {
@@ -378,7 +366,12 @@ export class GoogleAuth {
 
     private client(): OAuth2Client {
         if (!this.oauth) {
-            const { clientId, clientSecret } = readClientSecrets(this.deps.credentialsPath);
+            if (!this.deps.client) {
+                // A build made without config/client_secret.json (a fork, for example) has no Google client to sign in with.
+                throw new AppError('UNKNOWN', 'This copy of MCS-Relay was built without Google sign-in settings.',
+                    'Put the OAuth client file from Google Cloud Console in config/client_secret.json and build again.');
+            }
+            const { clientId, clientSecret } = this.deps.client;
             this.oauth = new OAuth2Client({
                 clientId,
                 clientSecret,

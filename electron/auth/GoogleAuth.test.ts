@@ -45,14 +45,13 @@ function makeAuth(safe: SafeStorageLike = fakeSafe(), openExternal: (url: string
         return new Response('not found', { status: 404 });
     }) as typeof fetch;
     return new GoogleAuth({
-        userDataDir: dir, credentialsPath: path.join(dir, 'client_secret.json'), openExternal,
+        userDataDir: dir, client: { clientId: 'cid', clientSecret: 'secret' }, openExternal,
         safeStorage: safe, fetchImpl, now: () => NOW,
     });
 }
 
 beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mdh-auth-'));
-    fs.writeFileSync(path.join(dir, 'client_secret.json'), JSON.stringify({ installed: { client_id: 'cid', client_secret: 'secret' } }));
     calls = [];
     opened = [];
     tokenAnswer = () => json(200, { access_token: 'fresh', expires_in: 3600, token_type: 'Bearer', scope: FULL_SCOPE });
