@@ -1,34 +1,141 @@
-# minecraft-distributed-hosting
-A desktop application to decrease the steps in a distributed hosting minecraft server booting sequence. By synching the server files in a cloud and running user determined scripts.
+<p align="center">
+  <img src="website/logo.svg" alt="" width="96" height="96">
+</p>
 
+<h1 align="center">MCS-Relay</h1>
 
-# React + TypeScript + Vite
+<p align="center">
+  Host your Minecraft server together, from a shared Google Drive.<br>
+  Whoever wants to play hosts it; the world is saved for the next one.
+</p>
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+<p align="center">
+  <a href="https://github.com/yeet30/MCS-Relay/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/yeet30/MCS-Relay?label=download"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/yeet30/MCS-Relay"></a>
+  <img alt="Windows 10 and 11" src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue">
+</p>
 
-Currently, two official plugins are available:
+<p align="center">
+  <a href="https://yeet30.github.io/MCS-Relay/">Website</a> ·
+  <a href="https://github.com/yeet30/MCS-Relay/releases/latest">Download</a> ·
+  <a href="https://yeet30.github.io/MCS-Relay/privacy.html">Privacy policy</a>
+</p>
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+<p align="center">
+  <img src="website/screenshot.png" alt="The MCS-Relay window while hosting a server" width="720">
+</p>
 
-## Expanding the ESLint configuration
+## Why
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+A group of friends with one Minecraft world usually needs one of two things: a rented server, or the one friend
+whose PC runs the server being online whenever anyone wants to play. MCS-Relay removes both. The world lives in a
+Google Drive folder that you all share, and whoever wants to play hosts it on their own PC:
 
-- Configure the top-level `parserOptions` property like this:
+1. **Start**: MCS-Relay reserves the server for you, downloads what changed since you last played, and starts the
+   Minecraft server (and playit.gg, if you use it, so friends can join from anywhere).
+2. **Play**: your friends join with the address MCS-Relay shows you.
+3. **Stop**: the world is uploaded, only the files that changed, and the server is free for the next person.
 
-```js
-export default {
-  // other rules...
-  parserOptions: {
-    ecmaVersion: 'latest',
-    sourceType: 'module',
-    project: ['./tsconfig.json', './tsconfig.node.json'],
-    tsconfigRootDir: __dirname,
-  },
-}
+## Features
+
+- **Take turns hosting**: anyone in the group can host; the world always continues from where the last host stopped.
+- **One host at a time**: a server is reserved while someone uses it, so two people never run it at once and
+  overwrite each other's world.
+- **Only changes are transferred**: after the first upload, a session moves just the files that changed, several
+  at a time.
+- **Safe uploads**: an upload becomes the new version only when every file has arrived. You can pause it, continue it
+  later (also after a crash or a closed laptop), or cancel it.
+- **Conflicts are shown, never guessed**: if your copy and the cloud both changed, you choose which one to keep.
+- **playit.gg built in**: every tunnel of your playit.gg agent (Minecraft Java, Bedrock, Simple Voice Chat, web
+  maps) is shown with what it is for, for you and for everyone in the group.
+- **Server management**: invite and remove members, choose which files are left out of the sync, sync without
+  playing, and repair a server whose upload was interrupted.
+- **Lives in the tray**: notifications and a sound when a start or stop finishes or fails, Light / Mint / Dark themes,
+  and automatic updates.
+
+## Getting started
+
+You need Windows 10 or 11, a Google account, and [Java](https://adoptium.net/) in the version your Minecraft server
+needs.
+
+1. Download `MCS-Relay-Setup-<version>.exe` from the [latest release](https://github.com/yeet30/MCS-Relay/releases/latest)
+   and run it. Windows may say it "protected your PC", because the installer is not signed yet: choose
+   **More info → Run anyway**.
+2. Sign in with Google. MCS-Relay asks for access to your Google Drive, because it has to read the world files your
+   friends upload; it only works in its own server folders (see [Your data](#your-data)).
+3. **Create a server**, give it a name, and choose its folder on your PC: the folder the Minecraft server runs from,
+   with the server `.jar` (or `run.bat` for Forge and NeoForge). An existing server folder works too.
+4. **Invite your friends** from Settings → Drive Folders. Google Drive emails them a link; they paste it into
+   **Join a server** in their own MCS-Relay.
+5. Press the power button.
+
+To let friends join from anywhere without port forwarding, install [playit.gg](https://playit.gg), set up a
+Minecraft Java tunnel once, and turn it on in Settings → Scripts.
+
+## Your data
+
+MCS-Relay has no servers of its own. It talks to Google Drive straight from your PC, keeps your sign-in encrypted on
+it, and works only inside the "Minecraft Shared Servers" folder it creates and the servers you join. Nothing is sold,
+shared for advertising or collected for statistics. The [privacy policy](https://yeet30.github.io/MCS-Relay/privacy.html)
+lists exactly what is used and stored, and how to remove it.
+
+If Google shows **"Google hasn't verified this app"** when you sign in, the app has not finished Google's review for
+apps with full Drive access yet. Choose **Advanced → Go to MCS-Relay** to continue.
+
+## Building from source
+
+You need [Node.js](https://nodejs.org/) 22 and a Google Cloud project of your own:
+
+1. In the [Google Cloud console](https://console.cloud.google.com/), create a project, enable the **Google Drive
+   API**, and set up the **Google Auth Platform** (External) with the scopes `openid`,
+   `.../auth/userinfo.email`, `.../auth/userinfo.profile` and `.../auth/drive`. While it is in Testing, add your
+   Google account as a test user.
+2. Create an **OAuth client ID** of type **Desktop app**, download its JSON and save it as `config/client_secret.json`
+   (the `config` folder is not committed). The build puts it into the app; a build without it cannot sign in.
+3. Then:
+
+```bash
+npm ci
 ```
 
-- Replace `plugin:@typescript-eslint/recommended` to `plugin:@typescript-eslint/recommended-type-checked` or `plugin:@typescript-eslint/strict-type-checked`
-- Optionally add `plugin:@typescript-eslint/stylistic-type-checked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and add `plugin:react/recommended` & `plugin:react/jsx-runtime` to the `extends` list
+```bash
+npm run dev
+```
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Runs the app with hot reload. |
+| `npm test` | Runs the tests (Vitest; Google Drive is faked, nothing touches a real account). |
+| `npm run lint` / `npm run typecheck` | ESLint and TypeScript checks. |
+| `npm run build` | Builds the Windows installer into `release/` without publishing it. |
+
+### How the code is organised
+
+| Folder | What is in it |
+|---|---|
+| `electron/` | The main process: Google sign-in, the Drive client, the server reservation (`lock/`), syncing and transfers, the Minecraft and playit.gg processes, the session that ties them together, and app updates. |
+| `src/` | The window: React components and zustand stores. |
+| `shared/` | Types and the IPC contract between the two. |
+| `website/` | The website, published to GitHub Pages. |
+| `docs/` | Design notes, among them [the specification of the rewrite](docs/rewrite/SPEC.md). |
+
+### Releasing
+
+Set the new `version` in `package.json`, commit it, then push a matching tag:
+
+```bash
+git tag v1.0.1
+```
+
+```bash
+git push origin v1.0.1
+```
+
+GitHub Actions checks, tests and builds the installer and publishes it as a release; installed apps update
+themselves from it. The workflow needs one repository secret, `GOOGLE_CLIENT_SECRET_JSON`, holding the contents of
+`config/client_secret.json`.
+
+## License
+
+[MIT](LICENSE). Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft. Google
+Drive is a trademark of Google LLC.
