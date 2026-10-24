@@ -3,7 +3,8 @@
   "private": true,
   "version": "1.0.0",
   "description": "MCS-Relay: host a Minecraft server from a shared Google Drive, taking turns with friends",
-  "author": "Yeet30",
+  "author": "yeet30",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -18,6 +19,7 @@
   "build": {
     "appId": "com.yeet.mcsrelay",
     "productName": "MCS-Relay",
+    "copyright": "Copyright © 2026 yeet30",
     "directories": {
       "output": "release"
     },
@@ -81,5 +83,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/yeet30/MCS-Relay.git"
-  }
+  },
+  "homepage": "https://yeet30.github.io/MCS-Relay/"
 }
