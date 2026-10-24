@@ -36,7 +36,11 @@
                 <a class="button" href="https://github.com/yeet30/MCS-Relay">Source code</a>
             </div>
             <p class="fine-print">Free and open source · Windows 10 and 11 · Updates itself</p>
-            <img class="screenshot" src="screenshot.png" alt="The MCS-Relay window while hosting a server: the stop button, two players online and the address friends join with." width="1200" height="900">
+            <!-- The app in the same theme as the page: dark when the visitor's system is dark. -->
+            <picture>
+                <source srcset="screenshot-dark.png" media="(prefers-color-scheme: dark)">
+                <img class="screenshot" src="screenshot.png" alt="The MCS-Relay window while hosting a server: the stop button, two players online and the address friends join with." width="1200" height="900">
+            </picture>
         </div>
 
         <section id="how-it-works">
@@ -110,7 +114,8 @@
             <span>
                 <a href="privacy.html">Privacy policy</a> ·
                 <a href="https://github.com/yeet30/MCS-Relay/issues">Report a problem</a> ·
-                <a href="https://github.com/yeet30/MCS-Relay">GitHub</a>
+                <a href="https://github.com/yeet30/MCS-Relay">GitHub</a> ·
+                <a href="https://github.com/yeet30/MCS-Relay/blob/main/LICENSE">MIT license</a>
             </span>
             <span>Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.</span>
         </div>
