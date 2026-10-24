@@ -54,7 +54,8 @@
     padding: 1px 0;
     line-height: 1.6;
     white-space: pre-wrap;
-    word-break: break-all;
+    /* Lines wrap between words; a single word longer than the line (a long path, say) still breaks. */
+    overflow-wrap: anywhere;
     user-select: text;
 }
 

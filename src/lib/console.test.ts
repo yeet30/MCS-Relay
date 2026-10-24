@@ -7,6 +7,11 @@ test('classifyLine', () => {
     expect(classifyLine('[12:00:00 INFO]: Done (3.2s)! For help, type "help"')).toBe('success');
     expect(classifyLine('[System] Server stopped')).toBe('system');
     expect(classifyLine('[12:00:00 INFO]: Preparing spawn area')).toBe('info');
+    expect(classifyLine('[18:09:20] [Server thread/WARN]: Can\'t keep up! Is the server overloaded?')).toBe('warn');
+    expect(classifyLine('[18:09:20] [Server thread/ERROR]: Encountered an unexpected exception')).toBe('error');
+    expect(classifyLine('[18:09:20] [Server thread/INFO]: Steve joined the game')).toBe('success');
+    expect(classifyLine('[18:09:20] [Server thread/INFO]: <Steve> my farm failed again')).toBe('info');
+    expect(classifyLine('java.lang.NullPointerException: null')).toBe('error');
 });
 
 test('appendLines keeps the newest lines', () => {

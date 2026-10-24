@@ -6,8 +6,13 @@ export type LineType = 'info' | 'warn' | 'error' | 'success' | 'system';
 
 export function classifyLine(text: string): LineType {
     if (/\[System\]/.test(text)) return 'system';
-    if (/\[WARN\]|Warning/i.test(text)) return 'warn';
-    if (/\[ERROR\]|Exception|FATAL|failed/i.test(text)) return 'error';
+    // The level comes as "[18:09:20] [Server thread/WARN]" (vanilla, Forge) or "[18:09:20 WARN]" (Paper, Spigot).
+    const level = /[\s/[](INFO|WARN|WARNING|ERROR|FATAL|SEVERE)\]/i.exec(text)?.[1].toUpperCase();
+    if (level === 'ERROR' || level === 'FATAL' || level === 'SEVERE') return 'error';
+    if (level === 'WARN' || level === 'WARNING') return 'warn';
+    // Lines without a level (a stack trace, a mod's own output) go by their words.
+    if (!level && /Exception|FATAL|failed/i.test(text)) return 'error';
+    if (!level && /Warning/i.test(text)) return 'warn';
     if (/Done|started|logged in|joined/i.test(text)) return 'success';
     return 'info';
 }
