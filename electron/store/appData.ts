@@ -281,6 +281,12 @@ export class AppData {
     migrateLegacy(): void {
         const legacyPath = path.join(this.root, LEGACY_FILE);
         if (!fs.existsSync(legacyPath)) return;
+        if (fs.existsSync(path.join(this.root, LEGACY_MIGRATED_FILE))) {
+            // Imported before: this one was written since by the old app, run again. Importing it would overwrite
+            // what was set in this app since then.
+            console.log(`[appData] ${LEGACY_FILE} was written again by the old app; not importing it a second time`);
+            return;
+        }
         const legacy = this.readLegacy(legacyPath);
         if (!legacy) return;            // unreadable: moved aside as .corrupt
 

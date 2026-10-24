@@ -21,14 +21,13 @@ import { ServersService } from './servers/ServersService';
 import { SessionController } from './session/SessionController';
 import { SettingsService } from './settings/SettingsService';
 import { AppData } from './store/appData';
+import { resolveDataFolder } from './store/dataFolder';
 import { ChangeTracker } from './sync/changeTracker';
 import { LauncherFiles } from './sync/launcherFiles';
 import { SyncEngine } from './sync/SyncEngine';
 import { TransferEngine } from './transfer/TransferEngine';
 import { Updates } from './updates/Updates';
 import type { UpdaterLike } from './updates/Updates';
-
-const DATA_FOLDER = 'minecraft-distributed-hosting';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -47,9 +46,9 @@ let windowTheme: ThemeName | null = null;
 
 /* ------------------------------------------------------------------ services (created once) */
 
-// The data folder keeps the name it had before the app was called MCS-Relay: logins, server folders, sync state
-// and unfinished uploads stay where they are. Set before anything (the single-instance lock too) uses it.
-app.setPath('userData', path.join(app.getPath('appData'), DATA_FOLDER));
+// %APPDATA%\mcs-relay (the folder of earlier builds is moved there once, see dataFolder.ts). Set before anything (the
+// single-instance lock too) uses it.
+app.setPath('userData', resolveDataFolder(app.getPath('appData')));
 const userData = app.getPath('userData');
 const appData = new AppData(userData);
 const dialogs = createDialogs(() => win);

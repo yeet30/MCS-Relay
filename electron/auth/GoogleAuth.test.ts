@@ -83,6 +83,12 @@ describe('TokenStore', () => {
         expect(new TokenStore(dir, fakeSafe()).load()).toEqual({ refresh_token: 'old' });
     });
 
+    it('keeps its own tokens.bin when an older app writes a token.json later', () => {
+        new TokenStore(dir, fakeSafe()).save({ refresh_token: 'mine' });
+        fs.writeFileSync(path.join(dir, 'token.json'), JSON.stringify({ refresh_token: 'old app' }));
+        expect(new TokenStore(dir, fakeSafe()).load()).toEqual({ refresh_token: 'mine' });
+    });
+
     it('falls back to token.json without encryption, and clear removes both', () => {
         const store = new TokenStore(dir, fakeSafe(false));
         store.save({ refresh_token: 'plain' });

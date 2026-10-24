@@ -126,14 +126,15 @@ export class TokenStore {
     load(): Credentials | null {
         const cipher = this.cipher();
         if (cipher) {
-            const legacy = this.readPlain();
-            if (legacy) {
-                // token.json only exists next to working encryption when an older app (or a run without a keyring) wrote it, so it is the newest.
+            // token.json next to working encryption was written by an older app. It only takes over a PC that has no
+            // tokens.bin yet; once this app has one, a token.json written later (by the old app run again) is not ours.
+            if (!fs.existsSync(this.encryptedPath)) {
+                const legacy = this.readPlain();
+                if (!legacy) return null;
                 this.save(legacy);
                 console.log('[auth] moved token.json into encrypted storage');
                 return legacy;
             }
-            if (!fs.existsSync(this.encryptedPath)) return null;
             try {
                 return parseStoredTokens(cipher.decryptString(fs.readFileSync(this.encryptedPath)));
             } catch (err) {

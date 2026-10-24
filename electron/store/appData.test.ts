@@ -223,6 +223,15 @@ describe('legacy import', () => {
         expect(appData.readSettings()).toMatchObject({ launchServer: true, joinedServerIds: ['srvZ', 'srvB', 'srvC'] });
     });
 
+    test('a localStore.json the old app writes after the import is not imported again', () => {
+        write('localStore.json', JSON.stringify(currentBranchStore('C:\\mc')));
+        appData.migrateLegacy();
+        appData.writeSettings({ ...appData.readSettings(), playitggPath: 'C:\\playit\\new.exe', launchServer: true });
+        write('localStore.json', JSON.stringify({ ...currentBranchStore('C:\\old'), localVariables: { playitggPath: 'C:\\playit\\old.exe', checklist: { serverConsole: false } } }));
+        appData.migrateLegacy();
+        expect(appData.readSettings()).toMatchObject({ playitggPath: 'C:\\playit\\new.exe', launchServer: true });
+    });
+
     test('nothing to do without a legacy file', () => {
         appData.migrateLegacy();
         expect(exists('settings.json')).toBe(false);
