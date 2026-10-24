@@ -26,8 +26,14 @@
         background-color: var(--panel);
     }
 
+    /* A fixed circle: in the narrow flex row of the pill it would otherwise be squeezed into an oval (the Google
+       photo too). */
     #profile-picture{
+        flex-shrink: 0;
+        width: 40px;
+        height: 40px;
         border-radius: 50%;
+        object-fit: cover;
     }
 
     #profile-picture.initial{
