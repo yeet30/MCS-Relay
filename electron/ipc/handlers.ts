@@ -7,6 +7,7 @@ import { LOGO_STATES } from '../../shared/types';
 import { toPosix } from '../../shared/paths';
 import { AppError } from '../errors';
 import type { GoogleAuth } from '../auth/GoogleAuth';
+import type { BackupService } from '../backups/BackupService';
 import { isValidServerId } from '../store/appData';
 import type { ServersService } from '../servers/ServersService';
 import type { SessionController } from '../session/SessionController';
@@ -30,8 +31,9 @@ export interface HandlerDeps {
     sync: Pick<SyncEngine, 'getRules' | 'setRules'>;
     transfers: Pick<TransferEngine, 'snapshot'>;
     changes: Pick<ChangeTracker, 'all'>;
-    dialogs: Pick<Dialogs, 'chooseFolder' | 'chooseFile'>;
+    dialogs: Pick<Dialogs, 'chooseFolder' | 'chooseFile' | 'openPath'>;
     report: Pick<ReportService, 'send' | 'save'>;
+    backups: Pick<BackupService, 'list' | 'create' | 'upload' | 'download' | 'restore' | 'deleteLocal' | 'deleteCloud' | 'localFolder' | 'isBusy'>;
     app: {
         quitResponse(confirmed: boolean): void;
         openExternal(url: string): Promise<void>;
@@ -103,6 +105,10 @@ export function ruleFromPick(root: string, picked: string, kind: 'file' | 'folde
 }
 
 export function registerHandlers(handle: Handle, d: HandlerDeps): void {
+    // A backup reads or replaces the world folders, so nothing may download into them meanwhile.
+    const notDuringBackup = () => {
+        if (d.backups.isBusy()) throw new AppError('BUSY', 'Wait until the backup has finished.');
+    };
     const afterLogin = (status: AuthStatus): AuthStatus => {
         if (status.loggedIn) {
             // Uploads a previous run could not finish are completed as soon as Drive is reachable.
@@ -157,9 +163,15 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
     handle('session:get', () => d.session.getState());
     handle('session:preflight', (serverId) => d.session.preflight(id(serverId)));
     handle('session:lastReport', () => d.session.lastReport());
-    handle('session:start', (serverId) => d.session.start(id(serverId)));
+    handle('session:start', (serverId) => {
+        notDuringBackup();
+        return d.session.start(id(serverId));
+    });
     handle('session:stop', () => d.session.stop());
-    handle('session:resolve', (serverId, choice) => d.session.resolve(id(serverId), oneOf(choice, CHOICES, 'choice')));
+    handle('session:resolve', (serverId, choice) => {
+        notDuringBackup();
+        return d.session.resolve(id(serverId), oneOf(choice, CHOICES, 'choice'));
+    });
     handle('session:retryUpload', () => d.session.retryUpload());
     handle('session:cancel', () => d.session.cancel());
     handle('session:setPrimaryTunnel', (address) => {
@@ -173,7 +185,10 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
         if (!(await d.servers.isOwner(sid))) throw new AppError('FORBIDDEN', 'Only the owner of the server can repair it.');
         return d.session.repair(sid);
     });
-    handle('session:syncNow', (serverId, direction) => d.session.syncNow(id(serverId), oneOf(direction, ['down', 'up'] as const, 'direction')));
+    handle('session:syncNow', (serverId, direction) => {
+        notDuringBackup();
+        return d.session.syncNow(id(serverId), oneOf(direction, ['down', 'up'] as const, 'direction'));
+    });
     handle('session:dismiss', () => d.session.dismiss());
     handle('session:command', (command) => d.session.command(text(command, 'command', { max: 1000 })));
     handle('session:changes', () => d.changes.all());
@@ -218,4 +233,14 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
     handle('report:send', (description, includeLog) => d.report.send(text(description, 'description', { max: MAX_REPORT }), bool(includeLog, 'log choice')));
     handle('report:save', (description, includeLog) => d.report.save(text(description, 'description', { max: MAX_REPORT }), bool(includeLog, 'log choice')));
     handle('report:openLogFolder', () => d.app.openLogFolder());
+
+    const backupFile = (value: unknown) => text(value, 'backup', { max: 300 });
+    handle('backups:list', (serverId) => d.backups.list(id(serverId)));
+    handle('backups:create', (serverId, name, upload) => d.backups.create(id(serverId), text(name, 'name', { allowEmpty: true, max: 100 }), bool(upload, 'upload choice')));
+    handle('backups:upload', (serverId, fileName) => d.backups.upload(id(serverId), backupFile(fileName)));
+    handle('backups:download', (serverId, cloudId) => d.backups.download(id(serverId), backupFile(cloudId)));
+    handle('backups:restore', (serverId, fileName) => d.backups.restore(id(serverId), backupFile(fileName)));
+    handle('backups:deleteLocal', (serverId, fileName) => d.backups.deleteLocal(id(serverId), backupFile(fileName)));
+    handle('backups:deleteCloud', (serverId, cloudId) => d.backups.deleteCloud(id(serverId), backupFile(cloudId)));
+    handle('backups:openFolder', async (serverId) => d.dialogs.openPath(await d.backups.localFolder(id(serverId))));
 }

@@ -1,6 +1,6 @@
 import './directory-menu.css';
 import { useRef, useState } from 'react';
-import { CloudDownload, CloudSync, CloudUpload, EyeOff, FileDiff, FolderCog, FolderInput, FolderOpen } from 'lucide-react';
+import { Archive, CloudDownload, CloudSync, CloudUpload, EyeOff, FileDiff, FolderCog, FolderInput, FolderOpen } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { ServerSummary } from '../../../shared/types';
 import { useConfirm } from '../../hooks/useConfirm';
@@ -9,6 +9,7 @@ import type { IModalItems } from '../../lib/ui-types';
 import { request } from '../../stores/request';
 import { chooseLocalPath } from '../../stores/serverActions';
 import { reportFor, useSessionStore } from '../../stores/sessionStore';
+import BackupsPanel from '../backups-panel';
 import ChangesPanel from '../changes-panel';
 import Modal from '../modal';
 import SyncRules from '../sync-rules';
@@ -54,16 +55,24 @@ function SideMenu({ side, icon, title, disabled = false, children }: {
 /** The folder menu at the bottom right of the power button. What it offers follows from my role on the server. */
 export function DirectoryMenu({ server, canWrite }: { server: ServerSummary | null; canWrite: boolean }) {
     const [modalItems, setModalItems] = useState<IModalItems[] | null>(null);
+    const [wide, setWide] = useState(false);
     const busy = useSessionStore((s) => isSessionBusy(s.state.phase));
 
     if (!server) return null;
     return (
         <>
-            <Modal isOpen={modalItems !== null} onClose={() => setModalItems(null)} width={480} height={400} items={modalItems ?? []} />
+            <Modal
+                isOpen={modalItems !== null}
+                onClose={() => setModalItems(null)}
+                width={wide ? 540 : 480}
+                height={wide ? 460 : 400}
+                items={modalItems ?? []}
+            />
             <SideMenu side='right' icon={<FolderCog size={20} />} title='Server folder'>
                 {(close) => {
-                    const show = (items: IModalItems[]) => {
+                    const show = (items: IModalItems[], large = false) => {
                         close();
+                        setWide(large);
                         setModalItems(items);
                     };
                     return (
@@ -74,6 +83,11 @@ export function DirectoryMenu({ server, canWrite }: { server: ServerSummary | nu
                             {canWrite && (
                                 <button className='side-option' onClick={() => show([{ title: 'Ignored files', content: <SyncRules serverId={server.id} /> }])}>
                                     <EyeOff size={15} /> Ignored files
+                                </button>
+                            )}
+                            {server.localPath && (
+                                <button className='side-option' onClick={() => show([{ title: 'Backups', content: <BackupsPanel server={server} canWrite={canWrite} /> }], true)}>
+                                    <Archive size={15} /> Backups
                                 </button>
                             )}
                             {!busy && (

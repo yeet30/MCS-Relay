@@ -259,6 +259,7 @@ export class MinecraftProcess {
     private players: string[] = [];
     private repliesToHide = 0;
     private namesLine: { hide: boolean } | null = null;
+    private readonly lineWatchers = new Set<(line: string) => void>();
 
     constructor(private readonly deps: MinecraftProcessDeps) {
         this.spawnImpl = deps.spawnImpl ?? spawn;
@@ -302,6 +303,25 @@ export class MinecraftProcess {
         }
         await this.waitUntilReady(readyTimeoutMs, signal);
         this.startPlayerPolling();
+    }
+
+    /** Makes the world files hold still for a backup: "save-off", then "save-all flush" and its "Saved the game".
+     *  Returns the function that turns saving back on ("save-on"). */
+    async pauseSaving(timeoutMs = 60_000): Promise<() => void> {
+        if (!this.child) throw new AppError('INVALID', 'The Minecraft server is not running.');
+        const saved = this.waitForMessage(/^Saved the (game|world)/, timeoutMs);
+        this.send('save-off');
+        this.send('save-all flush');
+        const resume = () => {
+            if (this.child) this.writeStdin('save-on\n');
+        };
+        try {
+            await saved;
+        } catch (err) {
+            resume();
+            throw err;
+        }
+        return resume;
     }
 
     isRunning(): boolean {
@@ -462,6 +482,7 @@ export class MinecraftProcess {
         if (!this.flushTimer) this.flushTimer = setTimeout(() => this.flushOutput(), OUTPUT_FLUSH_MS);
         if (this.onReadyLine && READY_RE.test(line)) this.onReadyLine();
         if (this.pollTimer && JOIN_LEAVE_RE.test(line)) this.pollSoon();
+        for (const watch of [...this.lineWatchers]) watch(line);
     }
 
     private flushOutput(): void {
@@ -485,6 +506,23 @@ export class MinecraftProcess {
         } catch (err) {
             console.error('[minecraft] onPlayers handler failed:', err);
         }
+    }
+
+    /** Resolves on the next console line whose message matches; rejects after timeoutMs. */
+    private waitForMessage(pattern: RegExp, timeoutMs: number): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+                this.lineWatchers.delete(watch);
+                reject(new AppError('TIMEOUT', 'The Minecraft server did not confirm that it saved the world.'));
+            }, timeoutMs);
+            const watch = (line: string) => {
+                if (!pattern.test(messageOf(line))) return;
+                clearTimeout(timer);
+                this.lineWatchers.delete(watch);
+                resolve();
+            };
+            this.lineWatchers.add(watch);
+        });
     }
 
     private waitUntilReady(timeoutMs: number, signal?: AbortSignal): Promise<void> {

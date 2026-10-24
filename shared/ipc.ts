@@ -3,7 +3,7 @@
 // The main process registers handlers with handle() (electron/ipc/handle.ts), the renderer
 // calls them with invoke() (src/api.ts). A renamed or mistyped channel is a compile error.
 import type {
-    AppErrorInfo, AppSettings, ChangeBatch, ConflictChoice, LockView, LogoState, MemberRole, ServerId, ServerMember,
+    AppErrorInfo, AppSettings, BackupInfo, BackupList, BackupProgress, ChangeBatch, ConflictChoice, LockView, LogoState, MemberRole, ServerId, ServerMember,
     ServerSettings, ServerSettingsPatch, ServerSummary, SessionProgress, SessionState, StepMessage, SyncReport, SyncRules,
     TransferSnapshot, UpdateState, UserInfo,
 } from './types';
@@ -97,6 +97,17 @@ export interface Commands {
     /** Saves a problem report as a text file where the user chooses; the path, or null when cancelled. */
     'report:save': (description: string, includeLog: boolean) => string | null;
     'report:openLogFolder': () => void;
+
+    'backups:list': (serverId: ServerId) => BackupList;
+    /** Backs up the world in this PC's folder; with `upload`, also puts the backup in the cloud. */
+    'backups:create': (serverId: ServerId, name: string, upload: boolean) => BackupInfo;
+    'backups:upload': (serverId: ServerId, fileName: string) => BackupInfo;
+    'backups:download': (serverId: ServerId, cloudId: string) => void;
+    /** Replaces the world in this PC's folder with the backup, after backing up the current world. */
+    'backups:restore': (serverId: ServerId, fileName: string) => void;
+    'backups:deleteLocal': (serverId: ServerId, fileName: string) => void;
+    'backups:deleteCloud': (serverId: ServerId, cloudId: string) => void;
+    'backups:openFolder': (serverId: ServerId) => void;
 }
 
 /** Every event the main process pushes: channel -> payload. */
@@ -120,6 +131,8 @@ export interface Events {
     'app:chime': { outcome: 'done' | 'failed' };
     /** The app's own update: checking, downloading, ready to install. */
     'app:update': UpdateState;
+    /** A backup task: how far it is; null when it has ended (done or failed). */
+    'backups:progress': BackupProgress | null;
 }
 
 export type CommandName = keyof Commands;
@@ -134,4 +147,4 @@ export interface BridgeApi {
     on: (channel: string, listener: (payload: unknown) => void) => () => void;
 }
 
-export const COMMAND_PREFIXES = ['auth:', 'servers:', 'session:', 'settings:', 'rules:', 'app:', 'report:'] as const;
+export const COMMAND_PREFIXES = ['auth:', 'servers:', 'session:', 'settings:', 'rules:', 'app:', 'report:', 'backups:'] as const;

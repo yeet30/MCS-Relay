@@ -388,6 +388,34 @@ describe('MinecraftProcess output and commands', () => {
         expect((catchError(() => h.mc.send('list')) as AppError).code).toBe('INVALID');
     });
 
+    it('pauses saving for a backup until the server confirms it saved, then turns saving back on', async () => {
+        const h = harness();
+        const child = await startReady(h);
+        let paused = false;
+        const pausing = h.mc.pauseSaving(2000).then((resume) => {
+            paused = true;
+            return resume;
+        });
+        await until(() => child.written.includes('save-all flush\n'));
+        expect(child.written.slice(-2)).toEqual(['save-off\n', 'save-all flush\n']);
+        child.print('[12:01:00] [Server thread/INFO]: <Steve> Saved the game? no\n');
+        child.print('[12:01:00] [Server thread/INFO]: Saving the game (this may take a moment!)\n');
+        await new Promise((r) => setTimeout(r, 30));
+        expect(paused).toBe(false);
+        child.print('[12:01:01] [Server thread/INFO]: Saved the game\n');
+        const resume = await pausing;
+        resume();
+        await until(() => child.written.includes('save-on\n'));
+    });
+
+    it('turns saving back on when the save is never confirmed', async () => {
+        const h = harness();
+        const child = await startReady(h);
+        const err = await h.mc.pauseSaving(50).then(() => null, (e: unknown) => e);
+        expect((err as AppError).code).toBe('TIMEOUT');
+        expect(child.written).toContain('save-on\n');
+    });
+
     it('polls "list", hides the replies and reports players', async () => {
         const h = harness({ playerPollMs: 40 });
         const child = await startReady(h);

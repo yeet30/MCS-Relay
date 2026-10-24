@@ -29,7 +29,7 @@ export interface SessionDeps {
         'preflight' | 'resolve' | 'download' | 'uploadSession' | 'loadRules' | 'hasJournal' | 'serversWithJournal'
         | 'discardJournal' | 'baseRevision' | 'cleanupMyPlaceholders' | 'unfinishedRepair' | 'commitPartial'>;
     changes: Pick<ChangeTracker, 'start' | 'stop' | 'clear' | 'all'>;
-    minecraft: Pick<MinecraftProcess, 'start' | 'stopAndWait' | 'isRunning' | 'send'>;
+    minecraft: Pick<MinecraftProcess, 'start' | 'stopAndWait' | 'isRunning' | 'send' | 'pauseSaving'>;
     playit: Pick<PlayitProcess, 'start' | 'stop'>;
     settings: Pick<SettingsService, 'get' | 'set' | 'getServer'>;
     events: EventSink;
@@ -178,6 +178,15 @@ export class SessionController {
 
     isBusy(): boolean {
         return !IDLE_PHASES.has(this.state.phase);
+    }
+
+    /** Before a backup of a server's folder on this PC. While this PC hosts it, the Minecraft server stops saving until
+     *  the returned function is called; null when nothing here is using it. Refused while a session downloads into the
+     *  folder or uploads from it. */
+    async pauseSavingFor(serverId: string): Promise<(() => void) | null> {
+        if (!this.isBusy() || this.state.serverId !== serverId) return null;
+        if (this.state.phase !== 'running') throw new AppError('BUSY', 'Wait until the server has started or the upload has finished.');
+        return this.d.minecraft.isRunning() ? this.d.minecraft.pauseSaving() : null;
     }
 
     /* ------------------------------------------------------------------ selection and preflight */

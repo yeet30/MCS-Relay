@@ -36,9 +36,9 @@ export function ancestorsOf(relDir: string): string[] {
     return result;
 }
 
-/** Always applied, never shared: the app's own files, the old app's root files, partial downloads and
- *  Minecraft's session.lock (held open by a running server). */
-export const BUILTIN_IGNORES: string[] = ['.launcher/', 'manifest.json', 'manifest.tmp', 'lock.json', '*.part', '**/session.lock'];
+/** Always applied, never shared: the app's own files, the old app's root files, partial downloads,
+ *  Minecraft's session.lock (held open by a running server) and the world backups made on this PC. */
+export const BUILTIN_IGNORES: string[] = ['.launcher/', 'manifest.json', 'manifest.tmp', 'lock.json', '*.part', '**/session.lock', 'mcs-relay-backups/'];
 
 /** The rules a new server's .launcher/sync-rules.json starts with. */
 export const DEFAULT_SHARED_IGNORES: string[] = ['logs/', 'crash-reports/', 'debug/', '*.tmp'];

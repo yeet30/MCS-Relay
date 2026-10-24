@@ -126,7 +126,33 @@ export const APP_PROPS = {
     tombstone: 'mdhTombstone',          // "1" on a placeholder: deleted, waiting for its owner to delete it for good
     deletedBy: 'mdhDeletedBy',
     deletedAt: 'mdhDeletedAt',
+    backupAt: 'mdhBackupAt',            // on a world backup in .launcher/backups: when it was made (ISO)
 } as const;
+
+/** One backup of a server's world, a zip file: on this PC (in the server folder's mcs-relay-backups/), in Google
+ *  Drive (in the server's .launcher/backups/, which every member sees), or both. The same backup has the same file
+ *  name in both places: "<yyyy-mm-dd_hh-mm-ss> <name>.zip". */
+export interface BackupInfo {
+    fileName: string;
+    name: string;                       // what the user called it
+    createdAt: string;                  // ISO
+    size: number;                       // bytes
+    local: boolean;
+    cloud: { id: string; by: string; canDelete: boolean } | null;
+}
+
+export interface BackupList {
+    backups: BackupInfo[];              // newest first
+    cloudError: string | null;          // the cloud ones could not be listed
+}
+
+/** A backup task underway; done and total count bytes. */
+export interface BackupProgress {
+    serverId: ServerId;
+    action: 'saving' | 'packing' | 'uploading' | 'downloading' | 'restoring';
+    done: number;
+    total: number;
+}
 
 /** Placeholders (0-byte files marked as deleted) that still wait for their owners. */
 export interface PendingCleanup {

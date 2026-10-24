@@ -3,6 +3,7 @@
 import { on, onSignedOut } from '../api';
 import { playChime } from '../lib/chime';
 import { useAuthStore } from './authStore';
+import { useBackupStore } from './backupStore';
 import { useServersStore } from './serversStore';
 import { useSessionStore } from './sessionStore';
 import { useUpdateStore } from './updateStore';
@@ -31,6 +32,7 @@ export function startEventSubscriptions(): void {
         on('app:quitting', () => session().setQuitting(true)),
         on('app:chime', ({ outcome }) => playChime(outcome)),
         on('app:update', (state) => useUpdateStore.getState().apply(state)),
+        on('backups:progress', (progress) => useBackupStore.getState().apply(progress)),
         onSignedOut((message) => {
             useAuthStore.getState().markSignedOut(message);
             useServersStore.getState().reset();

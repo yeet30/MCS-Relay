@@ -11,6 +11,7 @@ import { TITLE_BAR_HEIGHT, WINDOW_COLORS } from '../shared/types';
 import type { LogoState, SessionPhase, ThemeName } from '../shared/types';
 import { unscrambleClient } from './auth/embeddedClient';
 import { GoogleAuth } from './auth/GoogleAuth';
+import { BackupService } from './backups/BackupService';
 import { DriveClient } from './drive/DriveClient';
 import { DriveFiles } from './drive/DriveFiles';
 import { AppError } from './errors';
@@ -122,6 +123,12 @@ function loadUpdater(): UpdaterLike | null {
     return autoUpdater;
 }
 const updates = new Updates({ updater: loadUpdater(), current: app.getVersion(), emit: (state) => events.emit('app:update', state) });
+
+const backups = new BackupService({
+    settings, drive, launcher, session, me, appVersion: app.getVersion(),
+    hasUnfinishedUpload: (serverId) => appData.readJournal(serverId) !== null,
+    emit: (progress) => events.emit('backups:progress', progress),
+});
 
 const reports = new ReportService({
     log: appLog, drive, me, chooseSaveFile: dialogs.chooseSaveFile,
@@ -387,7 +394,7 @@ if (!app.requestSingleInstanceLock()) {
     void app.whenReady().then(async () => {
         appData.migrateLegacy();
         registerHandlers(createHandle(ipcMain, isTrustedUrl), {
-            auth, servers, session, settings, sync, transfers, changes, dialogs, report: reports,
+            auth, servers, session, settings, sync, transfers, changes, dialogs, report: reports, backups,
             app: {
                 quitResponse, openExternal: (url) => shell.openExternal(url), setLogoState: applyLogoState,
                 updateState: () => updates.get(), checkForUpdates: () => updates.check(), installUpdate,

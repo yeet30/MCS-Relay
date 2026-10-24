@@ -1,5 +1,5 @@
 // Access to the app's own files inside a server folder:
-//   <server folder>/.launcher/{lock.json, manifest.json, sync-rules.json, pending-delete/}
+//   <server folder>/.launcher/{lock.json, manifest.json, sync-rules.json, pending-delete/, backups/}
 // Drive allows several files with the same name in one folder, and two members can create one at the
 // same moment. Every lookup therefore takes the OLDEST match, and after creating a file or folder we
 // re-list and trash our own copy if an older one already existed.
@@ -8,7 +8,7 @@ import type { DriveApi } from '../drive/types';
 
 export const LAUNCHER_FOLDER = '.launcher';
 export type LauncherFileName = 'lock.json' | 'manifest.json' | 'sync-rules.json';
-export type LauncherSubfolder = 'pending-delete';
+export type LauncherSubfolder = 'pending-delete' | 'backups';
 
 function isNotFound(err: unknown): boolean {
     return err instanceof DriveError && err.status === 404;
@@ -98,6 +98,18 @@ export class LauncherFiles {
         });
         this.ids.set(key, result.id);
         return result.id;
+    }
+
+    /** A folder inside .launcher, or null when it does not exist. Read-only. */
+    async findSubfolder(serverId: string, name: LauncherSubfolder): Promise<string | null> {
+        const cached = this.ids.get(`${serverId}/${name}/`);
+        if (cached) return cached;
+        const parent = await this.findFolder(serverId);
+        if (!parent) return null;
+        const existing = await this.drive.listChildren(parent, { name, foldersOnly: true });
+        if (existing.length === 0) return null;
+        this.ids.set(`${serverId}/${name}/`, existing[0].id);
+        return existing[0].id;
     }
 
     /** Reads a .launcher file. null when it does not exist. */

@@ -23,6 +23,8 @@ const ALL_COMMANDS: Record<CommandName, true> = {
     'app:quitResponse': true, 'app:openExternal': true, 'app:setLogoState': true,
     'app:updateState': true, 'app:checkForUpdates': true, 'app:installUpdate': true,
     'report:send': true, 'report:save': true, 'report:openLogFolder': true,
+    'backups:list': true, 'backups:create': true, 'backups:upload': true, 'backups:download': true, 'backups:restore': true,
+    'backups:deleteLocal': true, 'backups:deleteCloud': true, 'backups:openFolder': true,
 };
 
 type Listener = (event: { senderFrame?: { url: string } | null }, ...args: unknown[]) => unknown;
@@ -34,9 +36,10 @@ function setup() {
     const auto = () => new Proxy({}, { get: (target: Record<string, unknown>, key: string) => (target[key] ??= vi.fn(async () => undefined)) });
     const deps = {
         auth: auto(), servers: auto(), session: auto(), settings: auto(), sync: auto(), transfers: auto(),
-        changes: auto(), dialogs: auto(), report: auto(), app: auto(),
+        changes: auto(), dialogs: auto(), report: auto(), backups: auto(), app: auto(),
     } as unknown as HandlerDeps;
     (deps.session.isBusy as unknown as ReturnType<typeof vi.fn>) = vi.fn(() => false);
+    (deps.backups.isBusy as unknown as ReturnType<typeof vi.fn>) = vi.fn(() => false);
     registerHandlers(handle, deps);
     const call = async (channel: string, ...args: unknown[]): Promise<Result<unknown>> =>
         (await listeners.get(channel)!({ senderFrame: { url: 'app://index.html' } }, ...args)) as Result<unknown>;
