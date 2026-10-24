@@ -52,8 +52,12 @@ Google Drive folder that you all share, and whoever wants to play hosts it on th
   maps) is shown with what it is for, for you and for everyone in the group.
 - **Server management**: invite and remove members, choose which files are left out of the sync, sync without
   playing, and repair a server whose upload was interrupted.
+- **World backups**: name a backup, keep it on your PC or put it in the cloud for everyone, and restore any of them;
+  the current world is backed up first. While you host, the server pauses saving for a moment.
 - **Lives in the tray**: notifications and a sound when a start or stop finishes or fails, Light / Mint / Dark themes,
   and automatic updates.
+- **Problem reports**: Settings → Report a problem sends your description and the app's log to the developer
+  through your own Google Drive, or saves them as a file.
 
 ## Getting started
 
@@ -79,8 +83,8 @@ Minecraft Java tunnel once, and turn it on in Settings → Scripts.
 ## Your data
 
 MCS-Relay has no servers of its own. It talks to Google Drive straight from your PC, keeps your sign-in encrypted on
-it, and works only inside the "Minecraft Shared Servers" folder it creates and the servers you join. Nothing is sold,
-shared for advertising or collected for statistics. The [privacy policy](https://mcs-relay.com/privacy.html)
+it, and works only inside the "Minecraft Shared Servers" folder it creates and the servers you join (and a "MCS-Relay
+problem reports" folder, when you send a report). Nothing is sold, shared for advertising or collected for statistics. The [privacy policy](https://mcs-relay.com/privacy.html)
 lists exactly what is used and stored, and how to remove it.
 
 If Google shows **"Google hasn't verified this app"** when you sign in, the app has not finished Google's review for
