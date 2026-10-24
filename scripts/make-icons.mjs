@@ -126,4 +126,18 @@ for (const [state, file] of Object.entries(STATES)) {
     writeFileSync(new URL(`../public/state/${state}.png`, import.meta.url), statePng(16));
     writeFileSync(new URL(`../public/state/${state}@2x.png`, import.meta.url), statePng(32));
 }
-console.log(`icons written: launcher.ico (${ICO_SIZES.join(', ')}), icon-16x16.png (+@2x), icon.png, state/{off,here,elsewhere}.ico/.png`);
+
+/** `rgba` (inner x inner) centred in a transparent total x total square. */
+function framed(rgba, inner, total) {
+    const out = new Uint8Array(total * total * 4);
+    const offset = Math.floor((total - inner) / 2);
+    for (let y = 0; y < inner; y++) {
+        out.set(rgba.subarray(y * inner * 4, (y + 1) * inner * 4), ((y + offset) * total + offset) * 4);
+    }
+    return out;
+}
+
+// The logo Google shows on its sign-in screen: 120 x 120. 112 is the largest whole multiple of 16 that fits, so the
+// pixels stay sharp, with a 4 px transparent margin around them.
+writeFileSync(new URL('../website/logo-120.png', import.meta.url), png(120, framed(scale(pixels, 112), 112, 120)));
+console.log(`icons written: launcher.ico (${ICO_SIZES.join(', ')}), icon-16x16.png (+@2x), icon.png, state/{off,here,elsewhere}.ico/.png, website/logo-120.png`);
