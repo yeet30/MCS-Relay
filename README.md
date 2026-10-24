@@ -16,13 +16,15 @@
 </p>
 
 <p align="center">
-  <a href="https://yeet30.github.io/MCS-Relay/">Website</a> ·
+  <a href="https://mcs-relay.com/">Website</a> ·
   <a href="https://github.com/yeet30/MCS-Relay/releases/latest">Download</a> ·
-  <a href="https://yeet30.github.io/MCS-Relay/privacy.html">Privacy policy</a>
+  <a href="https://mcs-relay.com/privacy.html">Privacy policy</a> ·
+  <a href="https://mcs-relay.com/terms.html">Terms of use</a>
 </p>
 
 <p align="center">
-  <img src="website/screenshot.png" alt="The MCS-Relay window while hosting a server" width="720">
+  <img src="website/screenshot.png" alt="The MCS-Relay window while hosting a server" width="49%">
+  <img src="website/screenshot-console.png" alt="The server console in the same window" width="49%">
 </p>
 
 ## Why
@@ -62,7 +64,8 @@ needs.
    and run it. Windows may say it "protected your PC", because the installer is not signed yet: choose
    **More info → Run anyway**.
 2. Sign in with Google. MCS-Relay asks for access to your Google Drive, because it has to read the world files your
-   friends upload; it only works in its own server folders (see [Your data](#your-data)).
+   friends upload; it only works in its own server folders (see [Your data](#your-data)). Then read and agree to
+   the [terms of use](#play-with-people-you-trust).
 3. **Create a server**, give it a name, and choose its folder on your PC: the folder the Minecraft server runs from,
    with the server `.jar` (or `run.bat` for Forge and NeoForge). An existing server folder works too.
 4. **Invite your friends** from Settings → Drive Folders. Google Drive emails them a link; they paste it into
@@ -76,11 +79,25 @@ Minecraft Java tunnel once, and turn it on in Settings → Scripts.
 
 MCS-Relay has no servers of its own. It talks to Google Drive straight from your PC, keeps your sign-in encrypted on
 it, and works only inside the "Minecraft Shared Servers" folder it creates and the servers you join. Nothing is sold,
-shared for advertising or collected for statistics. The [privacy policy](https://yeet30.github.io/MCS-Relay/privacy.html)
+shared for advertising or collected for statistics. The [privacy policy](https://mcs-relay.com/privacy.html)
 lists exactly what is used and stored, and how to remove it.
 
 If Google shows **"Google hasn't verified this app"** when you sign in, the app has not finished Google's review for
 apps with full Drive access yet. Choose **Advanced → Go to MCS-Relay** to continue.
+
+## Play with people you trust
+
+When you host, the server's files run on your PC: the server `.jar`, its mods and its plugins are programs, with the
+same access to your PC as anything else you run. Every member who can play can change those files, and MCS-Relay does
+not scan them. Someone with bad intentions, or whose Google account was taken over, could hide harmful software in a
+server, and it would run on the PC of whoever hosts next.
+
+- Create, join and invite only with people you trust. "Can view" members cannot change files.
+- Keep your antivirus on.
+- If mods, plugins or programs appear that nobody mentioned, ask before you host.
+
+The app asks every Google account to agree to this, in the [terms of use](https://mcs-relay.com/terms.html), before it
+can be used.
 
 ## Building from source
 

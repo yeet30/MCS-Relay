@@ -160,12 +160,24 @@ img {
     font-size: 0.85rem;
 }
 
+/* The main screen and the console next to each other; one above the other on a phone. */
+.screenshots {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 28px;
+}
+
+@media (max-width: 640px) {
+    .screenshots {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* height: auto keeps the 4:3 shape when the width shrinks (the width/height attributes only reserve the space). */
 .screenshot {
     display: block;
-    margin: 28px auto 0;
     width: 100%;
-    max-width: 800px;
     height: auto;
     border-radius: 16px;
     border: 1px solid var(--line);

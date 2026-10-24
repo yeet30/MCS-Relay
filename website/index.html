@@ -37,10 +37,16 @@
             </div>
             <p class="fine-print">Free and open source · Windows 10 and 11 · Updates itself</p>
             <!-- The app in the same theme as the page: dark when the visitor's system is dark. -->
-            <picture>
-                <source srcset="screenshot-dark.png" media="(prefers-color-scheme: dark)">
-                <img class="screenshot" src="screenshot.png" alt="The MCS-Relay window while hosting a server: the stop button, two players online and the address friends join with." width="1200" height="900">
-            </picture>
+            <div class="screenshots">
+                <picture>
+                    <source srcset="screenshot-dark.png" media="(prefers-color-scheme: dark)">
+                    <img class="screenshot" src="screenshot.png" alt="The MCS-Relay window while hosting a server: the stop button, two players online and the address friends join with." width="1200" height="900">
+                </picture>
+                <picture>
+                    <source srcset="screenshot-console-dark.png" media="(prefers-color-scheme: dark)">
+                    <img class="screenshot" src="screenshot-console.png" alt="The server console further down the same window: the Minecraft server's output and a box to type commands." width="1200" height="900">
+                </picture>
+            </div>
         </div>
 
         <section id="how-it-works">
@@ -94,6 +100,26 @@
             </div>
         </section>
 
+        <section id="trust">
+            <div class="wrap">
+                <h2>Play with people you trust</h2>
+                <div class="panel">
+                    <p>
+                        When you host, the server's files run on your PC: the server .jar, its mods and its plugins are
+                        programs. Every member of a server can change those files, and MCS-Relay does not scan them. Someone
+                        with bad intentions, or whose account was taken over, could hide harmful software in a server, and it
+                        would run on the PC of whoever hosts next.
+                    </p>
+                    <ul class="plain">
+                        <li>Create, join and invite only with people you trust.</li>
+                        <li>Keep your antivirus on.</li>
+                        <li>If mods, plugins or programs appear that nobody mentioned, ask before you host.</li>
+                    </ul>
+                    <p>The app asks you to agree to this in its <a href="terms.html">terms of use</a> before you start.</p>
+                </div>
+            </div>
+        </section>
+
         <section id="requirements">
             <div class="wrap">
                 <h2>What you need</h2>
@@ -113,6 +139,7 @@
         <div class="wrap">
             <span>
                 <a href="privacy.html">Privacy policy</a> ·
+                <a href="terms.html">Terms of use</a> ·
                 <a href="https://github.com/yeet30/MCS-Relay/issues">Report a problem</a> ·
                 <a href="https://github.com/yeet30/MCS-Relay">GitHub</a> ·
                 <a href="https://github.com/yeet30/MCS-Relay/blob/main/LICENSE">MIT license</a>
