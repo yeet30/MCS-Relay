@@ -69,6 +69,11 @@ export const WINDOW_COLORS: Record<ThemeName, { page: string; titleBar: string; 
 /** Height of the title bar, in px: the page leaves this much room at the top. */
 export const TITLE_BAR_HEIGHT = 32;
 
+/** The version of the terms of use (website/terms.html). Raise it when they change in a way people must agree to
+ *  again: everyone who agreed to an older version is asked once more. */
+export const TERMS_VERSION = 1;
+export const TERMS_URL = 'https://mcs-relay.com/terms.html';
+
 export interface AppSettings {
     selectedServerId: ServerId | null;
     playitggPath: string;
@@ -76,6 +81,7 @@ export interface AppSettings {
     launchServer: boolean;              // false = the app only syncs and holds the lock; you run Java yourself
     joinedServerIds: ServerId[];
     eulaAccepted: boolean;              // this Google account accepted the Minecraft EULA in the app
+    termsAccepted: number;              // the TERMS_VERSION this Google account agreed to; 0: none yet
     notifications: boolean;             // a desktop notification when a start or stop finishes in the background
     notificationSound: boolean;         // a short chime when a start or stop finishes
     theme: ThemeName;                   // per PC, like the other display settings

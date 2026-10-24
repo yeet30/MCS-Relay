@@ -1,6 +1,6 @@
 import './join-server.css';
 import { useState } from 'react';
-import { Link, Loader2, LogIn } from 'lucide-react';
+import { Link, Loader2, LogIn, ShieldAlert } from 'lucide-react';
 import type { ConfirmFn } from '../../stores/serverActions';
 import { joinServer } from '../../stores/serverActions';
 
@@ -22,6 +22,10 @@ export default function JoinServer({ confirm, onJoined }: { confirm: ConfirmFn; 
         <div className='join-card'>
             <span className='join-title'><LogIn size={15} /> Join a server</span>
             <p className='join-hint'>Paste the link (or folder ID) from the invitation email Google Drive sent you.</p>
+            <p className='join-warning'>
+                <ShieldAlert size={13} aria-hidden />
+                Join only servers of people you trust: when you host, the server&apos;s files run on your PC.
+            </p>
             <div className='join-row'>
                 <span className='join-input'>
                     <Link size={14} />

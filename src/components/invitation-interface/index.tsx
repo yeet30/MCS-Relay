@@ -1,6 +1,6 @@
 import './invitation-interface.css';
 import { useState } from 'react';
-import { Eye, Gamepad2, Loader2, Mail, Send } from 'lucide-react';
+import { Eye, Gamepad2, Loader2, Mail, Send, ShieldAlert } from 'lucide-react';
 import { useNoticeStore } from '../../stores/noticeStore';
 import { request } from '../../stores/request';
 import { useServersStore } from '../../stores/serversStore';
@@ -64,6 +64,10 @@ export default function InvitationInterface({ serverId, serverName, onDone }: { 
                 <textarea rows={2} placeholder='Come build with us!' value={message} onChange={(e) => setMessage(e.target.value)} />
             </label>
             <p className='invite-note'>Google Drive emails them a link. They paste it into "Join a server" in MCS-Relay.</p>
+            <p className='invite-note warning'>
+                <ShieldAlert size={13} aria-hidden />
+                Invite only people you trust: what they upload runs on the host&apos;s PC.
+            </p>
             <div className='form-buttons'>
                 <button type='button' className='text-button' onClick={onDone}>Cancel</button>
                 <button type='submit' className='text-button primary' disabled={sending || email.trim() === ''}>

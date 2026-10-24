@@ -20,6 +20,20 @@
         color: var(--muted);
     }
 
+    .join-warning {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        margin: 0;
+        font-size: 0.76rem;
+        color: var(--warn);
+
+        svg {
+            flex: none;
+            margin-top: 2px;
+        }
+    }
+
     .join-row {
         display: flex;
         gap: 8px;

@@ -127,6 +127,19 @@
         color: var(--muted);
     }
 
+    .invite-note.warning {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        margin-top: -6px;
+        color: var(--warn);
+
+        svg {
+            flex: none;
+            margin-top: 2px;
+        }
+    }
+
     .form-buttons {
         display: flex;
         justify-content: flex-end;

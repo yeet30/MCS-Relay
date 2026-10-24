@@ -1,6 +1,6 @@
 // Everything the app keeps on this PC, in Electron's userData folder:
 //   settings.json                         settings of this PC (playit.gg, launch, notifications)
-//   accounts/<email>/account.json         settings of one Google account (selected and joined servers, EULA)
+//   accounts/<email>/account.json         settings of one Google account (selected and joined servers, EULA, terms)
 //   accounts/<email>/servers/<id>/        that account's files for one server:
 //       settings.json                     local path, Java flags
 //       base.json                         what this PC and the cloud last agreed on
@@ -47,6 +47,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     launchServer: true,
     joinedServerIds: [],
     eulaAccepted: false,
+    termsAccepted: 0,
     notifications: true,
     notificationSound: true,
     theme: 'light',
@@ -104,9 +105,9 @@ export class AppData {
             return;
         }
         // The account's part goes to its own file; settings.json keeps what belongs to this PC.
-        const { selectedServerId, joinedServerIds, eulaAccepted, ...pc } = clean;
+        const { selectedServerId, joinedServerIds, eulaAccepted, termsAccepted, ...pc } = clean;
         writeJsonAtomic(this.settingsFile(), { ...parseSettings(this.readJson(this.settingsFile())), ...pc });
-        writeJsonAtomic(file, { selectedServerId, joinedServerIds, eulaAccepted });
+        writeJsonAtomic(file, { selectedServerId, joinedServerIds, eulaAccepted, termsAccepted });
     }
 
     private settingsFile(): string {
@@ -133,6 +134,7 @@ export class AppData {
             selectedServerId: inherit ? legacy.selectedServerId : null,
             joinedServerIds: inherit ? legacy.joinedServerIds : [],
             eulaAccepted: false,
+            termsAccepted: 0,
         });
     }
 
@@ -414,6 +416,7 @@ function parseSettings(raw: unknown): AppSettings {
         launchServer: typeof r.launchServer === 'boolean' ? r.launchServer : DEFAULT_SETTINGS.launchServer,
         joinedServerIds: Array.isArray(r.joinedServerIds) ? unique(r.joinedServerIds.filter(isValidServerId)) : [],
         eulaAccepted: r.eulaAccepted === true,
+        termsAccepted: isCount(r.termsAccepted) ? r.termsAccepted : 0,
         notifications: typeof r.notifications === 'boolean' ? r.notifications : DEFAULT_SETTINGS.notifications,
         notificationSound: typeof r.notificationSound === 'boolean' ? r.notificationSound : DEFAULT_SETTINGS.notificationSound,
         theme: THEMES.includes(r.theme as ThemeName) ? (r.theme as ThemeName) : DEFAULT_SETTINGS.theme,
@@ -421,9 +424,9 @@ function parseSettings(raw: unknown): AppSettings {
     };
 }
 
-function parseAccount(raw: unknown): Pick<AppSettings, 'selectedServerId' | 'joinedServerIds' | 'eulaAccepted'> {
+function parseAccount(raw: unknown): Pick<AppSettings, 'selectedServerId' | 'joinedServerIds' | 'eulaAccepted' | 'termsAccepted'> {
     const s = parseSettings(raw);
-    return { selectedServerId: s.selectedServerId, joinedServerIds: s.joinedServerIds, eulaAccepted: s.eulaAccepted };
+    return { selectedServerId: s.selectedServerId, joinedServerIds: s.joinedServerIds, eulaAccepted: s.eulaAccepted, termsAccepted: s.termsAccepted };
 }
 
 function parseServerSettings(raw: unknown): ServerSettings {

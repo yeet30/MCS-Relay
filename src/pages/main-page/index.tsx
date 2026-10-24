@@ -3,11 +3,16 @@ import { useEffect } from 'react';
 import GreetingSection from '../../components/greeting-section';
 import BurgerMenu from '../../components/burger-menu';
 import MembersSection from '../../components/members-section';
+import TermsGate from '../../components/terms-gate';
+import { TERMS_VERSION } from '../../../shared/types';
 import { useAuthStore } from '../../stores/authStore';
 import { useServersStore } from '../../stores/serversStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 
 export default function MainPage() {
+    // null while the settings load. Until this account agrees to the terms, the terms take the place of the page.
+    const termsAccepted = useSettingsStore((s) => s.settings?.termsAccepted ?? null);
+
     useEffect(() => {
         let cancelled = false;
         async function init() {
@@ -25,6 +30,8 @@ export default function MainPage() {
             cancelled = true;
         };
     }, []);
+
+    if (termsAccepted !== null && termsAccepted < TERMS_VERSION) return <TermsGate agreedBefore={termsAccepted > 0} />;
 
     return (
         <section id='main-section'>

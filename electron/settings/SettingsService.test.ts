@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { DEFAULT_JAVA_FLAGS } from '../../shared/types';
+import { DEFAULT_JAVA_FLAGS, TERMS_VERSION } from '../../shared/types';
 import type { AppSettings } from '../../shared/types';
 import { AppError } from '../errors';
 import { AppData } from '../store/appData';
@@ -63,6 +63,15 @@ describe('app settings', () => {
         expect(settings.set({ theme: 'mint' }).theme).toBe('mint');
         expect(new SettingsService({ appData, dialogs, platform: 'win32' }).get().theme).toBe('mint');
         expectInvalid(() => settings.set({ theme: 'neon' as unknown as AppSettings['theme'] }));
+    });
+
+    test('the terms start unagreed and only a version that exists can be agreed to', () => {
+        expect(settings.get().termsAccepted).toBe(0);
+        expect(settings.set({ termsAccepted: TERMS_VERSION }).termsAccepted).toBe(TERMS_VERSION);
+        expectInvalid(() => settings.set({ termsAccepted: TERMS_VERSION + 1 }));
+        expectInvalid(() => settings.set({ termsAccepted: -1 }));
+        expectInvalid(() => settings.set({ termsAccepted: true as unknown as number }));
+        expect(settings.get().termsAccepted).toBe(TERMS_VERSION);
     });
 
     test('joinedServerIds cannot be replaced through set', () => {

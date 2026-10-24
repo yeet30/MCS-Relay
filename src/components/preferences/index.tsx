@@ -1,8 +1,8 @@
 import './preferences.css';
 import { useEffect } from 'react';
-import { Bell, Download, ExternalLink, Loader2, Play, RefreshCw, ScrollText, Volume2 } from 'lucide-react';
+import { Bell, Download, ExternalLink, Loader2, Play, RefreshCw, ScrollText, ShieldCheck, Volume2 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { THEMES } from '../../../shared/types';
+import { TERMS_URL, THEMES } from '../../../shared/types';
 import type { AppSettings, ThemeName } from '../../../shared/types';
 import { invoke } from '../../api';
 import { playChime } from '../../lib/chime';
@@ -12,6 +12,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useUpdateStore } from '../../stores/updateStore';
 
 const EULA_URL = 'https://www.minecraft.net/en-us/eula';
+const PRIVACY_URL = 'https://mcs-relay.com/privacy.html';
 
 /** Each theme's own page, card and accent colours, so the choice shows what it looks like. */
 const THEME_PREVIEW: Record<ThemeName, { label: string; bg: string; panel: string; accent: string }> = {
@@ -70,8 +71,8 @@ function AboutRow() {
     );
 }
 
-/** The theme, how MCS-Relay tells you that something finished or failed, the EULA answer of this account, and the
- *  version with its updates. */
+/** The theme, how MCS-Relay tells you that something finished or failed, the EULA answer of this account, the
+ *  terms of use, and the version with its updates. */
 export default function Preferences() {
     const settings = useSettingsStore((s) => s.settings);
 
@@ -153,6 +154,26 @@ export default function Preferences() {
                         {settings.eulaAccepted && (
                             <button className='text-button' onClick={() => set({ eulaAccepted: false })}>Withdraw my answer</button>
                         )}
+                    </span>
+                </div>
+            </div>
+
+            <h4 className='pref-section'>Terms of use</h4>
+            <div className='pref-row'>
+                <span className='pref-icon'><ShieldCheck size={16} /></span>
+                <div className='pref-text'>
+                    <span className='pref-title'>Agreed for this Google account</span>
+                    <span className='pref-help'>
+                        Play only with people you trust: when you host, the server&apos;s .jar, mods and plugins run on this PC,
+                        and every member can change them.
+                    </span>
+                    <span className='pref-actions'>
+                        <button className='text-button' onClick={() => void invoke('app:openExternal', TERMS_URL)}>
+                            Read the terms <ExternalLink size={11} />
+                        </button>
+                        <button className='text-button' onClick={() => void invoke('app:openExternal', PRIVACY_URL)}>
+                            Privacy policy <ExternalLink size={11} />
+                        </button>
                     </span>
                 </div>
             </div>

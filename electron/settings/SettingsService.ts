@@ -1,7 +1,7 @@
 // The one writer of this PC's settings. Values arriving over IPC are unknown at runtime, so every
 // setter validates before anything is stored.
 import path from 'node:path';
-import { THEMES } from '../../shared/types';
+import { TERMS_VERSION, THEMES } from '../../shared/types';
 import type { AppSettings, JavaFlags, ServerSettings, ThemeName } from '../../shared/types';
 import { AppError } from '../errors';
 import { RAM_LIMITS, isValidServerId } from '../store/appData';
@@ -56,6 +56,13 @@ export class SettingsService {
         if ('usePlayitgg' in patch) next.usePlayitgg = requireBoolean(patch.usePlayitgg, 'usePlayitgg');
         if ('launchServer' in patch) next.launchServer = requireBoolean(patch.launchServer, 'launchServer');
         if ('eulaAccepted' in patch) next.eulaAccepted = requireBoolean(patch.eulaAccepted, 'eulaAccepted');
+        if ('termsAccepted' in patch) {
+            const version: unknown = patch.termsAccepted;
+            if (typeof version !== 'number' || !Number.isInteger(version) || version < 0 || version > TERMS_VERSION) {
+                throw invalid('That version of the terms of use does not exist.');
+            }
+            next.termsAccepted = version;
+        }
         if ('notifications' in patch) next.notifications = requireBoolean(patch.notifications, 'notifications');
         if ('notificationSound' in patch) next.notificationSound = requireBoolean(patch.notificationSound, 'notificationSound');
         if ('playitPrimary' in patch) {

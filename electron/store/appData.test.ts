@@ -181,6 +181,7 @@ describe('legacy import', () => {
             launchServer: false,
             joinedServerIds: ['srvB', 'srvC'],
             eulaAccepted: false,
+            termsAccepted: 0,
             notifications: true,
             notificationSound: true,
             theme: 'light',
@@ -292,13 +293,13 @@ describe('accounts', () => {
         expect(fs.existsSync(path.join(root, 'accounts', 'alice@example.com', 'servers', 'srvA', 'settings.json'))).toBe(true);
     });
 
-    test('selected and joined servers and the EULA belong to the account, the rest to the PC', () => {
+    test('selected and joined servers, the EULA and the terms belong to the account, the rest to the PC', () => {
         appData.setAccount('alice@example.com');
-        appData.writeSettings({ ...settingsOf(appData), selectedServerId: 'srvA', joinedServerIds: ['srvJ'], eulaAccepted: true, launchServer: false });
+        appData.writeSettings({ ...settingsOf(appData), selectedServerId: 'srvA', joinedServerIds: ['srvJ'], eulaAccepted: true, termsAccepted: 1, launchServer: false });
         appData.setAccount('bob@example.com');
-        expect(settingsOf(appData)).toMatchObject({ selectedServerId: null, joinedServerIds: [], eulaAccepted: false, launchServer: false });
+        expect(settingsOf(appData)).toMatchObject({ selectedServerId: null, joinedServerIds: [], eulaAccepted: false, termsAccepted: 0, launchServer: false });
         appData.setAccount('alice@example.com');
-        expect(settingsOf(appData)).toMatchObject({ selectedServerId: 'srvA', joinedServerIds: ['srvJ'], eulaAccepted: true });
+        expect(settingsOf(appData)).toMatchObject({ selectedServerId: 'srvA', joinedServerIds: ['srvJ'], eulaAccepted: true, termsAccepted: 1 });
     });
 
     test('data from before accounts moves to the first account that uses the server', () => {
