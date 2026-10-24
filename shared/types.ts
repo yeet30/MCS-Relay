@@ -76,7 +76,7 @@ export const TERMS_URL = 'https://mcs-relay.com/terms.html';
 
 /** Where problem reports are shared to (see electron/report/ReportService.ts). Empty: the app can only save reports
  *  as files. */
-export const REPORT_INBOX = '';
+export const REPORT_INBOX: string = 'yeet4em@gmail.com';
 
 export interface AppSettings {
     selectedServerId: ServerId | null;

@@ -130,8 +130,8 @@ export default function LoginPage() {
                 isOpen={reporting}
                 onClose={() => setReporting(false)}
                 items={[{ title: 'Report a problem', content: <ReportProblem signedIn={false} onDone={() => setReporting(false)} /> }]}
-                width={460}
-                height={380}
+                width={500}
+                height={450}
             />
             <p className='login-disclaimer'>Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.</p>
         </div>

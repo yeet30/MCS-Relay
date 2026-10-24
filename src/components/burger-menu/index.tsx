@@ -92,7 +92,7 @@ export default function BurgerMenu() {
                         <li onClick={() => open([{ title: 'Preferences', content: <Preferences /> }])}>
                             <SlidersHorizontal size={15} /> Preferences
                         </li>
-                        <li onClick={() => open([{ title: 'Report a problem', content: <ReportProblem signedIn onDone={() => setModalItems(null)} /> }])}>
+                        <li onClick={() => open([{ title: 'Report a problem', content: <ReportProblem signedIn onDone={() => setModalItems(null)} /> }], true)}>
                             <Bug size={15} /> Report a problem
                         </li>
                         <li className='danger' onClick={handleLogout}>
