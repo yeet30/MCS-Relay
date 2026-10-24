@@ -160,11 +160,13 @@ img {
     font-size: 0.85rem;
 }
 
+/* height: auto keeps the 4:3 shape when the width shrinks (the width/height attributes only reserve the space). */
 .screenshot {
     display: block;
     margin: 28px auto 0;
     width: 100%;
     max-width: 800px;
+    height: auto;
     border-radius: 16px;
     border: 1px solid var(--line);
     box-shadow: var(--shadow);
