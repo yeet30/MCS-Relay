@@ -10,6 +10,7 @@ import type { GoogleAuth } from '../auth/GoogleAuth';
 import { isValidServerId } from '../store/appData';
 import type { ServersService } from '../servers/ServersService';
 import type { SessionController } from '../session/SessionController';
+import type { ReportService } from '../report/ReportService';
 import type { Dialogs, SettingsService } from '../settings/SettingsService';
 import type { ChangeTracker } from '../sync/changeTracker';
 import type { SyncEngine } from '../sync/SyncEngine';
@@ -30,6 +31,7 @@ export interface HandlerDeps {
     transfers: Pick<TransferEngine, 'snapshot'>;
     changes: Pick<ChangeTracker, 'all'>;
     dialogs: Pick<Dialogs, 'chooseFolder' | 'chooseFile'>;
+    report: Pick<ReportService, 'send' | 'save'>;
     app: {
         quitResponse(confirmed: boolean): void;
         openExternal(url: string): Promise<void>;
@@ -37,11 +39,13 @@ export interface HandlerDeps {
         updateState(): UpdateState;
         checkForUpdates(): Promise<UpdateState>;
         installUpdate(): void;
+        openLogFolder(): Promise<void>;
     };
 }
 
 const CHOICES: readonly ConflictChoice[] = ['keep-cloud', 'keep-local', 'combine'];
 const MAX_TEXT = 2000;
+const MAX_REPORT = 20_000;
 const MAX_RULES = 500;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -210,4 +214,8 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
     handle('app:updateState', () => d.app.updateState());
     handle('app:checkForUpdates', () => d.app.checkForUpdates());
     handle('app:installUpdate', () => d.app.installUpdate());
+
+    handle('report:send', (description, includeLog) => d.report.send(text(description, 'description', { max: MAX_REPORT }), bool(includeLog, 'log choice')));
+    handle('report:save', (description, includeLog) => d.report.save(text(description, 'description', { max: MAX_REPORT }), bool(includeLog, 'log choice')));
+    handle('report:openLogFolder', () => d.app.openLogFolder());
 }

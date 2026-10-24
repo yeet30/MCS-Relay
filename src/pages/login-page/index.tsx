@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { ExternalLink, FolderLock, HardDrive, LoaderCircle, ShieldCheck } from 'lucide-react';
 import { invoke } from '../../api';
 import logoUrl from '../../assets/logo.svg';
+import Modal from '../../components/modal';
+import ReportProblem from '../../components/report-problem';
 import { useAuthStore } from '../../stores/authStore';
 
 const GOOGLE_ACCESS_PAGE = 'https://myaccount.google.com/connections';
@@ -72,6 +74,7 @@ export default function LoginPage() {
     const signedOutReason = useAuthStore((s) => s.signedOutReason);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [reporting, setReporting] = useState(false);
 
     useEffect(() => {
         // After a NOT_SIGNED_IN error stay here, even if a stored token still claims to be valid; going back to
@@ -119,7 +122,17 @@ export default function LoginPage() {
                 </div>
                 <BeforeSignIn />
             </div>
-            <p className='login-footer'>Your browser opens so you can sign in. Server files are kept in your Google Drive.</p>
+            <p className='login-footer'>
+                Your browser opens so you can sign in. Server files are kept in your Google Drive.
+                <button className='login-report' onClick={() => setReporting(true)}>Having trouble? Report a problem</button>
+            </p>
+            <Modal
+                isOpen={reporting}
+                onClose={() => setReporting(false)}
+                items={[{ title: 'Report a problem', content: <ReportProblem signedIn={false} onDone={() => setReporting(false)} /> }]}
+                width={460}
+                height={380}
+            />
             <p className='login-disclaimer'>Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.</p>
         </div>
     );

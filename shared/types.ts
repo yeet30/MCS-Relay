@@ -74,6 +74,10 @@ export const TITLE_BAR_HEIGHT = 32;
 export const TERMS_VERSION = 1;
 export const TERMS_URL = 'https://mcs-relay.com/terms.html';
 
+/** Where problem reports are shared to (see electron/report/ReportService.ts). Empty: the app can only save reports
+ *  as files. */
+export const REPORT_INBOX = '';
+
 export interface AppSettings {
     selectedServerId: ServerId | null;
     playitggPath: string;

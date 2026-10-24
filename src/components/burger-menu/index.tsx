@@ -1,7 +1,7 @@
 import './burger-menu.css';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FolderTree, LoaderCircle, LogOut, SlidersHorizontal, Terminal } from 'lucide-react';
+import { Bug, FolderTree, LoaderCircle, LogOut, SlidersHorizontal, Terminal } from 'lucide-react';
 import type { IModalItems } from '../../lib/ui-types';
 import { useAuthStore } from '../../stores/authStore';
 import { useServersStore } from '../../stores/serversStore';
@@ -10,6 +10,7 @@ import JoinedDriveFolders from '../joined-drive-folders';
 import Modal from '../modal';
 import OwnedDriveFolders from '../owned-drive-folders';
 import Preferences from '../preferences';
+import ReportProblem from '../report-problem';
 import ScriptsOptions from '../scripts-options';
 
 export default function BurgerMenu() {
@@ -90,6 +91,9 @@ export default function BurgerMenu() {
                         </li>
                         <li onClick={() => open([{ title: 'Preferences', content: <Preferences /> }])}>
                             <SlidersHorizontal size={15} /> Preferences
+                        </li>
+                        <li onClick={() => open([{ title: 'Report a problem', content: <ReportProblem signedIn onDone={() => setModalItems(null)} /> }])}>
+                            <Bug size={15} /> Report a problem
                         </li>
                         <li className='danger' onClick={handleLogout}>
                             {loggingOut ? <LoaderCircle size={15} className='spinner' /> : <LogOut size={15} />}

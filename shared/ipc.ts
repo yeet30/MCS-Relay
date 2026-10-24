@@ -91,6 +91,12 @@ export interface Commands {
     'app:checkForUpdates': () => UpdateState;
     /** Quits, installs the downloaded update and starts the app again. Refused while a session is busy. */
     'app:installUpdate': () => void;
+
+    /** Shares a problem report with the developer through the reporter's Google Drive (see ReportService). */
+    'report:send': (description: string, includeLog: boolean) => void;
+    /** Saves a problem report as a text file where the user chooses; the path, or null when cancelled. */
+    'report:save': (description: string, includeLog: boolean) => string | null;
+    'report:openLogFolder': () => void;
 }
 
 /** Every event the main process pushes: channel -> payload. */
@@ -128,4 +134,4 @@ export interface BridgeApi {
     on: (channel: string, listener: (payload: unknown) => void) => () => void;
 }
 
-export const COMMAND_PREFIXES = ['auth:', 'servers:', 'session:', 'settings:', 'rules:', 'app:'] as const;
+export const COMMAND_PREFIXES = ['auth:', 'servers:', 'session:', 'settings:', 'rules:', 'app:', 'report:'] as const;

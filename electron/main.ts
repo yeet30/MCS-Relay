@@ -2,10 +2,13 @@
 // and the quit flow. No business logic lives here.
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, Notification, safeStorage, shell, Tray } from 'electron';
 import { createRequire } from 'node:module';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { format } from 'node:util';
+import type { EventName, Events } from '../shared/ipc';
 import { TITLE_BAR_HEIGHT, WINDOW_COLORS } from '../shared/types';
-import type { LogoState, ThemeName } from '../shared/types';
+import type { LogoState, SessionPhase, ThemeName } from '../shared/types';
 import { unscrambleClient } from './auth/embeddedClient';
 import { GoogleAuth } from './auth/GoogleAuth';
 import { DriveClient } from './drive/DriveClient';
@@ -15,8 +18,10 @@ import { createDialogs } from './ipc/dialogs';
 import { createEventSink, createHandle } from './ipc/handle';
 import { registerHandlers } from './ipc/handlers';
 import { LockService } from './lock/LockService';
+import { AppLog } from './log/AppLog';
 import { MinecraftProcess } from './processes/MinecraftProcess';
 import { PlayitProcess } from './processes/PlayitProcess';
+import { ReportService } from './report/ReportService';
 import { ServersService } from './servers/ServersService';
 import { SessionController } from './session/SessionController';
 import { SettingsService } from './settings/SettingsService';
@@ -50,9 +55,16 @@ let windowTheme: ThemeName | null = null;
 // single-instance lock too) uses it.
 app.setPath('userData', resolveDataFolder(app.getPath('appData')));
 const userData = app.getPath('userData');
+
+// The log a problem report carries: everything below that is written to the console, and what the user sees happen.
+const appLog = new AppLog(path.join(userData, 'logs'));
+appLog.captureConsole();
+console.log(`[main] MCS-Relay ${app.getVersion()}${app.isPackaged ? '' : ' (development build)'} starting; ${aboutPc()}`);
+process.on('uncaughtExceptionMonitor', (err, origin) => appLog.write('error', `[main] ${origin}: ${format(err)}`));
+
 const appData = new AppData(userData);
 const dialogs = createDialogs(() => win);
-const events = createEventSink(() => win);
+const events = loggedEvents(createEventSink(() => win));
 const settings = new SettingsService({ appData, dialogs, onChange: (s) => applyWindowTheme(s.theme) });
 const auth = new GoogleAuth({
     userDataDir: userData,
@@ -111,6 +123,24 @@ function loadUpdater(): UpdaterLike | null {
 }
 const updates = new Updates({ updater: loadUpdater(), current: app.getVersion(), emit: (state) => events.emit('app:update', state) });
 
+const reports = new ReportService({
+    log: appLog, drive, me, chooseSaveFile: dialogs.chooseSaveFile,
+    about: () => {
+        const s = settings.get();
+        const state = session.getState();
+        const name = (id: string | null) => (id ? `"${servers.nameOf(id) ?? '?'}" (${id})` : 'none');
+        return [
+            `MCS-Relay ${app.getVersion()}${app.isPackaged ? '' : ' (development build)'}`,
+            aboutPc(),
+            `Electron ${process.versions.electron}, Chrome ${process.versions.chrome}, Node ${process.versions.node}`,
+            `Selected server: ${name(s.selectedServerId)}`,
+            `Session: ${state.phase}, server ${name(state.serverId)}${state.error ? `, error: ${state.error.message}` : ''}`,
+            `Settings: Minecraft server ${s.launchServer ? 'on' : 'off'}, playit.gg ${s.usePlayitgg ? 'on' : 'off'}, theme ${s.theme}`,
+            `Update: ${updates.get().status}`,
+        ];
+    },
+});
+
 const servers = new ServersService({
     drive, launcher, auth, settings, appData, dialogs,
     beforeDelete: async (serverId) => {
@@ -121,6 +151,41 @@ const servers = new ServersService({
         return sync.markForeignFilesDeleted(serverId, (done, total) => events.emit('servers:deleting', { serverId, done, total }));
     },
 });
+
+/* ------------------------------------------------------------------ log */
+
+function aboutPc(): string {
+    return `Windows ${os.release()} (${os.version()}), ${process.arch}, ${Math.round(os.totalmem() / 2 ** 30)} GB memory`;
+}
+
+/** The events the window gets, with what the user sees happen also written to the log: every progress line, phase
+ *  change and update status. Transfers and the Minecraft console are left out (too many lines, and players' chat). */
+function loggedEvents(sink: ReturnType<typeof createEventSink>): ReturnType<typeof createEventSink> {
+    let phase: SessionPhase | null = null;
+    let updateStatus: string | null = null;
+    return {
+        emit<E extends EventName>(event: E, payload: Events[E]): void {
+            if (event === 'session:step') {
+                const step = payload as Events['session:step'];
+                console.log(`[step] ${step.status}: ${step.message}`);
+            } else if (event === 'session:state') {
+                const state = payload as Events['session:state'];
+                if (state.phase !== phase) {
+                    phase = state.phase;
+                    const error = state.error ? `: ${state.error.message}${state.error.detail ? ` (${state.error.detail})` : ''}` : '';
+                    console.log(`[state] ${state.phase}${state.serverId ? ` on ${state.serverId}` : ''}${error}`);
+                }
+            } else if (event === 'app:update') {
+                const update = payload as Events['app:update'];
+                if (update.status !== updateStatus) {
+                    updateStatus = update.status;
+                    console.log(`[update] ${update.status}`);
+                }
+            }
+            sink.emit(event, payload);
+        },
+    };
+}
 
 /* ------------------------------------------------------------------ notifications */
 
@@ -247,6 +312,13 @@ function createWindow(): void {
     win.webContents.on('will-navigate', (event, url) => {
         if (!isTrustedUrl(url)) event.preventDefault();
     });
+    // The page's warnings and errors (a React error, a failed request) go into the log too.
+    win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+        if (level >= 2) appLog.write(level >= 3 ? 'error' : 'warn', `[window] ${message} (${path.basename(sourceId)}:${line})`);
+    });
+    win.webContents.on('render-process-gone', (_event, details) => {
+        console.error(`[window] the page stopped: ${details.reason} (exit code ${details.exitCode})`);
+    });
 
     if (VITE_DEV_SERVER_URL) void win.loadURL(VITE_DEV_SERVER_URL);
     else void win.loadFile(path.join(RENDERER_DIST, 'index.html'));
@@ -301,6 +373,10 @@ if (!app.requestSingleInstanceLock()) {
         if (quitAllowed) app.quit();
     });
 
+    app.on('child-process-gone', (_event, details) => {
+        console.warn(`[main] a helper process stopped: ${details.type} ${details.reason} (exit code ${details.exitCode})`);
+    });
+
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
@@ -311,10 +387,11 @@ if (!app.requestSingleInstanceLock()) {
     void app.whenReady().then(async () => {
         appData.migrateLegacy();
         registerHandlers(createHandle(ipcMain, isTrustedUrl), {
-            auth, servers, session, settings, sync, transfers, changes, dialogs,
+            auth, servers, session, settings, sync, transfers, changes, dialogs, report: reports,
             app: {
                 quitResponse, openExternal: (url) => shell.openExternal(url), setLogoState: applyLogoState,
                 updateState: () => updates.get(), checkForUpdates: () => updates.check(), installUpdate,
+                openLogFolder: () => dialogs.openPath(appLog.folder),
             },
         });
         createTray();

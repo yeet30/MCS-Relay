@@ -22,6 +22,7 @@ const ALL_COMMANDS: Record<CommandName, true> = {
     'rules:get': true, 'rules:set': true, 'rules:pickPath': true,
     'app:quitResponse': true, 'app:openExternal': true, 'app:setLogoState': true,
     'app:updateState': true, 'app:checkForUpdates': true, 'app:installUpdate': true,
+    'report:send': true, 'report:save': true, 'report:openLogFolder': true,
 };
 
 type Listener = (event: { senderFrame?: { url: string } | null }, ...args: unknown[]) => unknown;
@@ -33,7 +34,7 @@ function setup() {
     const auto = () => new Proxy({}, { get: (target: Record<string, unknown>, key: string) => (target[key] ??= vi.fn(async () => undefined)) });
     const deps = {
         auth: auto(), servers: auto(), session: auto(), settings: auto(), sync: auto(), transfers: auto(),
-        changes: auto(), dialogs: auto(), app: auto(),
+        changes: auto(), dialogs: auto(), report: auto(), app: auto(),
     } as unknown as HandlerDeps;
     (deps.session.isBusy as unknown as ReturnType<typeof vi.fn>) = vi.fn(() => false);
     registerHandlers(handle, deps);

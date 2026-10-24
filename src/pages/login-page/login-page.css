@@ -168,6 +168,20 @@
     color: var(--muted);
 }
 
+.login-report {
+    margin-left: 8px;
+    padding: 0;
+    border: none;
+    background: none;
+    font-size: inherit;
+    color: var(--accent);
+    cursor: pointer;
+}
+
+.login-report:hover {
+    text-decoration: underline;
+}
+
 .login-disclaimer {
     margin: -10px 0 0;
     font-size: 0.72rem;

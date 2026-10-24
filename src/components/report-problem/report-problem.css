@@ -1,0 +1,92 @@
+.report-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 2px;
+    text-align: left;
+    font-size: 0.9rem;
+
+    .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .field-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--muted);
+    }
+
+    textarea {
+        padding: 8px 10px;
+        border-radius: 9px;
+        border: 1px solid var(--line);
+        background: var(--panel-2);
+        color: var(--text);
+        font: inherit;
+        font-size: 0.86rem;
+        resize: vertical;
+        outline: none;
+    }
+
+    textarea:focus {
+        border-color: rgba(var(--accent-rgb), 0.6);
+    }
+
+    .report-check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.85rem;
+        cursor: pointer;
+
+        input {
+            accent-color: var(--accent);
+        }
+
+        small {
+            color: var(--muted);
+        }
+    }
+
+    .report-note {
+        margin: 0;
+        font-size: 0.76rem;
+        line-height: 1.5;
+        color: var(--muted);
+    }
+
+    .report-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: 6px;
+        padding: 0;
+        border: none;
+        background: none;
+        font-size: inherit;
+        color: var(--accent);
+        cursor: pointer;
+    }
+
+    .report-link:hover {
+        text-decoration: underline;
+    }
+
+    .form-buttons {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 2px;
+    }
+
+    .form-buttons .text-button {
+        padding: 6px 14px;
+        font-size: 0.85rem;
+    }
+
+    .spinner {
+        animation: spin 1s linear infinite;
+    }
+}
