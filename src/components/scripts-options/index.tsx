@@ -1,6 +1,6 @@
 import './scripts-options.css';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { FileCog, FolderInput, Loader2, Save } from 'lucide-react';
+import { Coffee, FileCog, FolderInput, Loader2, RotateCcw, Save } from 'lucide-react';
 import type { AppSettings, JavaFlags, ServerSettings } from '../../../shared/types';
 import { useConfirm } from '../../hooks/useConfirm';
 import { isSessionBusy } from '../../lib/sync';
@@ -23,12 +23,13 @@ const linesToFlags = (text: string): string => text.split(/\s+/).filter(Boolean)
  *  breaks alone are no change. */
 function hasChanges(
     saved: AppSettings | null, server: ServerSettings | null,
-    edited: { usePlayit: boolean; playitPath: string; launchServer: boolean; flags: JavaFlags | null; flagsText: string },
+    edited: { usePlayit: boolean; playitPath: string; launchServer: boolean; flags: JavaFlags | null; flagsText: string; javaPath: string },
 ): boolean {
     if (!saved) return false;
     if (edited.usePlayit !== saved.usePlayitgg || edited.launchServer !== saved.launchServer) return true;
     if (edited.playitPath !== saved.playitggPath) return true;
     if (!server || !edited.flags) return false;
+    if (edited.javaPath !== (server.javaPath ?? '')) return true;
     return edited.flags.maxRAM !== server.javaFlags.maxRAM || edited.flags.minRAM !== server.javaFlags.minRAM
         || linesToFlags(edited.flagsText) !== linesToFlags(server.javaFlags.customFlags);
 }
@@ -79,11 +80,12 @@ export default function ScriptsOptions() {
     const [launchServer, setLaunchServer] = useState(true);
     const [flags, setFlags] = useState<JavaFlags | null>(null);
     const [flagsText, setFlagsText] = useState('');
+    const [javaPath, setJavaPath] = useState('');                // '' = "java" from PATH
     const [saving, setSaving] = useState(false);
     const flagsRef = useRef<HTMLTextAreaElement>(null);
     const hasFlags = flags !== null;
     const { ask, popup } = useConfirm();
-    const dirty = hasChanges(settings, serverSettings, { usePlayit, playitPath, launchServer, flags, flagsText });
+    const dirty = hasChanges(settings, serverSettings, { usePlayit, playitPath, launchServer, flags, flagsText, javaPath });
 
     // The flags box grows with its text, so even a long list of flags is readable without scrolling inside it.
     useLayoutEffect(() => {
@@ -108,6 +110,7 @@ export default function ScriptsOptions() {
     useEffect(() => {
         setFlags(serverSettings ? { ...serverSettings.javaFlags } : null);
         setFlagsText(serverSettings ? flagsToLines(serverSettings.javaFlags.customFlags) : '');
+        setJavaPath(serverSettings?.javaPath ?? '');
     }, [serverSettings]);
 
     /** true when everything was saved. */
@@ -119,10 +122,17 @@ export default function ScriptsOptions() {
         setSaving(true);
         const store = useSettingsStore.getState();
         let ok = await store.update({ usePlayitgg: usePlayit, playitggPath: playitPath, launchServer });
-        if (ok && server && flags) ok = await store.updateServer(server.id, { javaFlags: { ...flags, customFlags: linesToFlags(flagsText) } });
+        if (ok && server && flags) {
+            ok = await store.updateServer(server.id, { javaFlags: { ...flags, customFlags: linesToFlags(flagsText) }, javaPath: javaPath || null });
+        }
         setSaving(false);
         if (ok) useNoticeStore.getState().success('Settings saved. They apply to the next session.');
         return ok;
+    }
+
+    async function handlePickJava() {
+        const picked = await useSettingsStore.getState().pickJavaPath();
+        if (picked) setJavaPath(picked);
     }
 
     async function handlePickPlayit() {
@@ -182,6 +192,21 @@ export default function ScriptsOptions() {
                             <RamSlider id='max-ram' label='Maximum' hint='-Xmx' value={flags.maxRAM} onChange={setMax} />
                             <RamSlider id='min-ram' label='At start' hint='-Xms' value={flags.minRAM} onChange={setMin} />
                         </div>
+                        <span className='section-label'>Java for {server.name}</span>
+                        <div className='program-path'>
+                            <Coffee size={14} />
+                            <span className='path-text' title={javaPath || undefined}>
+                                {javaPath || 'java (the one Windows finds first)'}
+                            </span>
+                            {javaPath && (
+                                <button className='text-button' title='Use the java Windows finds first' onClick={() => setJavaPath('')}>
+                                    <RotateCcw size={12} /> Default
+                                </button>
+                            )}
+                            <button className='text-button' onClick={() => void handlePickJava()}>
+                                <FolderInput size={12} /> {javaPath ? 'Change' : 'Choose'}
+                            </button>
+                        </div>
                         <label className='section-label' htmlFor='custom-flags'>Extra Java flags <small>one per line</small></label>
                         <textarea
                             id='custom-flags'
@@ -194,7 +219,7 @@ export default function ScriptsOptions() {
                             onChange={(e) => setFlagsText(e.target.value)}
                         />
                     </>
-                ) : <p>Select a server to set its memory.</p>}
+                ) : <p>Select a server to set its Java and memory.</p>}
             </OptionRow>
 
             <div className='save-bar'>

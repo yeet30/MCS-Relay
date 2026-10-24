@@ -1,10 +1,9 @@
 // App-wide and per-server settings. The main process validates and stores them; this is the last known copy.
 import { create } from 'zustand';
-import type { AppSettings, ServerId, ServerSettings } from '../../shared/types';
+import type { AppSettings, ServerId, ServerSettings, ServerSettingsPatch } from '../../shared/types';
 import { request } from './request';
 
 type AppSettingsPatch = Partial<Omit<AppSettings, 'joinedServerIds'>>;
-type ServerSettingsPatch = Partial<Omit<ServerSettings, 'localPath'>>;
 
 interface SettingsStore {
     settings: AppSettings | null;
@@ -16,6 +15,8 @@ interface SettingsStore {
     updateServer: (serverId: ServerId, patch: ServerSettingsPatch) => Promise<boolean>;
     /** The file picker for the playit.gg program; saving it is up to the caller. */
     pickPlayitPath: () => Promise<string | null>;
+    /** The file picker for a server's java.exe; saving it is up to the caller. */
+    pickJavaPath: () => Promise<string | null>;
 }
 
 export const useSettingsStore = create<SettingsStore>()((set) => ({
@@ -52,6 +53,11 @@ export const useSettingsStore = create<SettingsStore>()((set) => ({
 
     pickPlayitPath: async () => {
         const res = await request('settings:pickPlayitPath');
+        return res.ok ? res.value : null;
+    },
+
+    pickJavaPath: async () => {
+        const res = await request('settings:pickJavaPath');
         return res.ok ? res.value : null;
     },
 }));

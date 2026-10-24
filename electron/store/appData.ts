@@ -432,10 +432,12 @@ function parseAccount(raw: unknown): Pick<AppSettings, 'selectedServerId' | 'joi
 function parseServerSettings(raw: unknown): ServerSettings {
     const r = isRecord(raw) ? raw : {};
     const flags = isRecord(r.javaFlags) ? r.javaFlags : {};
-    return {
+    const settings: ServerSettings = {
         localPath: typeof r.localPath === 'string' && r.localPath !== '' ? r.localPath : null,
         javaFlags: sanitizeJavaFlags(flags.minRAM, flags.maxRAM, flags.customFlags) ?? { ...DEFAULT_JAVA_FLAGS },
     };
+    if (typeof r.javaPath === 'string' && r.javaPath !== '') settings.javaPath = r.javaPath;
+    return settings;
 }
 
 /** Clamps stored or imported values into the allowed range; null when they are not numbers at all. */

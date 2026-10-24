@@ -67,7 +67,8 @@ needs.
    friends upload; it only works in its own server folders (see [Your data](#your-data)). Then read and agree to
    the [terms of use](#play-with-people-you-trust).
 3. **Create a server**, give it a name, and choose its folder on your PC: the folder the Minecraft server runs from,
-   with the server `.jar` (or `run.bat` for Forge and NeoForge). An existing server folder works too.
+   with the server `.jar` (for Forge and NeoForge: the folder their installer set up with "Install server"). An
+   existing server folder works too. MCS-Relay finds what starts the server by itself; it does not need a `run.bat`.
 4. **Invite your friends** from Settings → Drive Folders. Google Drive emails them a link; they paste it into
    **Join a server** in their own MCS-Relay.
 5. Press the power button.

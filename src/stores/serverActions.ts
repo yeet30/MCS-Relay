@@ -45,9 +45,9 @@ async function offerLocalPath(server: ServerSummary, confirm: ConfirmFn, what: s
 export async function askForServerFolder(server: ServerSummary, confirm: ConfirmFn): Promise<void> {
     const choose = await confirm({
         message: `Next, choose the folder for "${server.name}" on this PC.\n\n`
-            + 'The Minecraft server runs from this folder, so it needs the server program: one server .jar (from '
-            + 'minecraft.net, or a Paper or Fabric jar), or a run.bat for Forge and NeoForge. The world and settings are '
-            + 'made there when the server first starts.\n\n'
+            + 'The Minecraft server runs from this folder, so it needs the server program: the server .jar (from '
+            + 'minecraft.net, or a Paper or Fabric jar). For Forge or NeoForge, run their installer with "Install server" '
+            + 'in this folder. The world and settings are made there when the server first starts.\n\n'
             + 'Have a server already? Choose its folder; the world is uploaded the first time you host. Starting fresh? '
             + 'Put the server .jar in a new, empty folder and choose that.',
         confirmText: 'Choose folder',

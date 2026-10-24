@@ -92,6 +92,15 @@ export interface AppSettings {
 export interface ServerSettings {
     localPath: string | null;
     javaFlags: JavaFlags;
+    /** The Java program this server starts with on this PC; missing: "java" from PATH. */
+    javaPath?: string;
+}
+
+/** A change to a server's settings on this PC (the folder goes through servers:chooseLocalPath). javaPath null: back to
+ *  "java" from PATH. */
+export interface ServerSettingsPatch {
+    javaFlags?: Partial<JavaFlags>;
+    javaPath?: string | null;
 }
 
 export const DEFAULT_JAVA_FLAGS: JavaFlags = { minRAM: 2048, maxRAM: 4096, customFlags: '' };

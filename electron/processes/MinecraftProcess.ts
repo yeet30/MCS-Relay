@@ -82,74 +82,66 @@ export function splitArgs(text: string, quotes = '"\''): string[] {
     return args;
 }
 
-const isBlank = (ch: string | undefined) => ch === undefined || ch === ' ' || ch === '\t';
+/** Where Forge (1.17 and later) and NeoForge keep the Java arguments that start them; their run.bat only passes
+ *  this file to Java. NeoForge for 1.20.1 still used the forge name. */
+const ARGS_FILE_DIRS = ['libraries/net/minecraftforge/forge', 'libraries/net/neoforged/neoforge', 'libraries/net/neoforged/forge'];
 
-/** Cuts a script line at the first unquoted shell operator (`& | < > ;`) or, in sh, an unquoted `#` comment. */
-function cutAtOperators(line: string, kind: 'bat' | 'sh'): string {
-    const quotes = kind === 'bat' ? '"' : '"\'';
-    let quote: string | null = null;
-    for (let i = 0; i < line.length; i++) {
-        const ch = line[i];
-        if (quote) {
-            if (ch === quote) quote = null;
-            continue;
-        }
-        if (quotes.includes(ch) && line.indexOf(ch, i + 1) !== -1) {
-            quote = ch;
-            continue;
-        }
-        if (ch === '<' || ch === '>') {
-            // "2>&1": the stream number belongs to the redirection, not to the arguments.
-            const digit = i > 0 && /\d/.test(line[i - 1]) && isBlank(line[i - 2]);
-            return line.slice(0, digit ? i - 1 : i);
-        }
-        if (ch === '&' || ch === '|') return line.slice(0, i);
-        if (kind === 'sh' && ch === ';') return line.slice(0, i);
-        if (kind === 'sh' && ch === '#' && isBlank(line[i - 1])) return line.slice(0, i);
+/** Root jars that start the server when there are several, most specific first. Fabric's launcher needs the
+ *  vanilla server.jar next to it, and Forge before 1.17 the vanilla minecraft_server jar. */
+const STARTER_JARS = [
+    /^fabric-server-launch\.jar$/i,
+    /^fabric-server-mc\..+-launcher\..+\.jar$/i,
+    /^quilt-server-launch\.jar$/i,
+    /^forge-.+\.jar$/i,
+    /^server\.jar$/i,
+];
+
+/** "1.20.1-47.2.0" before "1.20.1-47.10.1": the numbers in a version compared one by one. */
+export function compareVersions(a: string, b: string): number {
+    const pa = a.split(/\D+/).filter(Boolean).map(Number);
+    const pb = b.split(/\D+/).filter(Boolean).map(Number);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const diff = (pa[i] ?? -1) - (pb[i] ?? -1);
+        if (diff !== 0) return diff;
     }
-    return line;
+    return a.localeCompare(b);
 }
 
-type Env = Record<string, string | undefined>;
-
-/** %VAR% (bat) or $VAR / ${VAR} (sh) from the environment; unknown variables are left as they are. */
-function expandEnv(text: string, kind: 'bat' | 'sh', env: Env): string {
-    const lookup = (name: string, whole: string) => {
-        const key = Object.keys(env).find((k) => (kind === 'bat' ? k.toLowerCase() === name.toLowerCase() : k === name));
-        return key !== undefined ? env[key] ?? whole : whole;
-    };
-    if (kind === 'bat') return text.replace(/%([A-Za-z_][A-Za-z0-9_]*)%/g, (whole, name: string) => lookup(name, whole));
-    return text.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g, (whole, a: string | undefined, b: string | undefined) => lookup(a ?? b ?? '', whole));
-}
-
-export interface ScriptLaunch {
-    java: string;                                 // the java command as written: "java", or a path such as "%JAVA_HOME%\bin\java.exe" expanded
-    args: string[];                               // everything after it
-}
-
-/** The first java line of a run.bat / run.sh, or null when there is none. Skips REM / :: / # comments,
- *  accepts `@java` (bat), `exec java` (sh) and a path to java, drops `%*` and `"$@"`, stops at `&`, `|`, `>`. */
-export function parseRunScript(content: string, kind: 'bat' | 'sh', env: Env = {}): ScriptLaunch | null {
-    for (const raw of content.split(/\r?\n/)) {
-        let line = raw.trim();
-        if (!line) continue;
-        if (kind === 'bat') {
-            if (/^@?rem(\s|$)/i.test(line) || line.startsWith('::')) continue;
-            line = line.replace(/^@/, '');
-        } else {
-            if (line.startsWith('#')) continue;
-            line = line.replace(/^exec\s+/, '');
-        }
-        line = cutAtOperators(line, kind)
-            .replace(/%\*/g, ' ')
-            .replace(/"\$[@*]"|\$[@*]/g, ' ');
-        const tokens = splitArgs(line, kind === 'bat' ? '"' : '"\'');
-        if (tokens.length < 2) continue;
-        const java = expandEnv(tokens[0], kind, env);
-        if (!/(^|[\\/])java(\.exe)?$/i.test(java)) continue;
-        return { java, args: tokens.slice(1) };
+function subfolders(dir: string): string[] {
+    try {
+        return readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+    } catch {
+        return [];
     }
-    return null;
+}
+
+/** The Forge or NeoForge argument file of the newest installed version, relative to the server folder (with "/",
+ *  which Java accepts on Windows too); null when neither is installed. */
+export function findArgsFile(serverPath: string, platform: NodeJS.Platform): string | null {
+    const name = platform === 'win32' ? 'win_args.txt' : 'unix_args.txt';
+    const found: Array<{ version: string; file: string }> = [];
+    for (const dir of ARGS_FILE_DIRS) {
+        for (const version of subfolders(path.join(serverPath, dir))) {
+            if (existsSync(path.join(serverPath, dir, version, name))) found.push({ version, file: `${dir}/${version}/${name}` });
+        }
+    }
+    found.sort((a, b) => compareVersions(b.version, a.version));
+    return found[0]?.file ?? null;
+}
+
+/** The jar that starts the server, from the .jar files in the server folder (not its subfolders). */
+export function chooseServerJar(jars: string[]): string {
+    const candidates = jars.filter((jar) => !/installer/i.test(jar)).sort();
+    if (candidates.length === 1) return candidates[0];
+    if (candidates.length === 0) {
+        throw new AppError('JAVA', 'No server .jar file was found in the server folder. For Forge or NeoForge, run their installer with "Install server" in this folder first.');
+    }
+    for (const pattern of STARTER_JARS) {
+        const matches = candidates.filter((jar) => pattern.test(jar));
+        if (matches.length === 1) return matches[0];
+        if (matches.length > 1) break;
+    }
+    throw new AppError('JAVA', `The server folder has several .jar files (${candidates.join(', ')}), and it is not clear which one starts the server. Rename that one to server.jar, or move the others out of the folder.`);
 }
 
 export interface PlayerList {
@@ -185,7 +177,6 @@ function messageOf(line: string): string {
 // 'Done (4.215s)! For help, type "help"' (the decimal comma depends on the locale).
 const READY_RE = /Done \(\d/;
 const JOIN_LEAVE_RE = /: \S+ (joined|left) the game$/;
-const MEMORY_FLAG_RE = /^-Xm[sx]\d+[kKmMgGtT]?$/;
 
 export function abortError(signal: AbortSignal): Error {
     const reason: unknown = signal.reason;
@@ -278,7 +269,10 @@ export class MinecraftProcess {
 
     /** Resolves when the server prints "Done (". Rejects with AppError('JAVA' | 'TIMEOUT') if it exits first or times out (then kills it). */
     /** `acceptEula`: the user accepted the Minecraft EULA in the app, so eula.txt may be written for them. */
-    async start(opts: { serverPath: string; javaFlags: JavaFlags; readyTimeoutMs: number; signal?: AbortSignal; acceptEula?: boolean }): Promise<void> {
+    /** `javaPath`: the Java program chosen for this server on this PC; null uses "java" from PATH. */
+    async start(opts: {
+        serverPath: string; javaFlags: JavaFlags; javaPath?: string | null; readyTimeoutMs: number; signal?: AbortSignal; acceptEula?: boolean;
+    }): Promise<void> {
         if (this.child || this.launching) throw new AppError('BUSY', 'The Minecraft server is already running.');
         const { serverPath, javaFlags, readyTimeoutMs, signal } = opts;
         this.launching = true;
@@ -290,7 +284,7 @@ export class MinecraftProcess {
         };
         try {
             checkCancelled();
-            const { command, args } = MinecraftProcess.resolveLaunch(serverPath, javaFlags, this.platform);
+            const { command, args } = MinecraftProcess.resolveLaunch(serverPath, javaFlags, this.platform, opts.javaPath ?? null);
             await this.checkJava(command);
             checkCancelled();
             await ensureEula(serverPath, opts.acceptEula ?? true);
@@ -347,50 +341,27 @@ export class MinecraftProcess {
         return m ? Number(m[1]) : null;
     }
 
-    /** java arguments: memory flags, custom flags, then the run script's arguments or `-jar <the one jar>`, then nogui. */
+    /** java arguments: memory flags, custom flags, then what starts the server (`@<Forge or NeoForge args file>` or
+     *  `-jar <server jar>`), then nogui. */
     static buildLaunchArgs(serverPath: string, javaFlags: JavaFlags, platform: NodeJS.Platform = process.platform): string[] {
         return MinecraftProcess.resolveLaunch(serverPath, javaFlags, platform).args;
     }
 
-    /** buildLaunchArgs plus the java executable: a java path from the run script when it exists on this PC
-     *  (the script may come from another member's PC, so a missing path falls back to "java" on PATH). */
-    static resolveLaunch(serverPath: string, javaFlags: JavaFlags, platform: NodeJS.Platform = process.platform, env: Env = process.env): { command: string; args: string[] } {
+    /** buildLaunchArgs plus the java program: the one chosen for this server on this PC, or "java" from PATH. */
+    static resolveLaunch(serverPath: string, javaFlags: JavaFlags, platform: NodeJS.Platform = process.platform, javaPath: string | null = null): { command: string; args: string[] } {
         if (!existsSync(serverPath)) throw new AppError('NO_LOCAL_PATH', 'The server folder does not exist on this PC.', serverPath);
-        const scriptName = platform === 'win32' ? 'run.bat' : 'run.sh';
-        const scriptPath = path.join(serverPath, scriptName);
-        let command = 'java';
-        let launch: string[];
-        if (existsSync(scriptPath)) {
-            const parsed = parseRunScript(readFileSync(scriptPath, 'utf8'), platform === 'win32' ? 'bat' : 'sh', env);
-            if (!parsed) throw new AppError('JAVA', `${scriptName} is in the server folder, but it has no "java ..." line to start the server with.`);
-            if (/[\\/]/.test(parsed.java)) {
-                const javaPath = path.resolve(serverPath, parsed.java);
-                if (existsSync(javaPath)) command = javaPath;
-                else console.warn(`[minecraft] ${scriptName} names ${parsed.java}, which is not on this PC; using "java" from PATH`);
-            }
-            // The app's RAM setting is per PC; a shared script's -Xmx would otherwise win (the JVM uses the last one).
-            launch = parsed.args.filter((arg) => !MEMORY_FLAG_RE.test(arg));
-            for (const arg of launch) {
-                if (!arg.startsWith('@') || arg.startsWith('@@')) continue;
-                const file = arg.slice(1);
-                if (!existsSync(path.resolve(serverPath, file))) {
-                    throw new AppError('JAVA', `${scriptName} needs "${file}", which is missing from the server folder. Check that it is not ignored by the sync rules.`);
-                }
-            }
-        } else {
-            const jars = readdirSync(serverPath, { withFileTypes: true })
-                .filter((e) => e.isFile() && e.name.toLowerCase().endsWith('.jar'))
-                .map((e) => e.name)
-                .sort();
-            if (jars.length === 0) throw new AppError('JAVA', `No server .jar file and no ${scriptName} was found in the server folder.`);
-            if (jars.length > 1) {
-                throw new AppError('JAVA', `The server folder has several .jar files (${jars.join(', ')}). Keep only the server jar there, or add a ${scriptName}.`);
-            }
-            launch = ['-jar', jars[0]];
+        if (javaPath && !existsSync(javaPath)) {
+            throw new AppError('JAVA', 'The Java program chosen for this server is not on this PC anymore. Choose it again in Settings > Scripts.', javaPath);
         }
+        const argsFile = findArgsFile(serverPath, platform);
+        const launch = argsFile
+            ? [`@${argsFile}`]
+            : ['-jar', chooseServerJar(readdirSync(serverPath, { withFileTypes: true })
+                .filter((e) => e.isFile() && e.name.toLowerCase().endsWith('.jar'))
+                .map((e) => e.name))];
         const args = [`-Xmx${javaFlags.maxRAM}M`, `-Xms${javaFlags.minRAM}M`, ...splitArgs(javaFlags.customFlags), ...launch];
         if (!args.some((a) => a.toLowerCase() === 'nogui' || a.toLowerCase() === '--nogui')) args.push('nogui');
-        return { command, args };
+        return { command: javaPath ?? 'java', args };
     }
 
     /* -------------------------------------------------------------- internals */

@@ -320,7 +320,7 @@ export class SessionController {
                 this.progress.setNote(JAVA_NOTE);
                 this.onMinecraftOutput([`[System] Starting the Minecraft server (${new Date(this.now()).toLocaleTimeString()})`]);
                 await this.d.minecraft.start({
-                    serverPath: server.localPath ?? '', javaFlags: server.javaFlags,
+                    serverPath: server.localPath ?? '', javaFlags: server.javaFlags, javaPath: server.javaPath ?? null,
                     readyTimeoutMs: this.d.timeouts?.minecraftMs ?? 180_000, signal, acceptEula: settings.eulaAccepted,
                 });
                 this.setState({ javaRunning: true });

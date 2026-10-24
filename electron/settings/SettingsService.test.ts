@@ -125,6 +125,18 @@ describe('server settings', () => {
         settings.setServer('s1', { localPath: null, javaFlags: { minRAM: 512 } } as unknown as Parameters<SettingsService['setServer']>[1]);
         expect(settings.getServer('s1').localPath).toBe(folder);
     });
+
+    test('a Java program is stored, cleared again, and never taken from the server folder', () => {
+        const folder = path.join(root, 'mc');
+        settings.setLocalPath('s1', folder);
+        const java = path.join(root, 'jdk-21', 'bin', 'java.exe');
+        expect(settings.setServer('s1', { javaPath: java }).javaPath).toBe(java);
+        expect(settings.getServer('s1').javaFlags).toEqual(DEFAULT_JAVA_FLAGS);
+        expect(settings.setServer('s1', { javaPath: null })).toEqual({ localPath: folder, javaFlags: DEFAULT_JAVA_FLAGS });
+        expectInvalid(() => settings.setServer('s1', { javaPath: path.join(folder, 'jre', 'bin', 'java.exe') }));
+        expectInvalid(() => settings.setServer('s1', { javaPath: path.join(root, 'tools', 'evil.exe') }));
+        expectInvalid(() => settings.setServer('s1', { javaPath: 'java.exe' }));
+    });
 });
 
 describe('local paths', () => {

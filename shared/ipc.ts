@@ -4,7 +4,7 @@
 // calls them with invoke() (src/api.ts). A renamed or mistyped channel is a compile error.
 import type {
     AppErrorInfo, AppSettings, ChangeBatch, ConflictChoice, LockView, LogoState, MemberRole, ServerId, ServerMember,
-    ServerSettings, ServerSummary, SessionProgress, SessionState, StepMessage, SyncReport, SyncRules,
+    ServerSettings, ServerSettingsPatch, ServerSummary, SessionProgress, SessionState, StepMessage, SyncReport, SyncRules,
     TransferSnapshot, UpdateState, UserInfo,
 } from './types';
 
@@ -71,9 +71,11 @@ export interface Commands {
     'settings:get': () => AppSettings;
     'settings:set': (patch: Partial<Omit<AppSettings, 'joinedServerIds'>>) => AppSettings;
     'settings:getServer': (serverId: ServerId) => ServerSettings;
-    'settings:setServer': (serverId: ServerId, patch: Partial<Omit<ServerSettings, 'localPath'>>) => ServerSettings;
+    'settings:setServer': (serverId: ServerId, patch: ServerSettingsPatch) => ServerSettings;
     /** Opens the file picker; the path is stored only with settings:set. */
     'settings:pickPlayitPath': () => string | null;
+    /** Opens the file picker for a server's java.exe; the path is stored only with settings:setServer. */
+    'settings:pickJavaPath': () => string | null;
 
     'rules:get': (serverId: ServerId) => SyncRules;
     'rules:set': (serverId: ServerId, ignore: string[]) => SyncRules;

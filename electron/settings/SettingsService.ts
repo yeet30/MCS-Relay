@@ -2,7 +2,7 @@
 // setter validates before anything is stored.
 import path from 'node:path';
 import { TERMS_VERSION, THEMES } from '../../shared/types';
-import type { AppSettings, JavaFlags, ServerSettings, ThemeName } from '../../shared/types';
+import type { AppSettings, JavaFlags, ServerSettings, ServerSettingsPatch, ThemeName } from '../../shared/types';
 import { AppError } from '../errors';
 import { RAM_LIMITS, isValidServerId } from '../store/appData';
 import type { AppData } from '../store/appData';
@@ -14,7 +14,6 @@ export interface Dialogs {
 }
 
 export type SettingsPatch = Partial<Omit<AppSettings, 'joinedServerIds'>>;
-export type ServerSettingsPatch = { javaFlags?: Partial<JavaFlags> };
 
 const MAX_CUSTOM_FLAGS = 2000;
 
@@ -83,13 +82,17 @@ export class SettingsService {
         return this.appData.readServerSettings(requireId(id));
     }
 
-    /** Only javaFlags can be changed here; the local path goes through setLocalPath. */
+    /** The Java flags and program; the local path goes through setLocalPath. */
     setServer(id: string, patch: ServerSettingsPatch): ServerSettings {
         const current = this.getServer(id);
         if (!isObject(patch)) throw invalid('The server settings change is not valid.');
         if (patch.javaFlags !== undefined) {
             if (!isObject(patch.javaFlags)) throw invalid('The Java settings are not valid.');
             current.javaFlags = validateJavaFlags({ ...current.javaFlags, ...patch.javaFlags });
+        }
+        if (patch.javaPath !== undefined) {
+            if (patch.javaPath === null) delete current.javaPath;
+            else current.javaPath = this.validateJavaPath(patch.javaPath, current.localPath);
         }
         this.appData.writeServerSettings(id, current);
         return current;
@@ -129,12 +132,34 @@ export class SettingsService {
         this.appData.writeSettings(settings);
     }
 
+    /** Asks for the Java program a server starts with; null when cancelled. Saved with setServer. */
+    async pickJavaPath(): Promise<string | null> {
+        const filters = this.platform === 'win32' ? [{ name: 'Java (java.exe)', extensions: ['exe'] }] : undefined;
+        const chosen = await this.dialogs.chooseFile('Choose the Java program (java.exe in the bin folder of a Java installation)', filters);
+        return chosen ? chosen.trim() : null;
+    }
+
     /** Asks for the playit.gg program; null when cancelled. Nothing is stored: the Scripts panel saves it with
      *  its other changes (settings:set validates it then). */
     async pickPlayitPath(): Promise<string | null> {
         const filters = this.platform === 'win32' ? [{ name: 'Programs', extensions: ['exe'] }] : undefined;
         const chosen = await this.dialogs.chooseFile('Choose the playit.gg program', filters);
         return chosen ? chosen.trim() : null;
+    }
+
+    /** A java program installed on this PC. One inside the server folder is refused: every member can replace the
+     *  files there. */
+    private validateJavaPath(value: unknown, serverFolder: string | null): string {
+        if (typeof value !== 'string' || !path.isAbsolute(value.trim())) throw invalid('Choose the Java program with the file picker.');
+        const chosen = path.resolve(value.trim());
+        if (!/^java(.exe)?$/i.test(path.basename(chosen))) throw invalid('Choose java.exe, in the bin folder of a Java installation.');
+        if (serverFolder) {
+            const key = (p: string) => (this.platform === 'win32' || this.platform === 'darwin' ? path.resolve(p).toLowerCase() : path.resolve(p));
+            if (isInside(key(chosen), key(serverFolder))) {
+                throw invalid('Choose a Java installed on this PC, not one inside the server folder: every member can change the files there.');
+            }
+        }
+        return chosen;
     }
 
     /** Two servers syncing the same folder (or one inside the other) would overwrite each other's worlds. */

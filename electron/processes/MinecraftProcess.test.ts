@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { JavaFlags } from '../../shared/types';
 import { FakeChildProcess, fakeExecFile, fakeSpawn, until } from '../../test/fakes/FakeChildProcess';
 import { AppError } from '../errors';
-import { MinecraftProcess, parsePlayerList, parseRunScript, splitArgs, stripAnsi } from './MinecraftProcess';
+import { chooseServerJar, compareVersions, MinecraftProcess, parsePlayerList, splitArgs, stripAnsi } from './MinecraftProcess';
 
 const FLAGS: JavaFlags = { minRAM: 2048, maxRAM: 4096, customFlags: '' };
 const DONE = '[12:00:05] [Server thread/INFO]: Done (4.215s)! For help, type "help"\n';
@@ -58,46 +58,6 @@ describe('stripAnsi', () => {
     });
 });
 
-describe('parseRunScript', () => {
-    it('reads a Forge run.bat with comments, CRLF, @argfiles and %*', () => {
-        const bat = [
-            '@echo off',
-            'REM Forge requires a configured set of both JVM and program arguments.',
-            'rem Add custom JVM arguments to the user_jvm_args.txt',
-            ':: another comment mentioning java -jar fake.jar',
-            'java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.20.1-47.2.0/win_args.txt %*',
-            'pause',
-        ].join('\r\n');
-        expect(parseRunScript(bat, 'bat')).toEqual({
-            java: 'java',
-            args: ['@user_jvm_args.txt', '@libraries/net/minecraftforge/forge/1.20.1-47.2.0/win_args.txt'],
-        });
-    });
-
-    it('reads a run.sh with a shebang, # comments, exec and "$@"', () => {
-        const sh = '#!/usr/bin/env sh\n# java -jar commented.jar\nexec java -Xmx1G -jar "my server.jar" nogui "$@"\n';
-        expect(parseRunScript(sh, 'sh')).toEqual({ java: 'java', args: ['-Xmx1G', '-jar', 'my server.jar', 'nogui'] });
-    });
-
-    it('stops at redirections, pipes and trailing comments', () => {
-        expect(parseRunScript('java -jar server.jar nogui 2>&1 | tee log.txt # keep a log', 'sh')?.args).toEqual(['-jar', 'server.jar', 'nogui']);
-        expect(parseRunScript('@java -jar server.jar nogui > log.txt & pause', 'bat')?.args).toEqual(['-jar', 'server.jar', 'nogui']);
-    });
-
-    it('accepts a (quoted) path to java and expands environment variables in it', () => {
-        expect(parseRunScript('"C:\\Program Files\\Java\\jdk-21\\bin\\java.exe" -jar server.jar', 'bat')).toEqual({
-            java: 'C:\\Program Files\\Java\\jdk-21\\bin\\java.exe', args: ['-jar', 'server.jar'],
-        });
-        expect(parseRunScript('"%JAVA_HOME%\\bin\\java.exe" -jar server.jar %*', 'bat', { java_home: 'D:\\jdk' })?.java).toBe('D:\\jdk\\bin\\java.exe');
-        expect(parseRunScript('"$JAVA_HOME/bin/java" -jar server.jar "$@"', 'sh', { JAVA_HOME: '/opt/jdk' })?.java).toBe('/opt/jdk/bin/java');
-    });
-
-    it('returns null when there is no java line', () => {
-        expect(parseRunScript('@echo off\r\nREM java -jar x.jar\r\njavac Foo.java\r\npause\r\n', 'bat')).toBeNull();
-        expect(parseRunScript('java\n', 'sh')).toBeNull();
-    });
-});
-
 describe('parsePlayerList', () => {
     it('parses the modern reply', () => {
         expect(parsePlayerList('[12:00:00] [Server thread/INFO]: There are 2 of a max of 20 players online: Steve, Alex')).toEqual({
@@ -130,7 +90,7 @@ describe('buildLaunchArgs', () => {
 
     it('fails without a jar or with several jars', async () => {
         expect((catchError(() => MinecraftProcess.buildLaunchArgs(dir, FLAGS, 'win32')) as AppError).code).toBe('JAVA');
-        await writeFile(path.join(dir, 'server.jar'), '');
+        await writeFile(path.join(dir, 'spigot.jar'), '');
         await writeFile(path.join(dir, 'other.JAR'), '');
         const err = catchError(() => MinecraftProcess.buildLaunchArgs(dir, FLAGS, 'win32')) as AppError;
         expect(err.code).toBe('JAVA');
@@ -141,49 +101,61 @@ describe('buildLaunchArgs', () => {
         expect((catchError(() => MinecraftProcess.buildLaunchArgs(path.join(dir, 'nope'), FLAGS)) as AppError).code).toBe('NO_LOCAL_PATH');
     });
 
-    it('uses run.bat on Windows, keeps @argfiles and appends nogui', async () => {
-        await writeFile(path.join(dir, 'server.jar'), '');
-        await writeFile(path.join(dir, 'user_jvm_args.txt'), '# -Xmx4G\n');
-        await mkdir(path.join(dir, 'libraries', 'forge'), { recursive: true });
-        await writeFile(path.join(dir, 'libraries', 'forge', 'win_args.txt'), '');
-        await writeFile(path.join(dir, 'run.bat'), '@echo off\r\nREM comment\r\njava -Xmx2G -Xms1G @user_jvm_args.txt @libraries/forge/win_args.txt %*\r\npause\r\n');
+    it('starts Forge and NeoForge from their newest args file for this platform, without run.bat', async () => {
+        await writeFile(path.join(dir, 'run.bat'), 'java @user_jvm_args.txt @libraries/x/win_args.txt %*\r\n');
+        for (const version of ['1.20.1-47.2.0', '1.20.1-47.10.1']) {
+            const folder = path.join(dir, 'libraries', 'net', 'minecraftforge', 'forge', version);
+            await mkdir(folder, { recursive: true });
+            await writeFile(path.join(folder, 'win_args.txt'), '');
+            await writeFile(path.join(folder, 'unix_args.txt'), '');
+        }
+        await writeFile(path.join(dir, 'forge-1.20.1-47.10.1-installer.jar'), '');
         expect(MinecraftProcess.buildLaunchArgs(dir, FLAGS, 'win32')).toEqual([
-            '-Xmx4096M', '-Xms2048M', '@user_jvm_args.txt', '@libraries/forge/win_args.txt', 'nogui',
+            '-Xmx4096M', '-Xms2048M', '@libraries/net/minecraftforge/forge/1.20.1-47.10.1/win_args.txt', 'nogui',
         ]);
-        // run.bat is ignored elsewhere: the single jar is used.
-        expect(MinecraftProcess.buildLaunchArgs(dir, FLAGS, 'linux')).toEqual(['-Xmx4096M', '-Xms2048M', '-jar', 'server.jar', 'nogui']);
+        expect(MinecraftProcess.buildLaunchArgs(dir, FLAGS, 'linux')[2]).toBe('@libraries/net/minecraftforge/forge/1.20.1-47.10.1/unix_args.txt');
+
+        const neo = path.join(dir, 'libraries', 'net', 'neoforged', 'neoforge', '21.1.72');
+        await mkdir(neo, { recursive: true });
+        await writeFile(path.join(neo, 'win_args.txt'), '');
+        expect(MinecraftProcess.buildLaunchArgs(dir, FLAGS, 'win32')[2]).toBe('@libraries/net/neoforged/neoforge/21.1.72/win_args.txt');
     });
 
-    it('fails when an @argfile is missing', async () => {
-        await writeFile(path.join(dir, 'run.bat'), 'java @user_jvm_args.txt @libraries/forge/win_args.txt %*\r\n');
-        await writeFile(path.join(dir, 'user_jvm_args.txt'), '');
-        const err = catchError(() => MinecraftProcess.buildLaunchArgs(dir, FLAGS, 'win32')) as AppError;
-        expect(err.code).toBe('JAVA');
-        expect(err.message).toContain('libraries/forge/win_args.txt');
-    });
-
-    it('uses run.sh elsewhere, with quoted paths and without a duplicate nogui', async () => {
-        await writeFile(path.join(dir, 'run.sh'), '#!/bin/sh\n# comment\njava -Xmx1G -jar "my server.jar" nogui "$@"\n');
-        expect(MinecraftProcess.buildLaunchArgs(dir, { ...FLAGS, customFlags: '-Da=1' }, 'linux')).toEqual([
-            '-Xmx4096M', '-Xms2048M', '-Da=1', '-jar', 'my server.jar', 'nogui',
-        ]);
-    });
-
-    it('fails when the run script has no java line', async () => {
-        await writeFile(path.join(dir, 'run.sh'), '#!/bin/sh\necho hello\n');
-        expect((catchError(() => MinecraftProcess.buildLaunchArgs(dir, FLAGS, 'linux')) as AppError).code).toBe('JAVA');
-    });
-
-    it('uses a java path from the script only when it exists on this PC', async () => {
+    it('uses "java" from PATH unless a Java program was chosen, and fails when that one is gone', async () => {
+        await writeFile(path.join(dir, 'server.jar'), '');
+        expect(MinecraftProcess.resolveLaunch(dir, FLAGS, 'win32').command).toBe('java');
         const javaExe = path.join(dir, 'jdk', 'bin', 'java.exe');
         await mkdir(path.dirname(javaExe), { recursive: true });
         await writeFile(javaExe, '');
-        await writeFile(path.join(dir, 'run.bat'), `"${javaExe}" -jar server.jar\r\n`);
-        expect(MinecraftProcess.resolveLaunch(dir, FLAGS, 'win32', {}).command).toBe(javaExe);
-        await writeFile(path.join(dir, 'run.bat'), '"C:\\Missing\\jdk\\bin\\java.exe" -jar server.jar\r\n');
-        expect(MinecraftProcess.resolveLaunch(dir, FLAGS, 'win32', {})).toEqual({
-            command: 'java', args: ['-Xmx4096M', '-Xms2048M', '-jar', 'server.jar', 'nogui'],
-        });
+        expect(MinecraftProcess.resolveLaunch(dir, FLAGS, 'win32', javaExe).command).toBe(javaExe);
+        const err = catchError(() => MinecraftProcess.resolveLaunch(dir, FLAGS, 'win32', path.join(dir, 'missing', 'java.exe'))) as AppError;
+        expect(err.code).toBe('JAVA');
+    });
+});
+
+describe('chooseServerJar', () => {
+    it('takes the only jar, leaving installers out', () => {
+        expect(chooseServerJar(['paper-1.21.1-123.jar'])).toBe('paper-1.21.1-123.jar');
+        expect(chooseServerJar(['forge-1.16.5-36.2.39-installer.jar', 'forge-1.16.5-36.2.39.jar'])).toBe('forge-1.16.5-36.2.39.jar');
+    });
+
+    it('picks the loader that starts the server over the vanilla jar it needs', () => {
+        expect(chooseServerJar(['server.jar', 'fabric-server-launch.jar'])).toBe('fabric-server-launch.jar');
+        expect(chooseServerJar(['fabric-server-mc.1.21.1-loader.0.16.5-launcher.1.0.1.jar', 'server.jar'])).toBe('fabric-server-mc.1.21.1-loader.0.16.5-launcher.1.0.1.jar');
+        expect(chooseServerJar(['minecraft_server.1.16.5.jar', 'forge-1.16.5-36.2.39.jar'])).toBe('forge-1.16.5-36.2.39.jar');
+        expect(chooseServerJar(['paper-1.21.1-123.jar', 'server.jar'])).toBe('server.jar');
+    });
+
+    it('asks for server.jar when the choice is not clear, and explains an empty folder', () => {
+        const several = catchError(() => chooseServerJar(['a.jar', 'b.jar'])) as AppError;
+        expect(several.code).toBe('JAVA');
+        expect(several.message).toContain('server.jar');
+        expect((catchError(() => chooseServerJar(['neoforge-21.1.72-installer.jar'])) as AppError).message).toContain('Install server');
+    });
+
+    it('compares versions number by number', () => {
+        expect(compareVersions('1.20.1-47.10.1', '1.20.1-47.2.0')).toBeGreaterThan(0);
+        expect(compareVersions('21.1.9', '21.1.72')).toBeLessThan(0);
     });
 });
 

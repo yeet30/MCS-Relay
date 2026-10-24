@@ -25,7 +25,7 @@ export interface HandlerDeps {
         'getState' | 'preflight' | 'lastReport' | 'start' | 'stop' | 'resolve' | 'retryUpload' | 'dismiss' | 'command'
         | 'steps' | 'consoleLines' | 'select' | 'isBusy' | 'resumeUnfinishedUploads' | 'getProgress' | 'syncNow' | 'cancel' | 'repair' | 'abandonUpload'
         | 'setPrimaryTunnel'>;
-    settings: Pick<SettingsService, 'get' | 'set' | 'getServer' | 'setServer' | 'pickPlayitPath'>;
+    settings: Pick<SettingsService, 'get' | 'set' | 'getServer' | 'setServer' | 'pickPlayitPath' | 'pickJavaPath'>;
     sync: Pick<SyncEngine, 'getRules' | 'setRules'>;
     transfers: Pick<TransferEngine, 'snapshot'>;
     changes: Pick<ChangeTracker, 'all'>;
@@ -183,6 +183,7 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
     handle('settings:getServer', (serverId) => d.settings.getServer(id(serverId)));
     handle('settings:setServer', (serverId, patch) => d.settings.setServer(id(serverId), object(patch, 'server settings change')));
     handle('settings:pickPlayitPath', () => d.settings.pickPlayitPath());
+    handle('settings:pickJavaPath', () => d.settings.pickJavaPath());
 
     handle('rules:get', (serverId) => d.sync.getRules(id(serverId)));
     handle('rules:set', (serverId, ignore) => {

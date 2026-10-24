@@ -18,7 +18,7 @@ const ALL_COMMANDS: Record<CommandName, true> = {
     'session:progress': true, 'session:syncNow': true, 'session:cancel': true, 'session:repair': true, 'session:abandonUpload': true,
     'session:setPrimaryTunnel': true,
     'settings:get': true, 'settings:set': true, 'settings:getServer': true, 'settings:setServer': true,
-    'settings:pickPlayitPath': true,
+    'settings:pickPlayitPath': true, 'settings:pickJavaPath': true,
     'rules:get': true, 'rules:set': true, 'rules:pickPath': true,
     'app:quitResponse': true, 'app:openExternal': true, 'app:setLogoState': true,
     'app:updateState': true, 'app:checkForUpdates': true, 'app:installUpdate': true,
