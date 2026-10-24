@@ -1,5 +1,5 @@
 import './greeting-section.css';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronDown, ChevronUp, Terminal } from 'lucide-react';
 import SelectServer from '../select-server';
 import ServerConsole from '../server-console';
@@ -37,47 +37,38 @@ function SessionArea() {
     );
 }
 
-const CONSOLE_HINT_KEY = 'mdh.consoleHintSeen';
-
-function readHintSeen(): boolean {
-    try {
-        return localStorage.getItem(CONSOLE_HINT_KEY) === '1';
-    } catch {
-        return false;
-    }
-}
-
-function rememberHintSeen(): void {
-    try {
-        localStorage.setItem(CONSOLE_HINT_KEY, '1');
-    } catch {
-        // private storage unavailable: the dot simply shows again next time
-    }
-}
-
 export default function GreetingSection() {
     const authPhase = useAuthStore((s) => s.phase);
     const user = useAuthStore((s) => s.user);
     const consoleHasOutput = useSessionStore((s) => s.console.length > 0);
+    const consoleCount = useSessionStore((s) => s.consoleCount);
+    const unseenLines = useSessionStore((s) => s.consoleCount > s.consoleSeen);
     const [notAtTop, setNotAtTop] = useState(false);
-    // The red dot points out the console the first time it shows something; any scroll dismisses it for good.
-    const [hintSeen, setHintSeen] = useState(readHintSeen);
-    const outputRef = useRef(consoleHasOutput);
-    outputRef.current = consoleHasOutput;
+    const [consoleOnScreen, setConsoleOnScreen] = useState(false);
 
     useEffect(() => {
         function handleScroll() {
-            const scrolled = window.scrollY > 0;
-            setNotAtTop(scrolled);
-            if (scrolled && outputRef.current) {
-                setHintSeen(true);
-                rememberHintSeen();
-            }
+            setNotAtTop(window.scrollY > 0);
         }
         window.addEventListener('scroll', handleScroll);
         handleScroll();
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
+
+    // The red dot means "the console has lines you have not looked at": they count as seen while a good part of the
+    // console is on screen.
+    const signedIn = authPhase === 'signed-in' && user !== null;
+    useEffect(() => {
+        const section = document.getElementById('console-section');
+        if (!section) return undefined;
+        const observer = new IntersectionObserver(([entry]) => setConsoleOnScreen(entry.isIntersecting), { threshold: 0.3 });
+        observer.observe(section);
+        return () => observer.disconnect();
+    }, [signedIn]);
+
+    useEffect(() => {
+        if (consoleOnScreen) useSessionStore.getState().markConsoleSeen();
+    }, [consoleOnScreen, consoleCount]);
 
     if (authPhase !== 'signed-in' || !user) {
         return (
@@ -107,7 +98,7 @@ export default function GreetingSection() {
                 >
                     <Terminal size={16} />
                     <ChevronDown size={18} />
-                    {!hintSeen && <span className='scroller-dot' aria-label='The console has new output' />}
+                    {unseenLines && <span className='scroller-dot' aria-label='The console has new lines' />}
                 </button>
             )}
             {notAtTop && (

@@ -53,6 +53,10 @@ export interface SessionStore {
     transfer: TransferSnapshot | null;
     changes: Map<string, ChangeKind>;
     console: string[];
+    /** Console lines this window has received in all (the list itself keeps only the last ones). */
+    consoleCount: number;
+    /** consoleCount when the console was last on screen: anything above it is new to the user. */
+    consoleSeen: number;
     quitPrompt: QuitPrompt | null;
     quitting: boolean;
 
@@ -66,6 +70,8 @@ export interface SessionStore {
     applyChanges: (batch: ChangeBatch) => void;
     resetChanges: () => void;
     appendConsole: (lines: string[]) => void;
+    /** The console is on screen: every line so far counts as seen. */
+    markConsoleSeen: () => void;
     setQuitPrompt: (prompt: QuitPrompt | null) => void;
     setQuitting: (quitting: boolean) => void;
 
@@ -122,7 +128,11 @@ export const useSessionStore = create<SessionStore>()((set, get) => {
             }
             patch.changes = map;
         }
-        if (lines.ok) patch.console = mergeConsole(lines.value, buffered.lines);
+        if (lines.ok) {
+            patch.console = mergeConsole(lines.value, buffered.lines);
+            // At startup this counts the earlier lines as new (not seen in this window yet); later it never goes back.
+            patch.consoleCount = Math.max(get().consoleCount, patch.console.length);
+        }
         set(patch);
 
         for (const res of [state, report, steps, transfer, changes, lines, progress]) {
@@ -142,6 +152,8 @@ export const useSessionStore = create<SessionStore>()((set, get) => {
         transfer: null,
         changes: new Map(),
         console: [],
+        consoleCount: 0,
+        consoleSeen: 0,
         quitPrompt: null,
         quitting: false,
 
@@ -189,8 +201,10 @@ export const useSessionStore = create<SessionStore>()((set, get) => {
 
         appendConsole: (lines) => {
             if (buffer) for (const line of lines) buffer.lines.push(line);
-            set((s) => ({ console: appendLines(s.console, lines) }));
+            set((s) => ({ console: appendLines(s.console, lines), consoleCount: s.consoleCount + lines.length }));
         },
+
+        markConsoleSeen: () => set((s) => (s.consoleSeen === s.consoleCount ? s : { consoleSeen: s.consoleCount })),
 
         setQuitPrompt: (prompt) => set({ quitPrompt: prompt }),
         setQuitting: (quitting) => set({ quitting }),
