@@ -1,13 +1,14 @@
 // Composition root: creates every service once, wires them together, and owns the window, the tray
 // and the quit flow. No business logic lives here.
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, Notification, safeStorage, shell, Tray } from 'electron';
+import type { MenuItemConstructorOptions } from 'electron';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { format } from 'node:util';
 import type { EventName, Events } from '../shared/ipc';
-import { TITLE_BAR_HEIGHT, WINDOW_COLORS } from '../shared/types';
+import { TERMS_VERSION, TITLE_BAR_HEIGHT, WINDOW_COLORS } from '../shared/types';
 import type { LogoState, SessionPhase, ThemeName } from '../shared/types';
 import { unscrambleClient } from './auth/embeddedClient';
 import { GoogleAuth } from './auth/GoogleAuth';
@@ -66,7 +67,13 @@ process.on('uncaughtExceptionMonitor', (err, origin) => appLog.write('error', `[
 const appData = new AppData(userData);
 const dialogs = createDialogs(() => win);
 const events = loggedEvents(createEventSink(() => win));
-const settings = new SettingsService({ appData, dialogs, onChange: (s) => applyWindowTheme(s.theme) });
+const settings = new SettingsService({
+    appData, dialogs,
+    onChange: (s) => {
+        applyWindowTheme(s.theme);
+        updateTrayMenu();                       // the selected server may have changed
+    },
+});
 const auth = new GoogleAuth({
     userDataDir: userData,
     client: unscrambleClient(__MCS_RELAY_CLIENT__),
@@ -179,6 +186,7 @@ function loggedEvents(sink: ReturnType<typeof createEventSink>): ReturnType<type
                 const state = payload as Events['session:state'];
                 if (state.phase !== phase) {
                     phase = state.phase;
+                    setImmediate(updateTrayMenu);
                     const error = state.error ? `: ${state.error.message}${state.error.detail ? ` (${state.error.detail})` : ''}` : '';
                     console.log(`[state] ${state.phase}${state.serverId ? ` on ${state.serverId}` : ''}${error}`);
                 }
@@ -221,16 +229,20 @@ function showWindow(): void {
     win?.focus();
 }
 
-/** Close button, tray "Quit" and OS quit all come here. A busy session asks the user first. */
+/** Close button, tray "Quit" and OS quit all come here. A busy session or a backup task asks the user first; quitting
+ *  then waits for them (see quit). */
 function requestQuit(): void {
     if (quitting) return;
-    if (!session.isBusy()) {
+    const sessionActive = session.isBusy();
+    const backup = backups.isBusy();
+    // Nothing to interrupt, or no page that could ask (it crashed): quit, which still stops and uploads first.
+    if ((!sessionActive && !backup) || !win || win.webContents.isCrashed()) {
         void quit();
         return;
     }
     showWindow();
     quitPending = true;
-    events.emit('app:confirmQuit', { phase: session.getState().phase, sessionActive: true });
+    events.emit('app:confirmQuit', { phase: session.getState().phase, sessionActive, backup });
 }
 
 function quitResponse(confirmed: boolean): void {
@@ -243,8 +255,11 @@ function quitResponse(confirmed: boolean): void {
 async function quit(opts: { install?: boolean } = {}): Promise<void> {
     if (quitting) return;
     quitting = true;
+    updateTrayMenu();
     events.emit('app:quitting', null);
+    console.log(`[main] quitting${opts.install ? ' to install an update' : ''}`);
     try {
+        await backups.whenIdle();          // a restore cut short would leave half a world
         await session.shutdown();          // a running server is stopped and uploaded first
     } catch (err) {
         console.error('[main] shutdown failed:', err);
@@ -260,7 +275,7 @@ async function quit(opts: { install?: boolean } = {}): Promise<void> {
 
 /** "Restart to update": only between sessions, so a running server is never cut off. */
 function installUpdate(): void {
-    if (session.isBusy()) {
+    if (session.isBusy() || backups.isBusy()) {
         throw new AppError('BUSY', 'Stop the server and let the upload finish first. The update also installs by itself when you quit MCS-Relay.');
     }
     if (updates.get().status !== 'ready') throw new AppError('INVALID', 'No update has been downloaded yet.');
@@ -311,6 +326,14 @@ function createWindow(): void {
     win.on('closed', () => {
         win = null;
     });
+    // Windows is shutting down or signing out: there is no time to upload, and holding the shutdown up would only get
+    // the app killed. Java saves the world as it is ended; the next start of MCS-Relay sees that this PC left the server
+    // reserved and offers to upload what changed.
+    win.on('session-end', () => {
+        console.warn(`[main] Windows is ending the session (phase ${session.getState().phase})`);
+        quitAllowed = true;
+    });
+    applyTaskbarBadge();
     // Links never open inside the app; https links open in the browser.
     win.webContents.setWindowOpenHandler(({ url }) => {
         if (url.startsWith('https://')) void shell.openExternal(url);
@@ -347,17 +370,83 @@ function applyLogoState(state: LogoState): void {
     if (state === logoState) return;
     logoState = state;
     win?.setIcon(nativeImage.createFromPath(stateIcon(state, 'ico')));
+    applyTaskbarBadge();
     tray?.setImage(nativeImage.createFromPath(stateIcon(state, 'png')));
     tray?.setToolTip(LOGO_TOOLTIPS[state]);
+    updateTrayMenu();
+}
+
+/** Windows shows a pinned app (and one started from its Start menu shortcut) with the shortcut's icon, whatever icon
+ *  the window has. A small badge on the taskbar button is the way it lets an app show a state there. */
+function applyTaskbarBadge(): void {
+    if (!win || process.platform !== 'win32') return;
+    if (logoState === 'off') win.setOverlayIcon(null, '');
+    else win.setOverlayIcon(nativeImage.createFromPath(path.join(process.env.VITE_PUBLIC, 'state', `badge-${logoState}.png`)), LOGO_TOOLTIPS[logoState]);
+}
+
+const PHASE_LABELS: Partial<Record<SessionPhase, string>> = {
+    checking: 'Starting…', claiming: 'Starting…', downloading: 'Downloading the world…', launching: 'Starting the server…',
+    stopping: 'Stopping…', uploading: 'Uploading the world…', releasing: 'Freeing the server…', 'upload-pending': 'Upload paused: open to continue',
+};
+
+/** Open, Start or Stop the selected server, Quit. Rebuilt whenever the session, the selection or the logo changes. */
+function updateTrayMenu(): void {
+    if (!tray) return;
+    const state = session.getState();
+    const selected = settings.get().selectedServerId;
+    const nameOf = (id: string | null) => (id ? servers.nameOf(id) : null);
+    let action: MenuItemConstructorOptions;
+    if (quitting) {
+        action = { label: 'Quitting…', enabled: false };
+    } else if (state.phase === 'running') {
+        action = { label: `Stop ${nameOf(state.serverId) ?? 'the server'}`, click: () => void trayStop() };
+    } else if (session.isBusy()) {
+        action = { label: PHASE_LABELS[state.phase] ?? 'Busy…', enabled: false };
+    } else if (!selected) {
+        action = { label: 'Start', enabled: false };
+    } else if (logoState === 'elsewhere') {
+        action = { label: `${nameOf(selected) ?? 'The server'} is hosted by someone else`, enabled: false };
+    } else {
+        action = { label: `Start ${nameOf(selected) ?? 'the server'}`, click: () => void trayStart(selected) };
+    }
+    tray.setContextMenu(Menu.buildFromTemplate([
+        { label: 'Open MCS-Relay', click: showWindow },
+        { type: 'separator' },
+        action,
+        { type: 'separator' },
+        { label: 'Quit', click: requestQuit, enabled: !quitting },
+    ]));
+}
+
+/** Start from the tray. Anything that needs a question first (the terms, the Minecraft EULA, a version saved from a
+ *  cancelled upload) opens the window instead, where the power button asks it. A failure is notified. */
+async function trayStart(serverId: string): Promise<void> {
+    const s = settings.get();
+    const report = session.lastReport();
+    const incomplete = report?.serverId === serverId && report.remoteIncomplete;
+    if (s.termsAccepted < TERMS_VERSION || (s.launchServer && !s.eulaAccepted) || incomplete || backups.isBusy()) {
+        showWindow();
+        return;
+    }
+    try {
+        await session.start(serverId);
+    } catch (err) {
+        console.warn('[tray] start failed:', err);
+    }
+}
+
+async function trayStop(): Promise<void> {
+    try {
+        await session.stop();
+    } catch (err) {
+        console.warn('[tray] stop failed:', err);
+    }
 }
 
 function createTray(): void {
     tray = new Tray(nativeImage.createFromPath(stateIcon(logoState, 'png')));
     tray.setToolTip(LOGO_TOOLTIPS[logoState]);
-    tray.setContextMenu(Menu.buildFromTemplate([
-        { label: 'Open', click: showWindow },
-        { label: 'Quit', click: requestQuit },
-    ]));
+    updateTrayMenu();
     tray.on('click', showWindow);
 }
 

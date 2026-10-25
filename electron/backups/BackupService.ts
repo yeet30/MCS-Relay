@@ -228,6 +228,11 @@ export class BackupService {
         return this.running !== null;
     }
 
+    /** Resolves once no backup task runs (quitting waits for one: a restore cut short leaves half a world). */
+    async whenIdle(): Promise<void> {
+        while (this.running) await this.running.catch(() => undefined);
+    }
+
     async list(serverId: string): Promise<BackupList> {
         const byName = new Map<string, BackupInfo>();
         const root = this.d.settings.getServer(serverId).localPath;

@@ -24,6 +24,7 @@ export interface ServerInfo {
 export interface QuitPrompt {
     phase: SessionState['phase'];
     sessionActive: boolean;             // something would be interrupted by quitting
+    backup: boolean;                    // a backup is being made, moved or restored: quitting waits for it
 }
 
 /** Every request the renderer can make: channel -> (arguments) => result. */

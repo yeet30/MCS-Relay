@@ -6,8 +6,15 @@ import { invoke } from '../../api';
 import { useConfirm } from '../../hooks/useConfirm';
 import { useSessionStore } from '../../stores/sessionStore';
 
+const BACKUP_NOTE = 'A backup is still being made, moved or restored. Quitting waits until it has finished.';
+
 function quitMessage(prompt: QuitPrompt): string {
-    if (!prompt.sessionActive) return 'Are you sure you want to quit?';
+    if (!prompt.sessionActive) return prompt.backup ? BACKUP_NOTE : 'Are you sure you want to quit?';
+    const session = sessionMessage(prompt);
+    return prompt.backup ? `${session}\n\n${BACKUP_NOTE}` : session;
+}
+
+function sessionMessage(prompt: QuitPrompt): string {
     switch (prompt.phase) {
         case 'running':
             return 'You are hosting a server. Quitting stops it and uploads the world to the cloud first. This may take a moment.';
