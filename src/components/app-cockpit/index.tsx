@@ -24,6 +24,8 @@ export default function AppCockpit() {
     const session = useSessionStore((s) => s.state);
     const report = useSessionStore((s) => reportFor(s, selectedId));
     const lock = useSessionStore((s) => lockFor(s, selectedId));
+    // While the folder is compared with the cloud, what may be done with the server is not known yet.
+    const checking = useSessionStore((s) => selectedId !== null && s.checkingId === selectedId);
     const { confirm, popup } = useConfirm();
     const [creating, setCreating] = useState(false);
     const [isJoinOpen, setIsJoinOpen] = useState(false);
@@ -34,7 +36,9 @@ export default function AppCockpit() {
     // Readers can download and watch, but cannot write the lock or upload: they cannot host.
     const mode: PowerMode = readOnly && computed.kind === 'start'
         ? { kind: 'start', enabled: false, reason: 'You were invited as a reader, so you can watch this server but not host it.' }
-        : computed;
+        : checking && computed.kind === 'start'
+            ? { kind: 'start', enabled: false, reason: 'Checking the server first…' }
+            : computed;
     // What I may do comes from my role on the server, never from a constant.
     const canWrite = selected !== null && (selected.myRole === 'owner' || selected.myRole === 'writer' || selected.kind === 'owned');
 
@@ -171,11 +175,11 @@ export default function AppCockpit() {
         <div className='cockpit'>
             {dialogs}
             <div className='cockpit-wrapper'>
-                <div className='side-slot left'><TransferMenu server={selected} canWrite={canWrite} /></div>
+                <div className='side-slot left'><TransferMenu server={selected} canWrite={canWrite} checking={checking} /></div>
                 {button}
                 <div className='side-slot right'><DirectoryMenu server={selected} canWrite={canWrite} /></div>
             </div>
-            {mode.kind === 'start' && !mode.enabled && mode.reason && report && <p className='power-reason'>{mode.reason}</p>}
+            {mode.kind === 'start' && !mode.enabled && mode.reason && report && !checking && <p className='power-reason'>{mode.reason}</p>}
         </div>
     );
 }

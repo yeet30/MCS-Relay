@@ -97,7 +97,7 @@
     #drawer.open {
         border-radius: 27px 27px 16px 16px;
         width: 230px;
-        height: 312px;
+        height: 338px;
         right: 5px;
         border-color: var(--line);
         box-shadow: var(--shadow);

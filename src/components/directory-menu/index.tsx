@@ -1,13 +1,12 @@
 import './directory-menu.css';
 import { useRef, useState } from 'react';
-import { Archive, CloudDownload, CloudSync, CloudUpload, EyeOff, FileDiff, FolderCog, FolderInput, FolderOpen } from 'lucide-react';
+import { Archive, CloudDownload, CloudSync, CloudUpload, EyeOff, FileDiff, FolderCog, FolderOpen } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { ServerSummary } from '../../../shared/types';
 import { useConfirm } from '../../hooks/useConfirm';
 import { isSessionBusy, manualSyncBlockers } from '../../lib/sync';
 import type { IModalItems } from '../../lib/ui-types';
 import { request } from '../../stores/request';
-import { chooseLocalPath } from '../../stores/serverActions';
 import { reportFor, useSessionStore } from '../../stores/sessionStore';
 import BackupsPanel from '../backups-panel';
 import ChangesPanel from '../changes-panel';
@@ -56,7 +55,6 @@ function SideMenu({ side, icon, title, disabled = false, children }: {
 export function DirectoryMenu({ server, canWrite }: { server: ServerSummary | null; canWrite: boolean }) {
     const [modalItems, setModalItems] = useState<IModalItems[] | null>(null);
     const [wide, setWide] = useState(false);
-    const busy = useSessionStore((s) => isSessionBusy(s.state.phase));
 
     if (!server) return null;
     return (
@@ -90,11 +88,6 @@ export function DirectoryMenu({ server, canWrite }: { server: ServerSummary | nu
                                     <Archive size={15} /> Backups
                                 </button>
                             )}
-                            {!busy && (
-                                <button className='side-option' onClick={() => { close(); void chooseLocalPath(server.id); }}>
-                                    <FolderInput size={15} /> Choose folder
-                                </button>
-                            )}
                             {server.localPath && (
                                 <button className='side-option' onClick={() => { close(); void request('servers:openFolder', server.id); }}>
                                     <FolderOpen size={15} /> Open folder
@@ -110,7 +103,7 @@ export function DirectoryMenu({ server, canWrite }: { server: ServerSummary | nu
 
 /** Downloading or uploading without starting the server, at the bottom left of the power button. Both reserve
  *  the server like a session does, so nobody else starts it meanwhile. */
-export function TransferMenu({ server, canWrite }: { server: ServerSummary | null; canWrite: boolean }) {
+export function TransferMenu({ server, canWrite, checking }: { server: ServerSummary | null; canWrite: boolean; checking: boolean }) {
     const { confirm, popup } = useConfirm();
     const busy = useSessionStore((s) => isSessionBusy(s.state.phase));
     const report = useSessionStore((s) => reportFor(s, server?.id ?? null));
@@ -118,7 +111,8 @@ export function TransferMenu({ server, canWrite }: { server: ServerSummary | nul
     if (!server) return null;
     const reason = !canWrite
         ? 'Members who can only view a server cannot download or upload it'
-        : !server.localPath ? 'Choose a folder for this server first' : busy ? 'Wait until the current session has finished' : null;
+        : !server.localPath ? 'Choose a folder for this server first' : busy ? 'Wait until the current session has finished'
+            : checking ? 'Checking the server first' : null;
     const blockers = manualSyncBlockers(report);
 
     async function syncNow(direction: 'down' | 'up', close: () => void) {

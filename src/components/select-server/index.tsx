@@ -46,8 +46,8 @@ export default function SelectServer() {
                 <button
                     className={`select-button ${isListOpen ? 'open' : ''}`}
                     onClick={() => setIsListOpen(!isListOpen)}
-                    disabled={busy}
-                    title={busy ? 'Finish the current session before switching servers' : 'Choose a server'}
+                    disabled={busy || checking}
+                    title={busy ? 'Finish the current session before switching servers' : checking ? 'Checking the server first' : 'Choose a server'}
                 >
                     <span className='button-title'>
                         {checking ? <p><Loader2 size={12} className='spinner' /> Checking</p> : selected?.name ?? 'Select a server'}

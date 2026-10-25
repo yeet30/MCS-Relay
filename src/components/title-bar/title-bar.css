@@ -20,9 +20,12 @@
     }
 
     /* Buttons in a drag region must opt out of dragging, or clicks only move the window. */
+    /* Centred in the whole bar, whatever the width of the name on its left. */
     .title-update {
         -webkit-app-region: no-drag;
-        margin-left: 6px;
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
         padding: 2px 10px;
         border-radius: 999px;
         border: 1px solid rgba(var(--accent-rgb), 0.6);
