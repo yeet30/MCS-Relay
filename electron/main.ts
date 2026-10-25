@@ -90,6 +90,7 @@ const me = () => auth.me();
 const lock = new LockService({
     drive, launcher, me,
     onLost: (serverId, reason) => session.onLockLost(serverId, reason),
+    onChange: (serverId, view) => session.lockChanged(serverId, view),
     remember: {
         // An upload journal names its session too, which covers journals written before lock-session.json existed.
         read: (serverId) => appData.readLockSession(serverId) ?? appData.readJournal(serverId)?.sessionId ?? null,

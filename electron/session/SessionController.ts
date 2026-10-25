@@ -1203,6 +1203,12 @@ export class SessionController {
         this.d.events.emit('session:step', entry);
     }
 
+    /** This PC wrote the lock: the window shows it at once, and the report it reloads from says the same. */
+    lockChanged(serverId: string, view: LockView): void {
+        if (this.report?.serverId === serverId) this.report = { ...this.report, lock: view };
+        this.d.events.emit('lock:update', { serverId, view });
+    }
+
     /* ------------------------------------------------------------------ lock polling while idle */
 
     private schedulePoll(): void {

@@ -23,6 +23,9 @@ export interface LockServiceDeps {
     /** The session this PC holds per server, kept on disk, so a lock left behind by a crash of this app is
      *  recognised after a restart instead of looking like someone else's. */
     remember?: { read(serverId: string): string | null; write(serverId: string, sessionId: string | null): void };
+    /** This PC wrote the lock (claimed, changed or released it): how it looks now. The idle poll does not run during
+     *  a session, so without this nobody would learn that the server is now hosted here. */
+    onChange?: (serverId: string, view: LockView) => void;
 }
 
 export type LockPatch = Partial<Pick<LockContent, 'phase' | 'address' | 'players' | 'startedAt' | 'baseRevision' | 'tunnels'>>;
@@ -173,6 +176,7 @@ export class LockService {
     private readonly leaseSeconds: number;
     private readonly claimSettleMs: number;
     private readonly remember: LockServiceDeps['remember'];
+    private readonly onChange: LockServiceDeps['onChange'];
     private readonly claims = new Map<string, Claim>();
     private latestSessionId = randomUUID();
 
@@ -186,6 +190,7 @@ export class LockService {
         this.leaseSeconds = deps.leaseSeconds ?? 45;
         this.claimSettleMs = deps.claimSettleMs ?? 3_000;
         this.remember = deps.remember;
+        this.onChange = deps.onChange;
     }
 
     /** The session id of the most recent claim (a new one per claim). */
@@ -270,6 +275,7 @@ export class LockService {
         }
         claim.active = true;
         this.scheduleRenewal(claim);
+        this.changed(serverId, { state: 'mine', lock: claim.content, ageSeconds: 0 });
     }
 
     /** Changes what lock.json says. Checks ownership first; if the lock was taken over, calls onLost and
@@ -280,7 +286,10 @@ export class LockService {
         if (patch.phase === 'free') throw new AppError('INVALID', 'The lock can only be freed by releasing it.');
         claim.content = applyPatch(claim.content, patch);
         const outcome = await this.enqueue(claim, () => this.checkAndWrite(claim));
-        if (outcome === 'written') return;
+        if (outcome === 'written') {
+            this.changed(serverId, { state: 'mine', lock: claim.content, ageSeconds: 0 });
+            return;
+        }
         if (outcome === 'lost') this.lose(claim, LOST_REASON);
         throw new AppError('LOCK_LOST', outcome === 'lost' ? LOST_REASON : NOT_HOLDING);
     }
@@ -304,6 +313,7 @@ export class LockService {
         await this.write(serverId, free);
         claim.content = free;
         this.dropClaim(claim);
+        this.changed(serverId, { state: 'free', lock: free });
     }
 
     /** For cleanup paths: releases only when the lock is ours, and never throws (errors are logged),
@@ -313,6 +323,14 @@ export class LockService {
             await this.release(serverId);
         } catch (err) {
             console.warn(`[lock] ${serverId}: could not release the lock, it will expire on its own:`, err);
+        }
+    }
+
+    private changed(serverId: string, view: LockView): void {
+        try {
+            this.onChange?.(serverId, view);
+        } catch (err) {
+            console.warn(`[lock] ${serverId}: onChange failed:`, err);
         }
     }
 

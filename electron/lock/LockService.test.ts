@@ -287,6 +287,19 @@ describe('claim', () => {
         expect((await h.member(BOB).lock.inspect(h.serverId)).state).toBe('held');
     });
 
+    it('tells onChange how the lock looks after each of its own writes', async () => {
+        const views: Array<[string, string, string | undefined]> = [];
+        const alice = h.member(ALICE, { onChange: (serverId, view) => views.push([serverId, view.state, view.lock?.phase]) });
+        await alice.lock.claim(h.serverId, 7);
+        await alice.lock.update(h.serverId, { phase: 'running' });
+        await alice.lock.release(h.serverId);
+        expect(views).toEqual([
+            [h.serverId, 'mine', 'claiming'],
+            [h.serverId, 'mine', 'running'],
+            [h.serverId, 'free', 'free'],
+        ]);
+    });
+
     it('writes the phase given in opts and uses a new session id for every claim', async () => {
         const alice = h.member(ALICE);
         await alice.lock.claim(h.serverId, 2, { phase: 'uploading' });
