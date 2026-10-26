@@ -22,7 +22,23 @@ export default function PlayitggLink() {
     const mine = isMySession(session, selectedId);
     const host = mine ? null : lock && lock.state !== 'free' ? lock.lock.host.name : 'The host';
     const primary = tunnels.find((t) => t.address === link);
+    // Hosting here without playit.gg: the address on this PC's network, for friends on the same Wi-Fi or LAN.
+    const lan = mine && !link && session.phase === 'running' ? session.lanAddress : null;
 
+    if (lan) {
+        return (
+            <div className='link-block'>
+                <span className='link-wrapper'>
+                    <span className='link-kind' title='Works for friends on the same Wi-Fi or network as this PC'>Same network</span>
+                    <pre>{lan}</pre>
+                    <CopyButton text={lan} />
+                </span>
+                <p className='link-hint'>
+                    On this PC, join with <b>localhost</b>. For friends elsewhere, turn on playit.gg in Settings &gt; Scripts.
+                </p>
+            </div>
+        );
+    }
     if (!link) return null;
     return (
         <span className='link-wrapper'>

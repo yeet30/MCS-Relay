@@ -334,7 +334,7 @@ function createWindow(): void {
         console.warn(`[main] Windows is ending the session (phase ${session.getState().phase})`);
         quitAllowed = true;
     });
-    applyTaskbarBadge();
+    applyWindowIcon();
     // Links never open inside the app; https links open in the browser.
     win.webContents.setWindowOpenHandler(({ url }) => {
         if (url.startsWith('https://')) void shell.openExternal(url);
@@ -370,19 +370,30 @@ function stateIcon(state: LogoState, kind: 'ico' | 'png'): string {
 function applyLogoState(state: LogoState): void {
     if (state === logoState) return;
     logoState = state;
-    win?.setIcon(nativeImage.createFromPath(stateIcon(state, 'ico')));
-    applyTaskbarBadge();
+    applyWindowIcon();
     tray?.setImage(nativeImage.createFromPath(stateIcon(state, 'png')));
     tray?.setToolTip(LOGO_TOOLTIPS[state]);
     updateTrayMenu();
 }
 
-/** Windows shows a pinned app (and one started from its Start menu shortcut) with the shortcut's icon, whatever icon
- *  the window has. A small badge on the taskbar button is the way it lets an app show a state there. */
-function applyTaskbarBadge(): void {
-    if (!win || process.platform !== 'win32') return;
-    if (logoState === 'off') win.setOverlayIcon(null, '');
-    else win.setOverlayIcon(nativeImage.createFromPath(path.join(process.env.VITE_PUBLIC, 'state', `badge-${logoState}.png`)), LOGO_TOOLTIPS[logoState]);
+/** The installed app runs under the app id of its Start menu shortcut (notifications need that), and Windows draws a
+ *  taskbar button with that id using the shortcut's icon, whatever icon the window sets. So the window gets an id
+ *  of its own, with the state icon as its taskbar icon (a real file: the shell cannot read inside app.asar), and a
+ *  relaunch command, so pinning it still starts MCS-Relay. */
+const WINDOW_APP_ID = 'com.yeet.mcsrelay.window';
+
+function applyWindowIcon(): void {
+    if (!win) return;
+    win.setIcon(nativeImage.createFromPath(stateIcon(logoState, 'ico')));
+    if (process.platform !== 'win32') return;
+    const folder = app.isPackaged ? path.join(process.resourcesPath, 'public', 'state') : path.join(process.env.APP_ROOT ?? '', 'public', 'state');
+    win.setAppDetails({
+        appId: WINDOW_APP_ID,
+        appIconPath: path.join(folder, `${logoState}.ico`),
+        appIconIndex: 0,
+        relaunchCommand: `"${process.execPath}"`,
+        relaunchDisplayName: 'MCS-Relay',
+    });
 }
 
 const PHASE_LABELS: Partial<Record<SessionPhase, string>> = {

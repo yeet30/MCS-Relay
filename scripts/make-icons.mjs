@@ -127,23 +127,6 @@ for (const [state, file] of Object.entries(STATES)) {
     writeFileSync(new URL(`../public/state/${state}@2x.png`, import.meta.url), statePng(32));
 }
 
-/** The badge Windows puts on the taskbar button (see applyTaskbarBadge in electron/main.ts): a 16x16 lamp, a
- *  10x10 square with a dark outline and a light corner. Red while this PC hosts, amber while someone else does. */
-function badge(fill, light, dark) {
-    const out = new Uint8Array(16 * 16 * 4);
-    const paint = (x, y, [r, g, b]) => out.set([r, g, b, 255], (y * 16 + x) * 4);
-    for (let y = 3; y <= 14; y++) {
-        for (let x = 3; x <= 14; x++) {
-            const edge = x === 3 || x === 14 || y === 3 || y === 14;
-            paint(x, y, edge ? dark : fill);
-        }
-    }
-    for (const [x, y] of [[4, 4], [5, 4], [4, 5]]) paint(x, y, light);
-    return out;
-}
-writeFileSync(new URL('../public/state/badge-here.png', import.meta.url), png(16, badge([0xd8, 0x23, 0x1a], [0xff, 0x8a, 0x7a], [0x3a, 0x0b, 0x06])));
-writeFileSync(new URL('../public/state/badge-elsewhere.png', import.meta.url), png(16, badge([0xe0, 0x9a, 0x1e], [0xff, 0xd8, 0x80], [0x45, 0x2a, 0x05])));
-
 /** `rgba` (inner x inner) centred in a transparent total x total square. */
 function framed(rgba, inner, total) {
     const out = new Uint8Array(total * total * 4);

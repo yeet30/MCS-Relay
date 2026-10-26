@@ -31,6 +31,7 @@ export default function SelectServer() {
     const busy = useSessionStore((s) => isSessionBusy(s.state.phase));
     const checking = useSessionStore((s) => s.checkingId !== null && s.checkingId === selected?.id);
     const lock = useSessionStore((s) => lockFor(s, selected?.id ?? null));
+    const lanAddress = useSessionStore((s) => (s.state.serverId === selected?.id ? s.state.lanAddress : null));
     const [isListOpen, setIsListOpen] = useState(false);
 
     if (servers.length === 0) return null;
@@ -59,7 +60,7 @@ export default function SelectServer() {
                     <Group title='Joined' servers={servers.filter((s) => s.kind === 'joined')} onPick={handlePick} />
                 </div>
             </span>
-            <h4>{!selected ? '' : checking ? 'if the server is being hosted…' : hostingMessage(lock, myEmail)}</h4>
+            <h4>{!selected ? '' : checking ? 'if the server is being hosted…' : hostingMessage(lock, myEmail, lanAddress)}</h4>
         </div>
     );
 }

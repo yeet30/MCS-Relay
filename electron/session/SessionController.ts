@@ -7,6 +7,7 @@ import type {
 } from '../../shared/types';
 import { formatDuration } from '../../shared/duration';
 import { ancestorsOf, parentOf } from '../../shared/paths';
+import { localJoinAddress } from './localAddress';
 import { AppError, toAppError } from '../errors';
 import type { LockService } from '../lock/LockService';
 import type { MinecraftProcess } from '../processes/MinecraftProcess';
@@ -59,7 +60,7 @@ const KEPT_DOWNLOADS = 'Files that already arrived are kept, so the next run dow
 type UploadKind = Extract<RunKind, 'stop' | 'retry' | 'resume' | 'up' | 'repair'>;
 
 const IDLE: SessionState = {
-    phase: 'idle', serverId: null, startedAt: null, address: null, tunnels: [], players: [], javaRunning: false, error: null,
+    phase: 'idle', serverId: null, startedAt: null, address: null, lanAddress: null, tunnels: [], players: [], javaRunning: false, error: null,
 };
 
 const uploadFailed = (name: string): string => `The upload of ${name} did not finish`;
@@ -332,7 +333,7 @@ export class SessionController {
                     serverPath: server.localPath ?? '', javaFlags: server.javaFlags, javaPath: server.javaPath ?? null,
                     readyTimeoutMs: this.d.timeouts?.minecraftMs ?? 180_000, signal, acceptEula: settings.eulaAccepted,
                 });
-                this.setState({ javaRunning: true });
+                this.setState({ javaRunning: true, lanAddress: address ? null : localJoinAddress(server.localPath ?? '') });
                 this.progress.setNote(null);
                 this.progress.complete('java', 'The Minecraft server is ready');
             }
@@ -496,7 +497,7 @@ export class SessionController {
         if (javaRunning) this.progress.complete('stop-java', 'The Minecraft server has stopped');
         if (playitRunning) this.progress.enter('stop-playit', 'Stopping playit.gg');
         await this.d.playit.stop();
-        this.setState({ address: null, tunnels: [] });
+        this.setState({ address: null, lanAddress: null, tunnels: [] });
         if (playitRunning) this.progress.complete('stop-playit', 'playit.gg has stopped');
         if (this.lockLost) return;
         if (this.cancelled) {
@@ -1152,7 +1153,7 @@ export class SessionController {
             console.error('[session] the Minecraft server could not be stopped:', err);
         }
         await this.d.playit.stop();
-        this.setState({ javaRunning: this.d.minecraft.isRunning(), address: null, tunnels: [], players: [] });
+        this.setState({ javaRunning: this.d.minecraft.isRunning(), address: null, lanAddress: null, tunnels: [], players: [] });
     }
 
     /** Sets the phase and writes it into the lock while we hold it. */

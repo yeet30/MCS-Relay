@@ -84,8 +84,8 @@ export default function GreetingSection() {
                 <div className='starter-section'>
                     <AppCockpit />
                     <SelectServer />
-                    <SessionArea />
                     <PlayitggLink />
+                    <SessionArea />
                 </div>
             </div>
 

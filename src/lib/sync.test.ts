@@ -38,7 +38,7 @@ function report(patch: Partial<SyncReport> = {}): SyncReport {
 }
 
 function session(patch: Partial<SessionState> = {}): SessionState {
-    return { phase: 'idle', serverId: null, startedAt: null, address: null, tunnels: [], players: [], javaRunning: false, error: null, ...patch };
+    return { phase: 'idle', serverId: null, startedAt: null, address: null, lanAddress: null, tunnels: [], players: [], javaRunning: false, error: null, ...patch };
 }
 
 describe('the "can start" decision', () => {
@@ -137,6 +137,8 @@ describe('hostingMessage', () => {
 
     test('me, here or on another PC', () => {
         expect(hostingMessage({ state: 'mine', lock: lockContent(), ageSeconds: 1 }, 'alex@example.com')).toBe('is currently hosted by you.');
+        expect(hostingMessage({ state: 'mine', lock: lockContent(), ageSeconds: 1 }, 'alex@example.com', '192.168.1.23:25565')).toBe('is currently hosted by you at:');
+        expect(hostingMessage(held(), 'me@example.com', '192.168.1.23:25565')).toBe('is currently hosted by Alex.');
         expect(hostingMessage(held(), 'alex@example.com')).toBe('is currently hosted by you on another PC.');
     });
 

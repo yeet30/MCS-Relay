@@ -294,6 +294,9 @@ export interface SessionState {
     serverId: ServerId | null;
     startedAt: string | null;           // when the server became "running"
     address: string | null;             // the playit.gg tunnel shown first
+    /** Without playit.gg: this PC's address on its local network with the server's port, for friends on the same
+     *  network. Shown on this PC only, never written to the lock. */
+    lanAddress: string | null;
     tunnels: PlayitTunnel[];            // every tunnel playit.gg reported
     players: string[];
     javaRunning: boolean;

@@ -145,3 +145,17 @@
         color: var(--faint);
     }
 }
+
+/* Hosting without playit.gg: the network address, and how to join from this PC and from elsewhere. */
+.link-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+}
+
+.link-hint {
+    margin: 0;
+    font-size: 0.74rem;
+    color: var(--muted);
+}

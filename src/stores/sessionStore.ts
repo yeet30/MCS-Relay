@@ -16,6 +16,7 @@ export const IDLE_SESSION: SessionState = {
     phase: 'idle',
     serverId: null,
     startedAt: null,
+    lanAddress: null,
     address: null,
     tunnels: [],
     players: [],

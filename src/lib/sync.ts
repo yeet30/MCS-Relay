@@ -336,10 +336,12 @@ export function logoState(session: SessionState, serverId: ServerId | null, lock
     return isMySession(session, serverId) ? 'here' : 'elsewhere';
 }
 
-/** The line next to the server picker: "<server> is currently hosted by Alex at:". */
-export function hostingMessage(view: LockView | null, myEmail: string | null): string {
+/** The line next to the server picker: "<server> is currently hosted by Alex at:". `localAddress`: the network address
+ *  this PC shows when it hosts without playit.gg (it is not in the lock). */
+export function hostingMessage(view: LockView | null, myEmail: string | null, localAddress: string | null = null): string {
     if (!view || view.state === 'free') return 'is not being hosted right now.';
-    const { host, phase, address } = view.lock;
+    const { host, phase } = view.lock;
+    const address = view.lock.address ?? (view.state === 'mine' ? localAddress : null);
     const isMe = myEmail !== null && host.email === myEmail;
     const who = view.state === 'mine' ? 'you' : view.leftByThisPc ? 'this PC' : isMe ? 'you on another PC' : host.name;
     if (view.state === 'stale') {
