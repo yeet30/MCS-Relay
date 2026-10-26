@@ -44,6 +44,8 @@ export interface ServersServiceDeps {
     homeDir?: string;
     /** Makes a Windows shortcut (Electron's shell.writeShortcutLink); false when it could not. */
     writeShortcut?: (link: string, target: string) => boolean;
+    /** Moves a file or folder to the Recycle Bin (Electron's shell.trashItem). */
+    moveToTrash?: (target: string) => Promise<void>;
 }
 
 export type FolderMode = 'new' | 'existing';
@@ -66,6 +68,7 @@ export class ServersService {
     private readonly beforeDelete: (serverId: string) => Promise<unknown>;
     private readonly homeDir: string;
     private readonly writeShortcut?: (link: string, target: string) => boolean;
+    private readonly moveToTrash?: (target: string) => Promise<void>;
     /** Deleted from this PC in this run, kept out of listings while Drive's search catches up. */
     private readonly deletedHere = new Set<string>();
 
@@ -79,6 +82,7 @@ export class ServersService {
         this.beforeDelete = deps.beforeDelete;
         this.homeDir = deps.homeDir ?? os.homedir();
         this.writeShortcut = deps.writeShortcut;
+        this.moveToTrash = deps.moveToTrash;
     }
 
     /** Owned servers first, then joined ones. One me() per call and one permissions request per folder. */
@@ -150,11 +154,13 @@ export class ServersService {
     }
 
     /** Deletes a server I own. A second request while one runs (a double click) joins it instead of starting another. */
-    delete(id: string): Promise<void> {
+    /** `removeLocal`: its folder on this PC goes to the Recycle Bin too, once the server is gone from Drive. */
+    delete(id: string, removeLocal = false): Promise<void> {
         requireId(id);
         const running = this.deleting.get(id);
         if (running) return running;
-        const run = this.runDelete(id).finally(() => this.deleting.delete(id));
+        const local = removeLocal ? this.localOf(id) : null;
+        const run = this.runDelete(id).then(() => this.recycle(local)).finally(() => this.deleting.delete(id));
         this.deleting.set(id, run);
         return run;
     }
@@ -215,8 +221,15 @@ export class ServersService {
     }
 
     /** Removes my own access and forgets the server on this PC. */
-    async leave(id: string): Promise<void> {
+    /** `removeLocal`: its folder on this PC goes to the Recycle Bin too, once I have left. */
+    async leave(id: string, removeLocal = false): Promise<void> {
         requireId(id);
+        const local = removeLocal ? this.localOf(id) : null;
+        await this.runLeave(id);
+        await this.recycle(local);
+    }
+
+    private async runLeave(id: string): Promise<void> {
         const me = await this.auth.me();
         let permissions: DrivePermission[] = [];
         try {
@@ -416,6 +429,29 @@ export class ServersService {
             });
         }
         return oldest;
+    }
+
+    /** The server's folder on this PC and the shortcut that may point to it, read before the server is forgotten. */
+    private localOf(id: string): { folder: string; shortcut: string } | null {
+        const folder = this.settings.getServer(id).localPath;
+        if (!folder) return null;
+        const name = this.names.get(id) ?? path.basename(folder);
+        return { folder, shortcut: path.join(this.serversFolder(), `${folderNameFor(name)}.lnk`) };
+    }
+
+    /** Moves a deleted or left server's folder (and its shortcut) to the Recycle Bin. A failure is logged, not thrown:
+     *  the server itself is already gone, and the folder can still be deleted by hand. */
+    private async recycle(local: { folder: string; shortcut: string } | null): Promise<void> {
+        if (!local || !this.moveToTrash) return;
+        for (const target of [local.folder, local.shortcut]) {
+            if (!fs.existsSync(target)) continue;
+            try {
+                await this.moveToTrash(target);
+                console.log(`[servers] moved ${target} to the Recycle Bin`);
+            } catch (err) {
+                console.warn(`[servers] could not move ${target} to the Recycle Bin:`, err);
+            }
+        }
     }
 
     private forgetLocally(id: string): void {

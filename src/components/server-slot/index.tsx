@@ -17,7 +17,7 @@ const MAX_NAME = 60;
 /** One server in Settings > Servers: its name, its folder on this PC and its members. Downloading and
  *  uploading happen only through a session. */
 export default function ServerSlot({ server }: { server: ServerSummary }) {
-    const { confirm, popup } = useConfirm();
+    const { confirm, ask, popup } = useConfirm();
     const inUse = useSessionStore((s) => isMySession(s.state, server.id) && s.state.phase !== 'failed');
     const pathStep = useServersStore((s) => (s.pathBusy?.serverId === server.id ? s.pathBusy.step : null));
     const pathBusy = pathStep !== null;
@@ -59,16 +59,28 @@ export default function ServerSlot({ server }: { server: ServerSummary }) {
                 cancelText: 'Keep',
             }
             : {
-                message: `Leave "${server.name}"? You lose access to the shared folder. Your local copy stays on this PC.
+                message: `Leave "${server.name}"? You lose access to the shared folder.
 
 World files you uploaded stay in the server, because the others still need them, and keep using your Google storage until the owner deletes the server.`,
                 confirmText: 'Leave',
                 cancelText: 'Stay',
             });
         if (!accepted || server.id in useServersStore.getState().leaving) return;
+        // Its folder on this PC: a new server with the same name would find it full otherwise. The Recycle Bin, not gone
+        // for good, so a world removed by mistake can still be brought back.
+        let removeLocal = false;
+        if (server.localPath) {
+            const answer = await ask({
+                message: `Also move its folder on this PC to the Recycle Bin?\n\n${server.localPath}\n\nKeep it if you want to hold on to this copy of the world.`,
+                confirmText: 'Move to Recycle Bin',
+                cancelText: 'Keep the folder',
+            });
+            if (answer === null) return;
+            removeLocal = answer === 'yes';
+        }
         const servers = useServersStore.getState();
         servers.setLeaving(server.id, null);
-        const res = isOwner ? await request('servers:delete', server.id) : await request('servers:leave', server.id);
+        const res = isOwner ? await request('servers:delete', server.id, removeLocal) : await request('servers:leave', server.id, removeLocal);
         servers.setLeaving(server.id, undefined);
         if (!res.ok) return;
         useNoticeStore.getState().success(isOwner ? `"${server.name}" was deleted.` : `You left "${server.name}".`);

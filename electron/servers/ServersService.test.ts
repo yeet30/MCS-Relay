@@ -613,3 +613,32 @@ describe('the create wizard', () => {
         expect((await alice.servers.list()).map((s) => s.id)).not.toContain(server.id);
     });
 });
+
+describe('removing the folder on this PC', () => {
+    function withTrash() {
+        const trashed: string[] = [];
+        const servers = new ServersService({
+            drive: alice.drive, launcher: alice.launcher, auth: { me: alice.me }, settings: alice.settings, appData: alice.appData,
+            dialogs: alice.dialogs, beforeDelete: alice.beforeDelete, homeDir: path.join(tmp, 'home'),
+            moveToTrash: async (target) => {
+                trashed.push(target);
+            },
+        });
+        return { servers, trashed };
+    }
+
+    test('a deleted server\'s folder goes to the Recycle Bin only when asked', async () => {
+        const { servers, trashed } = withTrash();
+        const parent = path.join(tmp, 'servers');
+        const kept = await servers.create('Kept');
+        const keptFolder = await servers.setUpFolder(kept.id, 'new', parent, 'Kept');
+        await servers.delete(kept.id, false);
+        expect(trashed).toEqual([]);
+        expect(fs.existsSync(keptFolder)).toBe(true);
+
+        const gone = await servers.create('Gone');
+        const goneFolder = await servers.setUpFolder(gone.id, 'new', parent, 'Gone');
+        await servers.delete(gone.id, true);
+        expect(trashed).toEqual([goneFolder]);
+    });
+});

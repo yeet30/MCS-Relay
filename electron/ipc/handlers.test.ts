@@ -24,7 +24,7 @@ const ALL_COMMANDS: Record<CommandName, true> = {
     'app:quitResponse': true, 'app:openExternal': true, 'app:setLogoState': true,
     'app:updateState': true, 'app:checkForUpdates': true, 'app:installUpdate': true,
     'report:send': true, 'report:save': true, 'report:openLogFolder': true,
-    'backups:list': true, 'backups:create': true, 'backups:upload': true, 'backups:download': true, 'backups:restore': true,
+    'backups:list': true, 'backups:create': true, 'backups:upload': true, 'backups:download': true, 'backups:restore': true, 'backups:restoreAuto': true,
     'backups:deleteLocal': true, 'backups:deleteCloud': true, 'backups:openFolder': true,
     'installer:versions': true, 'installer:folder': true, 'installer:install': true,
 };

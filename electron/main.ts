@@ -139,6 +139,22 @@ const backups = new BackupService({
     emit: (progress) => events.emit('backups:progress', progress),
 });
 
+/** The automatic backup while this PC hosts: every autoBackupMinutes, the first one that long after the start, into
+ *  the one copy that is kept up to date (see BackupService.autoBackup). */
+let hostingSince: { serverId: string; lastBackup: number } | null = null;
+setInterval(() => {
+    const state = session.getState();
+    if (state.phase !== 'running' || !state.javaRunning || !state.serverId) {
+        hostingSince = null;
+        return;
+    }
+    if (hostingSince?.serverId !== state.serverId) hostingSince = { serverId: state.serverId, lastBackup: Date.now() };
+    const minutes = settings.get().autoBackupMinutes;
+    if (!minutes || backups.isBusy() || Date.now() - hostingSince.lastBackup < minutes * 60_000) return;
+    hostingSince.lastBackup = Date.now();
+    void backups.autoBackup(state.serverId).catch((err: unknown) => console.warn('[backups] the automatic backup failed:', err));
+}, 30_000);
+
 const installer = new ServerInstaller({
     settings, appVersion: app.getVersion(),
     isBusy: (serverId) => session.isBusy() && session.getState().serverId === serverId,
@@ -166,6 +182,7 @@ const reports = new ReportService({
 const servers = new ServersService({
     drive, launcher, auth, settings, appData, dialogs, homeDir: app.getPath('home'),
     writeShortcut: (link, target) => shell.writeShortcutLink(link, 'create', { target }),
+    moveToTrash: (target) => shell.trashItem(target),
     beforeDelete: async (serverId) => {
         const view = await lock.inspect(serverId);
         if (view.state === 'held' || view.state === 'mine') {

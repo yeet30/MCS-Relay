@@ -35,7 +35,7 @@ export interface HandlerDeps {
     dialogs: Pick<Dialogs, 'chooseFolder' | 'chooseFile' | 'openPath'>;
     report: Pick<ReportService, 'send' | 'save'>;
     installer: Pick<ServerInstaller, 'versions' | 'folder' | 'install'>;
-    backups: Pick<BackupService, 'list' | 'create' | 'upload' | 'download' | 'restore' | 'deleteLocal' | 'deleteCloud' | 'localFolder' | 'isBusy'>;
+    backups: Pick<BackupService, 'list' | 'create' | 'upload' | 'download' | 'restore' | 'restoreAuto' | 'deleteLocal' | 'deleteCloud' | 'localFolder' | 'isBusy'>;
     app: {
         quitResponse(confirmed: boolean): void;
         openExternal(url: string): Promise<void>;
@@ -134,12 +134,12 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
     handle('servers:pickFolder', (kind, current) => d.servers.pickFolder(oneOf(kind, ['parent', 'existing'] as const, 'folder kind'), current === null ? null : text(current, 'folder', { max: 1000 })));
     handle('servers:checkFolder', (mode, folder, name) => d.servers.checkFolder(oneOf(mode, MODES, 'choice'), text(folder, 'folder', { max: 1000 }), text(name, 'name', { max: 100 })));
     handle('servers:setUpFolder', (serverId, mode, folder, name) => d.servers.setUpFolder(id(serverId), oneOf(mode, MODES, 'choice'), text(folder, 'folder', { max: 1000 }), text(name, 'name', { max: 100 })));
-    handle('servers:delete', (serverId) => {
+    handle('servers:delete', (serverId, removeLocal) => {
         const sid = id(serverId);
         if (d.session.isBusy() && d.session.getState().serverId === sid) {
             throw new AppError('BUSY', 'Stop this server before deleting it.');
         }
-        return d.servers.delete(sid);
+        return d.servers.delete(sid, bool(removeLocal, 'folder choice'));
     });
     handle('servers:rename', (serverId, name) => d.servers.rename(id(serverId), text(name, 'name', { max: 100 }).trim()));
     handle('servers:invite', (serverId, email, role, message) => {
@@ -148,12 +148,12 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
         return d.servers.invite(id(serverId), address, oneOf(role, ['writer', 'reader'] as const, 'role'), text(message, 'message', { allowEmpty: true }));
     });
     handle('servers:removeMember', (serverId, permissionId) => d.servers.removeMember(id(serverId), text(permissionId, 'member', { max: 200 })));
-    handle('servers:leave', (serverId) => {
+    handle('servers:leave', (serverId, removeLocal) => {
         const sid = id(serverId);
         if (d.session.isBusy() && d.session.getState().serverId === sid) {
             throw new AppError('BUSY', 'Stop this server before leaving it.');
         }
-        return d.servers.leave(sid);
+        return d.servers.leave(sid, bool(removeLocal, 'folder choice'));
     });
     handle('servers:join', (folderId) => d.servers.join(text(folderId, 'server link', { max: 500 }).trim()));
     handle('servers:chooseLocalPath', (serverId) => {
@@ -247,6 +247,7 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
     handle('backups:upload', (serverId, fileName) => d.backups.upload(id(serverId), backupFile(fileName)));
     handle('backups:download', (serverId, cloudId) => d.backups.download(id(serverId), backupFile(cloudId)));
     handle('backups:restore', (serverId, fileName) => d.backups.restore(id(serverId), backupFile(fileName)));
+    handle('backups:restoreAuto', (serverId) => d.backups.restoreAuto(id(serverId)));
     handle('backups:deleteLocal', (serverId, fileName) => d.backups.deleteLocal(id(serverId), backupFile(fileName)));
     handle('backups:deleteCloud', (serverId, cloudId) => d.backups.deleteCloud(id(serverId), backupFile(cloudId)));
     const KINDS = ['vanilla', 'paper', 'fabric'] as const;

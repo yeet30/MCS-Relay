@@ -45,12 +45,13 @@ export interface Commands {
     'servers:checkFolder': (mode: 'new' | 'existing', folder: string, name: string) => string;
     /** Makes the new server's folder, or links its existing one, and sets it as the server's folder on this PC. */
     'servers:setUpFolder': (serverId: ServerId, mode: 'new' | 'existing', folder: string, name: string) => string;
-    'servers:delete': (serverId: ServerId) => void;
+    /** `removeLocal`: the server's folder on this PC goes to the Recycle Bin too. */
+    'servers:delete': (serverId: ServerId, removeLocal: boolean) => void;
     'servers:rename': (serverId: ServerId, name: string) => void;
     /** The new member, as Drive describes them. */
     'servers:invite': (serverId: ServerId, email: string, role: Extract<MemberRole, 'writer' | 'reader'>, message: string) => ServerMember;
     'servers:removeMember': (serverId: ServerId, permissionId: string) => void;
-    'servers:leave': (serverId: ServerId) => void;
+    'servers:leave': (serverId: ServerId, removeLocal: boolean) => void;
     'servers:join': (folderId: string) => ServerSummary;
     'servers:chooseLocalPath': (serverId: ServerId) => string | null;
     'servers:openFolder': (serverId: ServerId) => void;
@@ -116,6 +117,8 @@ export interface Commands {
     'backups:download': (serverId: ServerId, cloudId: string) => void;
     /** Replaces the world in this PC's folder with the backup, after backing up the current world. */
     'backups:restore': (serverId: ServerId, fileName: string) => void;
+    /** Replaces the world in this PC's folder with the automatic backup, after backing up the current world. */
+    'backups:restoreAuto': (serverId: ServerId) => void;
     'backups:deleteLocal': (serverId: ServerId, fileName: string) => void;
     'backups:deleteCloud': (serverId: ServerId, cloudId: string) => void;
     'backups:openFolder': (serverId: ServerId) => void;
