@@ -21,6 +21,10 @@ import type { SettingsService } from '../settings/SettingsService';
 import type { LauncherFiles } from '../sync/launcherFiles';
 
 export const BACKUPS_FOLDER = 'mcs-relay-backups';
+/** The automatic backup, inside BACKUPS_FOLDER: a plain copy of the world folders, so a new run copies only what
+ *  changed. Its description sits beside the copies. */
+const AUTO_FOLDER = 'auto';
+const AUTO_META = 'mcs-relay-auto.json';
 const META_FILE = 'mcs-relay-backup.json';
 const FILE_NAME_RE = /^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2}) ([^\\/]+)\.zip$/;
 const MAX_NAME = 40;
@@ -115,6 +119,37 @@ async function walk(root: string, rel: string, out: WorldFile[]): Promise<void> 
     }
 }
 
+/** Makes `dest` hold the same files as `src`: copies what is new or changed (size or modification time), deletes what
+ *  is no longer there. Returns how many files were copied and the bytes the copy holds. */
+async function mirror(src: string, dest: string): Promise<{ copied: number; bytes: number }> {
+    await fs.mkdir(dest, { recursive: true });
+    const wanted = new Set<string>();
+    let copied = 0;
+    let bytes = 0;
+    for (const entry of await fs.readdir(src, { withFileTypes: true })) {
+        const from = path.join(src, entry.name);
+        const to = path.join(dest, entry.name);
+        if (entry.isDirectory()) {
+            wanted.add(entry.name);
+            const inner = await mirror(from, to);
+            copied += inner.copied;
+            bytes += inner.bytes;
+        } else if (entry.isFile() && entry.name !== 'session.lock') {
+            wanted.add(entry.name);
+            const [a, b] = await Promise.all([fs.stat(from), fs.stat(to).catch(() => null)]);
+            bytes += a.size;
+            if (b?.isFile() && b.size === a.size && Math.abs(b.mtimeMs - a.mtimeMs) < 2) continue;
+            await fs.copyFile(from, to);
+            await fs.utimes(to, a.atime, a.mtime);
+            copied++;
+        }
+    }
+    for (const entry of await fs.readdir(dest, { withFileTypes: true })) {
+        if (!wanted.has(entry.name)) await fs.rm(path.join(dest, entry.name), { recursive: true, force: true });
+    }
+    return { copied, bytes };
+}
+
 /** The backup's description and the bytes its world files hold, without unpacking anything. */
 async function inspectZip(file: string): Promise<{ meta: BackupMeta; total: number }> {
     const damaged = (err: unknown) => new AppError('INVALID', 'The backup file is damaged and cannot be read.', err instanceof Error ? err.message : String(err));
@@ -156,6 +191,16 @@ async function inspectZip(file: string): Promise<{ meta: BackupMeta; total: numb
         throw err instanceof AppError ? err : damaged(err);
     } finally {
         zip.close();
+    }
+}
+
+async function readAutoMeta(folder: string): Promise<{ at: string; worlds: string[]; bytes: number } | null> {
+    try {
+        const raw = JSON.parse(await fs.readFile(path.join(folder, AUTO_META), 'utf8')) as { at?: unknown; worlds?: unknown; bytes?: unknown };
+        if (typeof raw.at !== 'string' || !Array.isArray(raw.worlds) || !raw.worlds.every((w) => typeof w === 'string' && isSafeFolderName(w))) return null;
+        return { at: raw.at, worlds: raw.worlds as string[], bytes: typeof raw.bytes === 'number' ? raw.bytes : 0 };
+    } catch {
+        return null;
     }
 }
 
@@ -270,7 +315,7 @@ export class BackupService {
             console.warn(`[backups] cannot list the cloud backups of ${serverId}:`, err);
         }
         const backups = [...byName.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.fileName.localeCompare(a.fileName));
-        return { backups, cloudError };
+        return { backups, cloudError, auto: root ? await this.autoInfo(root) : null };
     }
 
     /** Backs up the world in this PC's folder; with `upload`, also puts it in the cloud. */
@@ -348,6 +393,61 @@ export class BackupService {
             await extract(file, root, new Set(meta.worlds), (done) => this.progress(serverId, 'restoring', done, total));
             console.log(`[backups] restored ${fileName} into ${serverId} (${meta.worlds.join(', ')})`);
         });
+    }
+
+    /** The automatic backup, while this PC hosts: the one copy is brought up to date (only changed files are copied),
+     *  with the server's saving paused meanwhile. Skipped while another backup task runs. */
+    autoBackup(serverId: string): Promise<void> {
+        return this.exclusive(async () => {
+            const root = this.folderOf(serverId);
+            const worlds = await findWorlds(root);
+            if (worlds.length === 0) return;
+            const auto = path.join(root, BACKUPS_FOLDER, AUTO_FOLDER);
+            const resume = await this.d.session.pauseSavingFor(serverId);
+            let copied = 0;
+            let bytes = 0;
+            try {
+                for (const world of worlds) {
+                    const result = await mirror(path.join(root, world), path.join(auto, world));
+                    copied += result.copied;
+                    bytes += result.bytes;
+                }
+            } finally {
+                resume?.();
+            }
+            for (const entry of await fs.readdir(auto, { withFileTypes: true })) {
+                if (entry.isDirectory() && !worlds.includes(entry.name)) await fs.rm(path.join(auto, entry.name), { recursive: true, force: true });
+            }
+            await fs.writeFile(path.join(auto, AUTO_META), JSON.stringify({ at: this.now().toISOString(), worlds, bytes }, null, 2));
+            console.log(`[backups] automatic backup of ${serverId}: ${copied} files copied, ${bytes} bytes in all`);
+        });
+    }
+
+    /** Replaces the world in this PC's folder with the automatic backup, after backing up the current one. */
+    restoreAuto(serverId: string): Promise<void> {
+        return this.exclusive(async () => {
+            const root = this.folderOf(serverId);
+            if (this.d.session.isBusy()) throw new AppError('BUSY', 'Stop the server first: a world cannot be restored while it is in use.');
+            if (this.d.hasUnfinishedUpload(serverId)) {
+                throw new AppError('UNFINISHED_UPLOAD', 'This server has an unfinished upload. Let it finish before restoring a backup.');
+            }
+            const auto = path.join(root, BACKUPS_FOLDER, AUTO_FOLDER);
+            const meta = await readAutoMeta(auto);
+            if (!meta) throw new AppError('NOT_FOUND', 'There is no automatic backup of this server on this PC yet.');
+            const current = await findWorlds(root);
+            if (current.length > 0) await this.pack(serverId, root, current, 'Before restoring the automatic backup');
+            this.progress(serverId, 'restoring', 0, meta.bytes, true);
+            for (const world of meta.worlds) {
+                await fs.rm(path.join(root, world), { recursive: true, force: true });
+                await fs.cp(path.join(auto, world), path.join(root, world), { recursive: true, preserveTimestamps: true });
+            }
+            console.log(`[backups] restored the automatic backup of ${serverId} from ${meta.at}`);
+        });
+    }
+
+    private async autoInfo(root: string): Promise<{ at: string; size: number } | null> {
+        const meta = await readAutoMeta(path.join(root, BACKUPS_FOLDER, AUTO_FOLDER));
+        return meta ? { at: meta.at, size: meta.bytes } : null;
     }
 
     deleteLocal(serverId: string, fileName: string): Promise<void> {

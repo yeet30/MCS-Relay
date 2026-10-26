@@ -50,6 +50,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     termsAccepted: 0,
     tourDone: false,
     serversFolder: '',
+    autoBackupMinutes: 10,
     notifications: true,
     notificationSound: true,
     theme: 'light',
@@ -422,6 +423,7 @@ function parseSettings(raw: unknown): AppSettings {
         termsAccepted: isCount(r.termsAccepted) ? r.termsAccepted : 0,
         tourDone: r.tourDone === true,
         serversFolder: typeof r.serversFolder === 'string' ? r.serversFolder : '',
+        autoBackupMinutes: isAutoBackupMinutes(r.autoBackupMinutes) ? r.autoBackupMinutes : DEFAULT_SETTINGS.autoBackupMinutes,
         notifications: typeof r.notifications === 'boolean' ? r.notifications : DEFAULT_SETTINGS.notifications,
         notificationSound: typeof r.notificationSound === 'boolean' ? r.notificationSound : DEFAULT_SETTINGS.notificationSound,
         theme: THEMES.includes(r.theme as ThemeName) ? (r.theme as ThemeName) : DEFAULT_SETTINGS.theme,
@@ -600,6 +602,11 @@ function isDirectory(p: string): boolean {
 
 function isRecord(v: unknown): v is Record<string, unknown> {
     return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/** 0 (off), or every 5 to 30 minutes. */
+export function isAutoBackupMinutes(v: unknown): v is number {
+    return typeof v === 'number' && Number.isInteger(v) && (v === 0 || (v >= 5 && v <= 30));
 }
 
 function isCount(v: unknown): v is number {

@@ -1,6 +1,6 @@
 import './backups-panel.css';
 import { useCallback, useEffect, useState } from 'react';
-import { Archive, Cloud, CloudDownload, CloudUpload, FolderOpen, HardDrive, History, Loader2, Trash2 } from 'lucide-react';
+import { Archive, Cloud, CloudDownload, CloudUpload, FolderOpen, HardDrive, History, Loader2, Timer, Trash2 } from 'lucide-react';
 import type { BackupInfo, BackupList, BackupProgress, ServerSummary } from '../../../shared/types';
 import { useConfirm } from '../../hooks/useConfirm';
 import { formatBytes, formatBytesPair, formatWhen } from '../../lib/format';
@@ -9,6 +9,7 @@ import { useBackupStore } from '../../stores/backupStore';
 import { useNoticeStore } from '../../stores/noticeStore';
 import { request } from '../../stores/request';
 import { lockFor, useSessionStore } from '../../stores/sessionStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 
 const ACTIONS: Record<BackupProgress['action'], string> = {
     saving: 'Asking the server to save the world',
@@ -38,6 +39,7 @@ export default function BackupsPanel({ server, canWrite }: { server: ServerSumma
     const [upload, setUpload] = useState(false);
     const [starting, setStarting] = useState(false);
     const progress = useBackupStore((s) => s.progress);
+    const autoMinutes = useSettingsStore((s) => s.settings?.autoBackupMinutes ?? 0);
     const session = useSessionStore((s) => s.state);
     const lock = useSessionStore((s) => lockFor(s, server.id));
     const { ask, confirm, popup } = useConfirm();
@@ -83,6 +85,19 @@ export default function BackupsPanel({ server, canWrite }: { server: ServerSumma
         });
         if (!accepted) return;
         await run(async () => (await request('backups:restore', server.id, backup.fileName)).ok, `"${backup.name}" was restored.`);
+        void useSessionStore.getState().preflight(server.id);
+    }
+
+    async function restoreAuto(at: string) {
+        const accepted = await confirm({
+            message: `Restore the automatic backup from ${formatWhen(at).replace(/^on /, '')}?\n\n`
+                + 'The world in this PC\'s folder is replaced by it. The current world is backed up first, so you can go back.\n\n'
+                + 'Everyone gets the restored world after you next host this server (or upload your changes).',
+            confirmText: 'Restore',
+            cancelText: 'Cancel',
+        });
+        if (!accepted) return;
+        await run(async () => (await request('backups:restoreAuto', server.id)).ok, 'The automatic backup was restored.');
         void useSessionStore.getState().preflight(server.id);
     }
 
@@ -137,6 +152,22 @@ export default function BackupsPanel({ server, canWrite }: { server: ServerSumma
             {list === null && <p className='backup-empty'><Loader2 size={13} className='spinner' /> Loading…</p>}
             {list !== null && backups.length === 0 && <p className='backup-empty'>No backups yet.</p>}
             {list?.cloudError && <p className='backup-warning'>Cloud backups could not be loaded: {list.cloudError}</p>}
+            {list?.auto && (
+                <div className='backup-item auto'>
+                    <div className='backup-text'>
+                        <span className='backup-name'><Timer size={13} /> Automatic backup</span>
+                        <span className='backup-meta'>Updated {formatWhen(list.auto.at)} · {formatBytes(list.auto.size)}</span>
+                    </div>
+                    <div className='backup-actions'>
+                        <button className='text-button' disabled={working || busy} title={busy ? 'Stop the server first' : undefined} onClick={() => void restoreAuto(list.auto!.at)}>
+                            <History size={12} /> Restore
+                        </button>
+                    </div>
+                </div>
+            )}
+            {list && !list.auto && autoMinutes > 0 && (
+                <p className='backup-hint'>An automatic backup is made every {autoMinutes} minutes while you host this server (Settings &gt; Scripts).</p>
+            )}
             <ul className='backup-list'>
                 {backups.map((backup) => (
                     <li key={backup.fileName} className='backup-item'>

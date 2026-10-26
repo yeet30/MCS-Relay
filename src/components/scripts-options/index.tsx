@@ -20,11 +20,11 @@ const linesToFlags = (text: string): string => text.split(/\s+/).filter(Boolean)
  *  breaks alone are no change. */
 function hasChanges(
     saved: AppSettings | null, server: ServerSettings | null,
-    edited: { usePlayit: boolean; playitPath: string; launchServer: boolean; flags: JavaFlags | null; flagsText: string; javaPath: string },
+    edited: { usePlayit: boolean; playitPath: string; launchServer: boolean; flags: JavaFlags | null; flagsText: string; javaPath: string; autoBackup: number },
 ): boolean {
     if (!saved) return false;
     if (edited.usePlayit !== saved.usePlayitgg || edited.launchServer !== saved.launchServer) return true;
-    if (edited.playitPath !== saved.playitggPath) return true;
+    if (edited.playitPath !== saved.playitggPath || edited.autoBackup !== saved.autoBackupMinutes) return true;
     if (!server || !edited.flags) return false;
     if (edited.javaPath !== (server.javaPath ?? '')) return true;
     return edited.flags.maxRAM !== server.javaFlags.maxRAM || edited.flags.minRAM !== server.javaFlags.minRAM
@@ -41,6 +41,8 @@ export default function ScriptsOptions() {
     const [usePlayit, setUsePlayit] = useState(false);
     const [playitPath, setPlayitPath] = useState('');
     const [launchServer, setLaunchServer] = useState(true);
+    const [autoBackup, setAutoBackup] = useState(10);            // minutes; 0 = off
+    const [autoMinutes, setAutoMinutes] = useState(10);          // the slider, kept while the switch is off
     const [flags, setFlags] = useState<JavaFlags | null>(null);
     const [flagsText, setFlagsText] = useState('');
     const [javaPath, setJavaPath] = useState('');                // '' = "java" from PATH
@@ -48,7 +50,7 @@ export default function ScriptsOptions() {
     const flagsRef = useRef<HTMLTextAreaElement>(null);
     const hasFlags = flags !== null;
     const { ask, popup } = useConfirm();
-    const dirty = hasChanges(settings, serverSettings, { usePlayit, playitPath, launchServer, flags, flagsText, javaPath });
+    const dirty = hasChanges(settings, serverSettings, { usePlayit, playitPath, launchServer, flags, flagsText, javaPath, autoBackup });
 
     // The flags box grows with its text, so even a long list of flags is readable without scrolling inside it.
     useLayoutEffect(() => {
@@ -68,6 +70,8 @@ export default function ScriptsOptions() {
         setUsePlayit(settings.usePlayitgg);
         setPlayitPath(settings.playitggPath);
         setLaunchServer(settings.launchServer);
+        setAutoBackup(settings.autoBackupMinutes);
+        if (settings.autoBackupMinutes > 0) setAutoMinutes(settings.autoBackupMinutes);
     }, [settings]);
 
     useEffect(() => {
@@ -84,7 +88,7 @@ export default function ScriptsOptions() {
         }
         setSaving(true);
         const store = useSettingsStore.getState();
-        let ok = await store.update({ usePlayitgg: usePlayit, playitggPath: playitPath, launchServer });
+        let ok = await store.update({ usePlayitgg: usePlayit, playitggPath: playitPath, launchServer, autoBackupMinutes: autoBackup });
         if (ok && server && flags) {
             ok = await store.updateServer(server.id, { javaFlags: { ...flags, customFlags: linesToFlags(flagsText) }, javaPath: javaPath || null });
         }
@@ -177,6 +181,31 @@ export default function ScriptsOptions() {
                         />
                     </>
                 ) : <p>Select a server to set its Java and memory.</p>}
+            </OptionRow>
+
+            <OptionRow title='Automatic backup' enable={autoBackup > 0} onChange={(on) => setAutoBackup(on ? autoMinutes : 0)}>
+                <p>
+                    While you host, one copy of the world is kept up to date in the server folder, and Backups can restore it.
+                    After the first copy, only the files that changed are copied.
+                </p>
+                <div className='auto-backup-row'>
+                    <label htmlFor='auto-backup'>Every</label>
+                    <input
+                        id='auto-backup'
+                        type='range'
+                        min={5}
+                        max={30}
+                        step={5}
+                        value={autoMinutes}
+                        disabled={autoBackup === 0}
+                        style={{ '--fill': `${((autoMinutes - 5) / 25) * 100}%` } as React.CSSProperties}
+                        onChange={(e) => {
+                            setAutoMinutes(Number(e.target.value));
+                            setAutoBackup(Number(e.target.value));
+                        }}
+                    />
+                    <span className='ram-value'>{autoMinutes} min</span>
+                </div>
             </OptionRow>
 
             <div className='save-bar'>

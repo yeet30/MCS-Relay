@@ -4,7 +4,7 @@ import path from 'node:path';
 import { TERMS_VERSION, THEMES } from '../../shared/types';
 import type { AppSettings, JavaFlags, ServerSettings, ServerSettingsPatch, ThemeName } from '../../shared/types';
 import { AppError } from '../errors';
-import { RAM_LIMITS, isValidServerId } from '../store/appData';
+import { RAM_LIMITS, isAutoBackupMinutes, isValidServerId } from '../store/appData';
 import type { AppData } from '../store/appData';
 
 export interface Dialogs {
@@ -61,6 +61,10 @@ export class SettingsService {
                 throw invalid('That version of the terms of use does not exist.');
             }
             next.termsAccepted = version;
+        }
+        if ('autoBackupMinutes' in patch) {
+            if (!isAutoBackupMinutes(patch.autoBackupMinutes)) throw invalid('The automatic backup runs every 5 to 30 minutes, or not at all.');
+            next.autoBackupMinutes = patch.autoBackupMinutes;
         }
         if ('tourDone' in patch) next.tourDone = requireBoolean(patch.tourDone, 'tourDone');
         if ('serversFolder' in patch) {

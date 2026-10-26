@@ -212,3 +212,14 @@
 .backup-link:hover {
     text-decoration: underline;
 }
+
+/* The automatic backup, above the named ones. */
+.backup-item.auto {
+    background: var(--panel-2);
+
+    .backup-name {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+}

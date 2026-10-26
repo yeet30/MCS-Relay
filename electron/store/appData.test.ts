@@ -184,6 +184,7 @@ describe('legacy import', () => {
             termsAccepted: 0,
             tourDone: false,
             serversFolder: '',
+            autoBackupMinutes: 10,
             notifications: true,
             notificationSound: true,
             theme: 'light',

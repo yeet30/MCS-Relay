@@ -216,3 +216,59 @@ describe('BackupService', () => {
         expect((err as AppError).code).toBe('INVALID');
     });
 });
+
+describe('the automatic backup', () => {
+    const auto = (rel: string) => path.join(root, BACKUPS_FOLDER, 'auto', ...rel.split('/'));
+
+    test('an unchanged file is not copied again', async () => {
+        const { backups } = setup();
+        put('world/level.dat', 'same');
+        await backups.autoBackup('srv');
+        fs.writeFileSync(auto('world/level.dat'), 'xxxx');        // same size, and the time is set back below
+        const t = fs.statSync(path.join(root, 'world', 'level.dat')).mtime;
+        fs.utimesSync(auto('world/level.dat'), t, t);
+        await backups.autoBackup('srv');
+        expect(fs.readFileSync(auto('world/level.dat'), 'utf8')).toBe('xxxx');
+    });
+
+    test('the first run copies the world, later runs only what changed, and gone files go', async () => {
+        const { backups, session } = setup();
+        put('world/level.dat', 'one');
+        put('world/region/r.0.0.mca', 'region');
+        put('world/session.lock', 'locked');
+        await backups.autoBackup('srv');
+        expect(fs.readFileSync(auto('world/level.dat'), 'utf8')).toBe('one');
+        expect(fs.existsSync(auto('world/session.lock'))).toBe(false);
+        expect(session.pauseSavingFor).toHaveBeenCalledWith('srv');
+
+        put('world/level.dat', 'two!');
+        put('world/region/r.1.1.mca', 'new');
+        fs.rmSync(path.join(root, 'world', 'region', 'r.0.0.mca'));
+        await backups.autoBackup('srv');
+        expect(fs.readFileSync(auto('world/level.dat'), 'utf8')).toBe('two!');
+        expect(fs.existsSync(auto('world/region/r.1.1.mca'))).toBe(true);
+        expect(fs.existsSync(auto('world/region/r.0.0.mca'))).toBe(false);
+
+        const list = await backups.list('srv');
+        expect(list.auto?.size).toBe('two!'.length + 'new'.length);
+        expect(list.backups).toEqual([]);              // the copy is not listed as a zip backup
+    });
+
+    test('restoring it brings the world back, after backing up the current one', async () => {
+        const { backups } = setup();
+        put('world/level.dat', 'saved');
+        await backups.autoBackup('srv');
+        put('world/level.dat', 'broken');
+        put('world/region/r.9.9.mca', 'griefed');
+        await backups.restoreAuto('srv');
+        expect(read('world/level.dat')).toBe('saved');
+        expect(exists('world/region/r.9.9.mca')).toBe(false);
+        expect((await backups.list('srv')).backups.map((b) => b.name)).toEqual(['Before restoring the automatic backup']);
+    });
+
+    test('without one, there is nothing to restore', async () => {
+        put('world/level.dat', 'x');
+        const err = await setup().backups.restoreAuto('srv').catch((e: unknown) => e);
+        expect((err as AppError).code).toBe('NOT_FOUND');
+    });
+});

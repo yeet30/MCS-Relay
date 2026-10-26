@@ -88,6 +88,7 @@ export interface AppSettings {
     termsAccepted: number;              // the TERMS_VERSION this Google account agreed to; 0: none yet
     tourDone: boolean;                  // this Google account saw where its servers are managed, after its first server
     serversFolder: string;              // where new server folders go on this PC; '' = <home>\MCS-Relay Servers
+    autoBackupMinutes: number;          // the automatic backup while this PC hosts: every 5 to 30 minutes; 0 = off
     notifications: boolean;             // a desktop notification when a start or stop finishes in the background
     notificationSound: boolean;         // a short chime when a start or stop finishes
     theme: ThemeName;                   // per PC, like the other display settings
@@ -146,6 +147,8 @@ export interface BackupInfo {
 export interface BackupList {
     backups: BackupInfo[];              // newest first
     cloudError: string | null;          // the cloud ones could not be listed
+    /** The automatic backup: one copy of the world, kept up to date while this PC hosts; null before the first. */
+    auto: { at: string; size: number } | null;
 }
 
 /** The server programs MCS-Relay can download (see electron/installer/ServerInstaller.ts). */
