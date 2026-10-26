@@ -1,14 +1,17 @@
-.select-server-wrapper{
-
+.select-server-wrapper {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 5px;
+    gap: 6px;
     /* Above the progress and status cards, so the open list covers them cleanly. */
     position: relative;
     z-index: 20;
 
-    .select-button{
+    .server-picker {
+        position: relative;
+    }
+
+    .select-button {
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -22,11 +25,11 @@
     }
 
     .select-button.open,
-    .select-button:hover {
+    .select-button:not(:disabled):hover {
         border-color: var(--accent);
     }
 
-    .button-title{
+    .button-title {
         display: block;
         white-space: nowrap;
         overflow: hidden;
@@ -35,99 +38,101 @@
         width: 100%;
     }
 
-    .button-title:hover{
-        text-decoration: underline;
-    }
-
-    .server-arrow{    
+    .server-arrow {
         transform: rotate(180deg);
         transition: transform ease 0.2s;
     }
 
-    .server-arrow.open{
+    .server-arrow.open {
         transform: rotate(90deg);
     }
 
-    .server-drawer{
+    /* The list below the button. It fades and slides instead of shrinking: a shrinking box loses its border, padding
+       and shadow before its height, which made it jump while closing. */
+    .server-drawer {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        width: 10rem;
+        max-height: 150px;
         display: flex;
         flex-direction: column;
-        width:fit-content;
-        position: absolute;
-        margin-top: -20px;
-        max-height: 0px;
-        width: 10rem;
-        background-color: var(--panel);
-        border-radius: 10px;
-        transition: max-height 0.3s ease;
-        overflow: auto;
-        align-items: center;
-        z-index: 0;
-    }
-
-    .server-drawer.open{
-        max-height: 150px;
-        padding-bottom: 10px;
+        padding: 4px;
+        box-sizing: border-box;
+        overflow-y: auto;
+        border-radius: 12px;
         border: 1px solid var(--line-strong);
+        background-color: var(--panel);
         box-shadow: var(--shadow);
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-6px);
+        transition: opacity 0.15s ease, transform 0.15s ease, visibility 0s linear 0.15s;
     }
 
-    .server-type{
+    .server-drawer.open {
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+        transition: opacity 0.15s ease, transform 0.15s ease, visibility 0s;
+    }
+
+    .server-item {
         display: flex;
-        justify-content: start;
-        align-items: center;
         width: 100%;
-        min-height: 1.8rem;
-        border-bottom: solid 1px;
-        padding-left: 20px;
-        font-size: 1rem;
-        font-weight: 400;
-        color: var(--muted);
-    }
-
-    .server-item{
-        display: flex;
-        border-bottom: solid 1px;
-        width: 75%;
-        padding: 5px 10px;
-    }
-
-    .server-item:hover{
+        padding: 6px 10px;
+        border: none;
+        border-radius: 8px;
+        background: none;
+        color: var(--text);
+        text-align: left;
         cursor: pointer;
-        outline: auto;
     }
 
-    .owned {
-        display: flex;
-        width: 100%;
-        justify-content: start;
-        align-items: end;
-        background-color: rgba(var(--accent-rgb), 0.1);
+    .server-item:hover {
+        background: var(--hover);
     }
 
-    .server-drawer > .owned:first-child{
-        min-height: 3rem;
-        margin-bottom: 2px;
+    .server-item.current {
+        background: rgba(var(--accent-rgb), 0.12);
     }
 
-    .joined {
-        display: flex;
-        width: 100%;
-        justify-content: start;
-        align-items: end;
-        border-top: solid 1px var(--line);
-        background-color: rgba(var(--bad-rgb), 0.1);
-    }
-
-    .server-drawer > .joined:first-child{
-        min-height: 3rem;
-        margin-bottom: 2px;
-    }
-
-    .item-text{
+    .item-text {
         display: block;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+
+    /* Mine or joined, beside the picker. */
+    .server-groups {
+        display: flex;
+        height: 2rem;
+        padding: 2px;
+        box-sizing: border-box;
+        border-radius: 20px;
+        border: 1px solid var(--line-strong);
+        background: var(--panel-3);
+
+        button {
+            padding: 0 10px;
+            border: none;
+            border-radius: 16px;
+            background: none;
+            color: var(--muted);
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        button.selected {
+            background: var(--panel);
+            color: var(--text);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+        }
+
+        button:disabled {
+            cursor: default;
+        }
     }
 
     .spinner {
