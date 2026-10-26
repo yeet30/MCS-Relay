@@ -3,7 +3,8 @@
 // The main process registers handlers with handle() (electron/ipc/handle.ts), the renderer
 // calls them with invoke() (src/api.ts). A renamed or mistyped channel is a compile error.
 import type {
-    AppErrorInfo, AppSettings, BackupInfo, BackupList, BackupProgress, ChangeBatch, ConflictChoice, LockView, LogoState, MemberRole, ServerId, ServerMember,
+    AppErrorInfo, AppSettings, BackupInfo, BackupList, BackupProgress, InstallableVersion, InstallProgress, InstallResult,
+    ServerFolderInfo, ServerKind, ChangeBatch, ConflictChoice, LockView, LogoState, MemberRole, ServerId, ServerMember,
     ServerSettings, ServerSettingsPatch, ServerSummary, SessionProgress, SessionState, StepMessage, SyncReport, SyncRules,
     TransferSnapshot, UpdateState, UserInfo,
 } from './types';
@@ -109,6 +110,12 @@ export interface Commands {
     'backups:deleteLocal': (serverId: ServerId, fileName: string) => void;
     'backups:deleteCloud': (serverId: ServerId, cloudId: string) => void;
     'backups:openFolder': (serverId: ServerId) => void;
+
+    /** The versions a server program can be downloaded in, newest first. */
+    'installer:versions': (kind: ServerKind) => InstallableVersion[];
+    'installer:folder': (serverId: ServerId) => ServerFolderInfo;
+    /** Downloads the server program from its official source into the server's folder on this PC. */
+    'installer:install': (serverId: ServerId, kind: ServerKind, version: string) => InstallResult;
 }
 
 /** Every event the main process pushes: channel -> payload. */
@@ -134,6 +141,8 @@ export interface Events {
     'app:update': UpdateState;
     /** A backup task: how far it is; null when it has ended (done or failed). */
     'backups:progress': BackupProgress | null;
+    /** A server program download: how far it is; null when it has ended. */
+    'installer:progress': InstallProgress | null;
 }
 
 export type CommandName = keyof Commands;
@@ -148,4 +157,4 @@ export interface BridgeApi {
     on: (channel: string, listener: (payload: unknown) => void) => () => void;
 }
 
-export const COMMAND_PREFIXES = ['auth:', 'servers:', 'session:', 'settings:', 'rules:', 'app:', 'report:', 'backups:'] as const;
+export const COMMAND_PREFIXES = ['auth:', 'servers:', 'session:', 'settings:', 'rules:', 'app:', 'report:', 'backups:', 'installer:'] as const;

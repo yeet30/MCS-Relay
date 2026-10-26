@@ -13,6 +13,7 @@ import type { LogoState, SessionPhase, ThemeName } from '../shared/types';
 import { unscrambleClient } from './auth/embeddedClient';
 import { GoogleAuth } from './auth/GoogleAuth';
 import { BackupService } from './backups/BackupService';
+import { ServerInstaller } from './installer/ServerInstaller';
 import { DriveClient } from './drive/DriveClient';
 import { DriveFiles } from './drive/DriveFiles';
 import { AppError } from './errors';
@@ -136,6 +137,12 @@ const backups = new BackupService({
     settings, drive, launcher, session, me, appVersion: app.getVersion(),
     hasUnfinishedUpload: (serverId) => appData.readJournal(serverId) !== null,
     emit: (progress) => events.emit('backups:progress', progress),
+});
+
+const installer = new ServerInstaller({
+    settings, appVersion: app.getVersion(),
+    isBusy: (serverId) => session.isBusy() && session.getState().serverId === serverId,
+    emit: (progress) => events.emit('installer:progress', progress),
 });
 
 const reports = new ReportService({
@@ -495,7 +502,7 @@ if (!app.requestSingleInstanceLock()) {
     void app.whenReady().then(async () => {
         appData.migrateLegacy();
         registerHandlers(createHandle(ipcMain, isTrustedUrl), {
-            auth, servers, session, settings, sync, transfers, changes, dialogs, report: reports, backups,
+            auth, servers, session, settings, sync, transfers, changes, dialogs, report: reports, backups, installer,
             app: {
                 quitResponse, openExternal: (url) => shell.openExternal(url), setLogoState: applyLogoState,
                 updateState: () => updates.get(), checkForUpdates: () => updates.check(), installUpdate,

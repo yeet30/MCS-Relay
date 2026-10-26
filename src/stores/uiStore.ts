@@ -12,6 +12,9 @@ interface UiStore {
     clearDriveFoldersRequest: () => void;
     /** The server card calls this when it started the rename; true when it was asked to. */
     takeRename: (serverId: ServerId) => boolean;
+    /** The server whose "Download a server" window should open (ServerSetupHost owns it). */
+    setupId: ServerId | null;
+    openServerSetup: (serverId: ServerId | null) => void;
 }
 
 export const useUiStore = create<UiStore>()((set, get) => ({
@@ -19,6 +22,8 @@ export const useUiStore = create<UiStore>()((set, get) => ({
     renameId: null,
     openDriveFolders: (renameId = null) => set({ driveFoldersRequested: true, renameId }),
     clearDriveFoldersRequest: () => set({ driveFoldersRequested: false }),
+    setupId: null,
+    openServerSetup: (serverId) => set({ setupId: serverId }),
     takeRename: (serverId) => {
         if (get().renameId !== serverId) return false;
         set({ renameId: null });

@@ -33,6 +33,7 @@ export function startEventSubscriptions(): void {
         on('app:chime', ({ outcome }) => playChime(outcome)),
         on('app:update', (state) => useUpdateStore.getState().apply(state)),
         on('backups:progress', (progress) => useBackupStore.getState().apply(progress)),
+        on('installer:progress', (progress) => useBackupStore.getState().applyInstall(progress)),
         onSignedOut((message) => {
             useAuthStore.getState().markSignedOut(message);
             useServersStore.getState().reset();

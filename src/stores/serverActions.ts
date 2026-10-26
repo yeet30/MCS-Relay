@@ -1,6 +1,7 @@
 // Multi-step server actions shared by several components (the empty-state buttons and the Drive Folders lists).
 import type { ServerId, ServerSummary } from '../../shared/types';
 import type { ConfirmOptions } from '../hooks/useConfirm';
+import { invoke } from '../api';
 import { isSessionBusy } from '../lib/sync';
 import { useNoticeStore } from './noticeStore';
 import { request } from './request';
@@ -41,21 +42,24 @@ async function offerLocalPath(server: ServerSummary, confirm: ConfirmFn, what: s
 }
 
 /** Right after a new server is named: what its folder on this PC is for (new players may not know what a
- *  server folder holds), then the folder picker. */
+ *  server folder holds), then the folder picker, then, for a folder without a server program, the download. */
 export async function askForServerFolder(server: ServerSummary, confirm: ConfirmFn): Promise<void> {
     const choose = await confirm({
         message: `Next, choose the folder for "${server.name}" on this PC.\n\n`
-            + 'The Minecraft server runs from this folder, so it needs the server program: the server .jar (from '
-            + 'minecraft.net, or a Paper or Fabric jar). For Forge or NeoForge, run their installer with "Install server" '
-            + 'in this folder. The world and settings are made there when the server first starts.\n\n'
+            + 'The Minecraft server runs from this folder. The world and settings are made there when the server first starts.\n\n'
             + 'Have a server already? Choose its folder; the world is uploaded the first time you host. Starting fresh? '
-            + 'Put the server .jar in a new, empty folder and choose that.',
+            + 'Choose a new, empty folder, and MCS-Relay downloads the server for you (vanilla, Paper or Fabric). '
+            + 'For Forge or NeoForge, run their installer with "Install server" in the folder.',
         confirmText: 'Choose folder',
         cancelText: 'Later',
-        link: { label: 'Download the Minecraft server (minecraft.net)', url: 'https://www.minecraft.net/en-us/download/server' },
     });
     const path = choose ? await chooseLocalPath(server.id) : null;
-    if (!path) useNoticeStore.getState().info(`You can choose the folder for "${server.name}" later in Settings > Drive Folders.`);
+    if (!path) {
+        useNoticeStore.getState().info(`You can choose the folder for "${server.name}" later in Settings > Drive Folders.`);
+        return;
+    }
+    const folder = await invoke('installer:folder', server.id);
+    if (folder.ok && !folder.value.hasServer) useUiStore.getState().openServerSetup(server.id);
 }
 
 /** Creates a server folder in my Drive, then opens Drive Folders with its name ready to edit: the place where the

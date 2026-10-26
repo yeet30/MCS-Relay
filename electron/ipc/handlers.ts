@@ -8,6 +8,7 @@ import { toPosix } from '../../shared/paths';
 import { AppError } from '../errors';
 import type { GoogleAuth } from '../auth/GoogleAuth';
 import type { BackupService } from '../backups/BackupService';
+import type { ServerInstaller } from '../installer/ServerInstaller';
 import { isValidServerId } from '../store/appData';
 import type { ServersService } from '../servers/ServersService';
 import type { SessionController } from '../session/SessionController';
@@ -33,6 +34,7 @@ export interface HandlerDeps {
     changes: Pick<ChangeTracker, 'all'>;
     dialogs: Pick<Dialogs, 'chooseFolder' | 'chooseFile' | 'openPath'>;
     report: Pick<ReportService, 'send' | 'save'>;
+    installer: Pick<ServerInstaller, 'versions' | 'folder' | 'install'>;
     backups: Pick<BackupService, 'list' | 'create' | 'upload' | 'download' | 'restore' | 'deleteLocal' | 'deleteCloud' | 'localFolder' | 'isBusy'>;
     app: {
         quitResponse(confirmed: boolean): void;
@@ -242,5 +244,13 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
     handle('backups:restore', (serverId, fileName) => d.backups.restore(id(serverId), backupFile(fileName)));
     handle('backups:deleteLocal', (serverId, fileName) => d.backups.deleteLocal(id(serverId), backupFile(fileName)));
     handle('backups:deleteCloud', (serverId, cloudId) => d.backups.deleteCloud(id(serverId), backupFile(cloudId)));
+    const KINDS = ['vanilla', 'paper', 'fabric'] as const;
+    handle('installer:versions', (kind) => d.installer.versions(oneOf(kind, KINDS, 'server type')));
+    handle('installer:folder', (serverId) => d.installer.folder(id(serverId)));
+    handle('installer:install', (serverId, kind, version) => {
+        notDuringBackup();
+        return d.installer.install(id(serverId), oneOf(kind, KINDS, 'server type'), text(version, 'version', { max: 100 }));
+    });
+
     handle('backups:openFolder', async (serverId) => d.dialogs.openPath(await d.backups.localFolder(id(serverId))));
 }

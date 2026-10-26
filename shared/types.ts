@@ -146,6 +146,31 @@ export interface BackupList {
     cloudError: string | null;          // the cloud ones could not be listed
 }
 
+/** The server programs MCS-Relay can download (see electron/installer/ServerInstaller.ts). */
+export type ServerKind = 'vanilla' | 'paper' | 'fabric';
+
+export interface InstallableVersion {
+    id: string;                         // "1.21.4"
+    stable: boolean;                    // false: a snapshot, pre-release or release candidate
+}
+
+export interface ServerFolderInfo {
+    hasServer: boolean;                 // a server .jar is in the folder already
+    javaFound: number | null;           // the major version of the Java this server starts with on this PC
+}
+
+export interface InstallResult {
+    file: string;                       // the jar now in the folder
+    javaNeeded: number | null;          // the Java this Minecraft version needs
+}
+
+/** A server program download; done and total count bytes (total 0: unknown). */
+export interface InstallProgress {
+    serverId: ServerId;
+    done: number;
+    total: number;
+}
+
 /** A backup task underway; done and total count bytes. */
 export interface BackupProgress {
     serverId: ServerId;

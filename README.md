@@ -52,6 +52,8 @@ Google Drive folder that you all share, and whoever wants to play hosts it on th
   maps) is shown with what it is for, for you and for everyone in the group.
 - **Server management**: invite and remove members, choose which files are left out of the sync, sync without
   playing, and repair a server whose upload was interrupted.
+- **Download a server**: pick vanilla, Paper or Fabric and a version; the app downloads it from the official source
+  (Mojang, PaperMC, FabricMC), checks it, and tells you which Java it needs.
 - **World backups**: name a backup, keep it on your PC or put it in the cloud for everyone, and restore any of them;
   the current world is backed up first. While you host, the server pauses saving for a moment.
 - **Lives in the tray**: notifications and a sound when a start or stop finishes or fails, Light / Mint / Dark themes,
