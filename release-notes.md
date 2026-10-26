@@ -13,3 +13,4 @@
 
 ### Fixes
 - The server picker no longer flickers when it closes.
+- The Save button in Scripts lights up only when something changed, and says so when there is nothing new to save.
