@@ -82,6 +82,10 @@ export default function ScriptsOptions() {
 
     /** true when everything was saved. */
     async function handleSave(): Promise<boolean> {
+        if (!dirty) {
+            useNoticeStore.getState().info('There are no new changes to save.');
+            return true;
+        }
         if (usePlayit && !playitPath) {
             useNoticeStore.getState().error('Choose the playit.gg program first, or turn playit.gg off.');
             return false;
@@ -212,7 +216,7 @@ export default function ScriptsOptions() {
                 <span className={dirty && !busy ? 'unsaved' : ''}>
                     {busy ? 'Settings can be changed between sessions.' : dirty ? 'You have unsaved changes.' : 'Changes apply to the next session.'}
                 </span>
-                <button className='text-button primary' onClick={handleSave} disabled={saving || busy}>
+                <button className={`text-button save-button ${dirty && !busy ? 'primary ready' : ''}`} onClick={handleSave} disabled={saving || busy}>
                     {saving ? <Loader2 size={13} className='spinner' /> : <Save size={13} />} Save changes
                 </button>
             </div>

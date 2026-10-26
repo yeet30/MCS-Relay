@@ -99,6 +99,20 @@
             padding: 6px 14px;
             font-size: 0.85rem;
         }
+
+        /* Dim while there is nothing to save; lit once something changed. */
+        .save-button {
+            opacity: 0.6;
+            transition: opacity 0.15s ease, background-color 0.15s ease;
+        }
+
+        .save-button.ready {
+            opacity: 1;
+            background-color: rgba(var(--accent-rgb), 0.28);
+            border-color: var(--accent);
+            color: var(--text);
+            font-weight: 600;
+        }
     }
 
     .spinner {
