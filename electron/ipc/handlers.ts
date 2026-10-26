@@ -23,7 +23,7 @@ export interface HandlerDeps {
     auth: Pick<GoogleAuth, 'status' | 'login' | 'logout'>;
     servers: Pick<ServersService,
         'list' | 'create' | 'delete' | 'rename' | 'invite' | 'removeMember' | 'leave' | 'join' | 'chooseLocalPath' | 'openFolder' | 'info'
-        | 'isOwner'>;
+        | 'isOwner' | 'serversFolder' | 'pickFolder' | 'checkFolder' | 'setUpFolder'>;
     session: Pick<SessionController,
         'getState' | 'preflight' | 'lastReport' | 'start' | 'stop' | 'resolve' | 'retryUpload' | 'dismiss' | 'command'
         | 'steps' | 'consoleLines' | 'select' | 'isBusy' | 'resumeUnfinishedUploads' | 'getProgress' | 'syncNow' | 'cancel' | 'repair' | 'abandonUpload'
@@ -128,7 +128,12 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
     });
 
     handle('servers:list', () => d.servers.list());
-    handle('servers:create', () => d.servers.create());
+    const MODES = ['new', 'existing'] as const;
+    handle('servers:create', (name) => d.servers.create(text(name, 'name', { max: 100 })));
+    handle('servers:serversFolder', () => d.servers.serversFolder());
+    handle('servers:pickFolder', (kind, current) => d.servers.pickFolder(oneOf(kind, ['parent', 'existing'] as const, 'folder kind'), current === null ? null : text(current, 'folder', { max: 1000 })));
+    handle('servers:checkFolder', (mode, folder, name) => d.servers.checkFolder(oneOf(mode, MODES, 'choice'), text(folder, 'folder', { max: 1000 }), text(name, 'name', { max: 100 })));
+    handle('servers:setUpFolder', (serverId, mode, folder, name) => d.servers.setUpFolder(id(serverId), oneOf(mode, MODES, 'choice'), text(folder, 'folder', { max: 1000 }), text(name, 'name', { max: 100 })));
     handle('servers:delete', (serverId) => {
         const sid = id(serverId);
         if (d.session.isBusy() && d.session.getState().serverId === sid) {

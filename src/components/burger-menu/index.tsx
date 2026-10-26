@@ -20,7 +20,7 @@ export default function BurgerMenu() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [loggingOut, setLoggingOut] = useState(false);
     const [modalItems, setModalItems] = useState<IModalItems[] | null>(null);
-    // Drive Folders holds cards with member lists, so it gets a larger window than the settings panels.
+    // Servers holds cards with member lists, so it gets a larger window than the settings panels.
     const [wide, setWide] = useState(false);
     const driveFoldersRequested = useUiStore((s) => s.driveFoldersRequested);
 
@@ -41,19 +41,19 @@ export default function BurgerMenu() {
     }
 
     const driveFolders: IModalItems[] = [
-        { title: 'Your Folders', content: <OwnedDriveFolders /> },
-        { title: 'Joined Folders', content: <JoinedDriveFolders /> },
+        { title: 'Your servers', content: <OwnedDriveFolders /> },
+        { title: 'Joined servers', content: <JoinedDriveFolders /> },
     ];
 
-    // Another part of the app asked for Drive Folders (a server was just created).
+    // Another part of the app asked for Servers.
     useEffect(() => {
         if (!driveFoldersRequested) return;
         useUiStore.getState().clearDriveFoldersRequest();
         setIsMenuOpen(false);
         setWide(true);
         setModalItems([
-            { title: 'Your Folders', content: <OwnedDriveFolders /> },
-            { title: 'Joined Folders', content: <JoinedDriveFolders /> },
+            { title: 'Your servers', content: <OwnedDriveFolders /> },
+            { title: 'Joined servers', content: <JoinedDriveFolders /> },
         ]);
     }, [driveFoldersRequested]);
 
@@ -87,7 +87,7 @@ export default function BurgerMenu() {
                             <Terminal size={15} /> Scripts
                         </li>
                         <li onClick={() => open(driveFolders, true)}>
-                            <FolderTree size={15} /> Drive Folders
+                            <FolderTree size={15} /> Servers
                         </li>
                         <li onClick={() => open([{ title: 'Preferences', content: <Preferences /> }])}>
                             <SlidersHorizontal size={15} /> Preferences

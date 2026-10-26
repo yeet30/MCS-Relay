@@ -549,3 +549,67 @@ describe('pure helpers', () => {
         expect(parseMaxPlayers('')).toBeNull();
     });
 });
+
+describe('the create wizard', () => {
+    function wizard() {
+        const shortcuts: Array<[string, string]> = [];
+        const servers = new ServersService({
+            drive: alice.drive, launcher: alice.launcher, auth: { me: alice.me }, settings: alice.settings, appData: alice.appData,
+            dialogs: alice.dialogs, beforeDelete: alice.beforeDelete, homeDir: path.join(tmp, 'home'),
+            writeShortcut: (link, target) => {
+                shortcuts.push([link, target]);
+                return true;
+            },
+        });
+        return { servers, shortcuts };
+    }
+
+    test('a server gets the name it was given', async () => {
+        expect((await alice.servers.create('Survival with friends')).name).toBe('Survival with friends');
+        await expect(alice.servers.create('   ')).rejects.toBeInstanceOf(AppError);
+    });
+
+    test('new folders go to MCS-Relay Servers in the home folder until another place is chosen', async () => {
+        const { servers } = wizard();
+        const home = path.join(tmp, 'home');
+        expect(servers.serversFolder()).toBe(path.join(home, 'MCS-Relay Servers'));
+        const server = await servers.create('Survival: 2');
+        const elsewhere = path.join(tmp, 'D-drive');
+        const folder = await servers.setUpFolder(server.id, 'new', elsewhere, 'Survival: 2');
+        expect(folder).toBe(path.join(elsewhere, 'Survival- 2'));
+        expect(fs.statSync(folder).isDirectory()).toBe(true);
+        expect(alice.settings.getServer(server.id).localPath).toBe(folder);
+        expect(servers.serversFolder()).toBe(elsewhere);
+    });
+
+    test('a new server needs an empty or missing folder, and one no other server uses', async () => {
+        const { servers } = wizard();
+        const parent = path.join(tmp, 'servers');
+        fs.mkdirSync(path.join(parent, 'Taken'), { recursive: true });
+        fs.writeFileSync(path.join(parent, 'Taken', 'level.dat'), 'x');
+        expect(() => servers.checkFolder('new', parent, 'Taken')).toThrow(/already has files/);
+        expect(servers.checkFolder('new', parent, 'Fresh')).toBe(path.join(parent, 'Fresh'));
+        const first = await servers.create('One');
+        await servers.setUpFolder(first.id, 'new', parent, 'One');
+        expect(() => servers.checkFolder('existing', path.join(parent, 'One'), 'Two')).toThrow(/another server/);
+        expect(() => servers.checkFolder('existing', path.join(parent, 'missing'), 'Two')).toThrow(/does not exist/);
+    });
+
+    test('an existing server folder is used where it is, with a shortcut beside the other servers', async () => {
+        const { servers, shortcuts } = wizard();
+        const existing = path.join(tmp, 'old', 'My world');
+        fs.mkdirSync(existing, { recursive: true });
+        fs.writeFileSync(path.join(existing, 'server.jar'), 'x');
+        const server = await servers.create('Old world');
+        expect(await servers.setUpFolder(server.id, 'existing', existing, 'Old world')).toBe(existing);
+        expect(shortcuts).toEqual([[path.join(tmp, 'home', 'MCS-Relay Servers', 'Old world.lnk'), existing]]);
+    });
+
+    test('a server deleted here stays off the list while Drive still finds it', async () => {
+        const server = await alice.servers.create('Gone');
+        await alice.servers.delete(server.id);
+        const node = store.nodes.get(server.id);
+        if (node) node.trashed = false;          // Drive's search has not caught up with the trash yet
+        expect((await alice.servers.list()).map((s) => s.id)).not.toContain(server.id);
+    });
+});

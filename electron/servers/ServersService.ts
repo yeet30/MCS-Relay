@@ -2,10 +2,12 @@
 // members, join and leave. Owned servers are the folders inside "Minecraft Shared Servers" in my Drive;
 // joined servers are the folder ids stored in settings.joinedServerIds.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { ServerInfo } from '../../shared/ipc';
 import type { LockContent, MemberRole, ServerMember, ServerSummary, UserInfo } from '../../shared/types';
 import { DEFAULT_SHARED_IGNORES } from '../../shared/paths';
+import { folderNameFor } from '../../shared/folderName';
 import { DriveError, FOLDER_MIME } from '../drive/types';
 import type { DriveApi, DriveFileMeta, DrivePermission } from '../drive/types';
 import { AppError } from '../errors';
@@ -38,7 +40,13 @@ export interface ServersServiceDeps {
     /** Runs before an owner trashes a server folder: SyncEngine.markForeignFilesDeleted, so the files other
      *  members own become placeholders their apps delete for good. A failure cancels the delete. */
     beforeDelete: (serverId: string) => Promise<unknown>;
+    /** The user's home folder: new server folders go to <home>\MCS-Relay Servers unless they chose another place. */
+    homeDir?: string;
+    /** Makes a Windows shortcut (Electron's shell.writeShortcutLink); false when it could not. */
+    writeShortcut?: (link: string, target: string) => boolean;
 }
+
+export type FolderMode = 'new' | 'existing';
 
 const ROLE_ORDER: MemberRole[] = ['owner', 'organizer', 'fileOrganizer', 'writer', 'commenter', 'reader'];
 
@@ -56,6 +64,10 @@ export class ServersService {
     private readonly appData: AppData;
     private readonly dialogs: Dialogs;
     private readonly beforeDelete: (serverId: string) => Promise<unknown>;
+    private readonly homeDir: string;
+    private readonly writeShortcut?: (link: string, target: string) => boolean;
+    /** Deleted from this PC in this run, kept out of listings while Drive's search catches up. */
+    private readonly deletedHere = new Set<string>();
 
     constructor(deps: ServersServiceDeps) {
         this.drive = deps.drive;
@@ -65,12 +77,17 @@ export class ServersService {
         this.appData = deps.appData;
         this.dialogs = deps.dialogs;
         this.beforeDelete = deps.beforeDelete;
+        this.homeDir = deps.homeDir ?? os.homedir();
+        this.writeShortcut = deps.writeShortcut;
     }
 
     /** Owned servers first, then joined ones. One me() per call and one permissions request per folder. */
     async list(): Promise<ServerSummary[]> {
         const [me, rootId] = await Promise.all([this.auth.me(), this.findRoot()]);
-        const ownedFolders = rootId ? await this.drive.listChildren(rootId, { foldersOnly: true }) : [];
+        // Drive's search can still list a folder for a few seconds after it was trashed: a list refreshed right after a
+        // delete would bring the server back.
+        const ownedFolders = (rootId ? await this.drive.listChildren(rootId, { foldersOnly: true }) : [])
+            .filter((f) => !f.trashed && !this.deletedHere.has(f.id));
         const ownedIds = new Set(ownedFolders.map((f) => f.id));
         const joinedIds = this.settings.get().joinedServerIds.filter((id) => !ownedIds.has(id));
 
@@ -104,14 +121,16 @@ export class ServersService {
         }
     }
 
-    async create(): Promise<ServerSummary> {
+    /** `name`: what the user called it (the folder's name in Drive); without one, the next free "Server N". */
+    async create(name?: string): Promise<ServerSummary> {
+        const wanted = name === undefined ? null : checkName(name);
         const me = await this.auth.me();
         const rootId = await this.ensureRoot();
         const existing = await this.drive.listChildren(rootId, { foldersOnly: true });
         if (existing.length >= MAX_OWNED_SERVERS) {
             throw new AppError('INVALID', `You can own at most ${MAX_OWNED_SERVERS} servers. Delete one to create a new one.`);
         }
-        const folder = await this.drive.createFolder(nextServerName(existing.map((f) => f.name)), rootId);
+        const folder = await this.drive.createFolder(wanted ?? nextServerName(existing.map((f) => f.name)), rootId);
         try {
             await this.launcher.createFresh(folder.id, {
                 'lock.json': JSON.stringify(freeLock(me), null, 2),
@@ -154,15 +173,14 @@ export class ServersService {
         }
         await this.beforeDelete(id);
         await this.drive.trash(id);
+        this.deletedHere.add(id);
         this.forgetLocally(id);
         console.log(`[servers] deleted ${meta.name} (${id})`);
     }
 
     async rename(id: string, name: string): Promise<void> {
         requireId(id);
-        const trimmed = typeof name === 'string' ? name.trim() : '';
-        if (trimmed === '') throw new AppError('INVALID', 'The server name cannot be empty.');
-        if (trimmed.length > MAX_NAME_LENGTH) throw new AppError('INVALID', `The server name can be at most ${MAX_NAME_LENGTH} characters long.`);
+        const trimmed = checkName(name);
         await this.drive.rename(id, trimmed);
         this.names.set(id, trimmed);
     }
@@ -255,6 +273,60 @@ export class ServersService {
         if (!chosen) return null;
         this.settings.setLocalPath(id, chosen, this.listed ?? undefined);
         return this.settings.getServer(id).localPath;
+    }
+
+    /** Where new server folders go on this PC: the place chosen last time, else <home>\MCS-Relay Servers. Not in
+     *  Documents, which OneDrive often syncs: a world would then be synced twice and its files locked meanwhile. */
+    serversFolder(): string {
+        return this.settings.get().serversFolder || path.join(this.homeDir, 'MCS-Relay Servers');
+    }
+
+    /** A folder picker for the wizard: the place new server folders go, or an existing server folder. */
+    async pickFolder(kind: 'parent' | 'existing', current: string | null): Promise<string | null> {
+        const title = kind === 'parent' ? 'Choose where your server folders go' : 'Choose your existing server folder';
+        return this.dialogs.chooseFolder(title, current ?? undefined);
+    }
+
+    /** The folder a server would use, after checking it can: for "new", `folder` is the parent and the server's own
+     *  folder (named after it) must be missing or empty; for "existing", `folder` must be a folder. Neither may be
+     *  used by another server. Returns the server's folder. */
+    checkFolder(mode: FolderMode, folder: string, name: string): string {
+        if (typeof folder !== 'string' || !path.isAbsolute(folder.trim())) throw new AppError('INVALID', 'Choose the folder with the Browse button.');
+        const target = mode === 'new' ? path.join(folder.trim(), folderNameFor(checkName(name))) : path.resolve(folder.trim());
+        let stat: fs.Stats | null = null;
+        try {
+            stat = fs.statSync(target);
+        } catch {
+            // missing: fine for a new server
+        }
+        if (mode === 'existing' && !stat?.isDirectory()) throw new AppError('INVALID', 'That folder does not exist. Choose your server folder with Browse.');
+        if (mode === 'new' && stat) {
+            if (!stat.isDirectory() || fs.readdirSync(target).length > 0) {
+                throw new AppError('INVALID', `${target} already has files in it. Choose another place, or go back and choose "I already have a server folder".`);
+            }
+        }
+        const clash = this.settings.folderInUse(target, null, this.listed ?? undefined);
+        if (clash) throw new AppError('INVALID', 'This folder is already used by another server (or contains it). Each server needs its own folder.', `${target} overlaps ${clash}`);
+        return target;
+    }
+
+    /** Gives a new server its folder: makes it (new), or puts a shortcut to it beside the others (existing), so every
+     *  server can be found in one place. Remembers the place for the next server. */
+    async setUpFolder(id: string, mode: FolderMode, folder: string, name: string): Promise<string> {
+        requireId(id);
+        const target = this.checkFolder(mode, folder, name);
+        if (mode === 'new') {
+            fs.mkdirSync(target, { recursive: true });
+            this.settings.set({ serversFolder: folder.trim() });
+        } else if (this.writeShortcut) {
+            const parent = this.serversFolder();
+            fs.mkdirSync(parent, { recursive: true });
+            const link = path.join(parent, `${folderNameFor(name)}.lnk`);
+            if (!this.writeShortcut(link, target)) console.warn(`[servers] could not make the shortcut ${link}`);
+        }
+        this.settings.setLocalPath(id, target, this.listed ?? undefined);
+        console.log(`[servers] ${id} uses ${target} (${mode})`);
+        return target;
     }
 
     async openFolder(id: string): Promise<void> {
@@ -456,6 +528,14 @@ function escapeQuery(value: string): string {
 
 function isDriveStatus(err: unknown, status: number): err is DriveError {
     return err instanceof DriveError && err.status === status;
+}
+
+/** A server name as typed: trimmed, not empty, not too long. */
+function checkName(name: unknown): string {
+    const trimmed = typeof name === 'string' ? name.trim() : '';
+    if (trimmed === '') throw new AppError('INVALID', 'The server name cannot be empty.');
+    if (trimmed.length > MAX_NAME_LENGTH) throw new AppError('INVALID', `The server name can be at most ${MAX_NAME_LENGTH} characters long.`);
+    return trimmed;
 }
 
 function requireId(id: unknown): void {

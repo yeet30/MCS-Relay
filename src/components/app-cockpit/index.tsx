@@ -6,11 +6,11 @@ import { useConfirm } from '../../hooks/useConfirm';
 import { incompleteStartQuestion, powerMode } from '../../lib/sync';
 import type { PowerMode } from '../../lib/sync';
 import { useNoticeStore } from '../../stores/noticeStore';
-import { createServer } from '../../stores/serverActions';
 import { selectSelectedServer, useServersStore } from '../../stores/serversStore';
 import { lockFor, reportFor, useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useUiStore } from '../../stores/uiStore';
 import { DirectoryMenu, TransferMenu } from '../directory-menu';
 import JoinServer from '../join-server';
 import Modal from '../modal';
@@ -27,7 +27,7 @@ export default function AppCockpit() {
     // While the folder is compared with the cloud, what may be done with the server is not known yet.
     const checking = useSessionStore((s) => selectedId !== null && s.checkingId === selectedId);
     const { confirm, popup } = useConfirm();
-    const [creating, setCreating] = useState(false);
+    const creating = useUiStore((s) => s.creating);
     const [isJoinOpen, setIsJoinOpen] = useState(false);
     const [requesting, setRequesting] = useState(false);
 
@@ -42,10 +42,8 @@ export default function AppCockpit() {
     // What I may do comes from my role on the server, never from a constant.
     const canWrite = selected !== null && (selected.myRole === 'owner' || selected.myRole === 'writer' || selected.kind === 'owned');
 
-    async function handleCreate() {
-        setCreating(true);
-        await createServer(confirm);
-        setCreating(false);
+    function handleCreate() {
+        useUiStore.getState().openCreate(true);
     }
 
     /** Mojang's EULA has to be accepted before a server runs; asked once per Google account. */
@@ -116,10 +114,10 @@ export default function AppCockpit() {
                 <div className='buttons-div'>
                     <button className='initial-button' onClick={handleCreate} disabled={creating}>
                         <span className='initial-icon'>
-                            {creating ? <LoaderCircle size={26} className='spinner' /> : <Plus size={26} />}
+                            <Plus size={26} />
                         </span>
                         <span className='initial-label'>Create a server</span>
-                        <span className='initial-hint'>A new world folder in your Google Drive. You name it next.</span>
+                        <span className='initial-hint'>A few questions, then a new server in your Google Drive and on this PC.</span>
                     </button>
                     <button className='initial-button' onClick={() => setIsJoinOpen(true)}>
                         <span className='initial-icon'><LogIn size={26} /></span>

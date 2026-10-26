@@ -13,7 +13,7 @@ interface ServersStore {
     loaded: boolean;
     error: string | null;
     selectedId: ServerId | null;
-    /** Servers being deleted or left: kept here, not in the card, so reopening Drive Folders still shows it and the
+    /** Servers being deleted or left: kept here, not in the card, so reopening Servers still shows it and the
      *  button stays off. For a deletion, how many of the other members' files went back to them so far. */
     leaving: Record<ServerId, { done: number; total: number } | null>;
     setLeaving: (serverId: ServerId, progress: { done: number; total: number } | null | undefined) => void;

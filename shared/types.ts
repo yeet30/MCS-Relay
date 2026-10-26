@@ -86,6 +86,8 @@ export interface AppSettings {
     joinedServerIds: ServerId[];
     eulaAccepted: boolean;              // this Google account accepted the Minecraft EULA in the app
     termsAccepted: number;              // the TERMS_VERSION this Google account agreed to; 0: none yet
+    tourDone: boolean;                  // this Google account saw where its servers are managed, after its first server
+    serversFolder: string;              // where new server folders go on this PC; '' = <home>\MCS-Relay Servers
     notifications: boolean;             // a desktop notification when a start or stop finishes in the background
     notificationSound: boolean;         // a short chime when a start or stop finishes
     theme: ThemeName;                   // per PC, like the other display settings

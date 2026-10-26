@@ -1,0 +1,50 @@
+.tour {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+}
+
+/* The lit spot: everything around it is dimmed by its huge shadow. */
+.tour-spot {
+    position: fixed;
+    border-radius: 999px;
+    box-shadow: 0 0 0 9999px rgba(10, 10, 14, 0.62);
+    pointer-events: none;
+}
+
+.tour-arrow {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+}
+
+.tour-card {
+    position: fixed;
+    width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 18px;
+    border-radius: 16px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    text-align: left;
+
+    h3 {
+        margin: 0;
+        font-size: 1rem;
+    }
+
+    p {
+        margin: 0;
+        font-size: 0.82rem;
+        line-height: 1.5;
+        color: var(--muted);
+    }
+
+    .text-button {
+        align-self: flex-end;
+        padding: 6px 16px;
+        font-size: 0.85rem;
+    }
+}

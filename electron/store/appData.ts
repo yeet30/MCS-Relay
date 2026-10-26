@@ -48,6 +48,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     joinedServerIds: [],
     eulaAccepted: false,
     termsAccepted: 0,
+    tourDone: false,
+    serversFolder: '',
     notifications: true,
     notificationSound: true,
     theme: 'light',
@@ -105,9 +107,9 @@ export class AppData {
             return;
         }
         // The account's part goes to its own file; settings.json keeps what belongs to this PC.
-        const { selectedServerId, joinedServerIds, eulaAccepted, termsAccepted, ...pc } = clean;
+        const { selectedServerId, joinedServerIds, eulaAccepted, termsAccepted, tourDone, ...pc } = clean;
         writeJsonAtomic(this.settingsFile(), { ...parseSettings(this.readJson(this.settingsFile())), ...pc });
-        writeJsonAtomic(file, { selectedServerId, joinedServerIds, eulaAccepted, termsAccepted });
+        writeJsonAtomic(file, { selectedServerId, joinedServerIds, eulaAccepted, termsAccepted, tourDone });
     }
 
     private settingsFile(): string {
@@ -135,6 +137,7 @@ export class AppData {
             joinedServerIds: inherit ? legacy.joinedServerIds : [],
             eulaAccepted: false,
             termsAccepted: 0,
+            tourDone: false,
         });
     }
 
@@ -417,6 +420,8 @@ function parseSettings(raw: unknown): AppSettings {
         joinedServerIds: Array.isArray(r.joinedServerIds) ? unique(r.joinedServerIds.filter(isValidServerId)) : [],
         eulaAccepted: r.eulaAccepted === true,
         termsAccepted: isCount(r.termsAccepted) ? r.termsAccepted : 0,
+        tourDone: r.tourDone === true,
+        serversFolder: typeof r.serversFolder === 'string' ? r.serversFolder : '',
         notifications: typeof r.notifications === 'boolean' ? r.notifications : DEFAULT_SETTINGS.notifications,
         notificationSound: typeof r.notificationSound === 'boolean' ? r.notificationSound : DEFAULT_SETTINGS.notificationSound,
         theme: THEMES.includes(r.theme as ThemeName) ? (r.theme as ThemeName) : DEFAULT_SETTINGS.theme,
@@ -424,9 +429,12 @@ function parseSettings(raw: unknown): AppSettings {
     };
 }
 
-function parseAccount(raw: unknown): Pick<AppSettings, 'selectedServerId' | 'joinedServerIds' | 'eulaAccepted' | 'termsAccepted'> {
+function parseAccount(raw: unknown): Pick<AppSettings, 'selectedServerId' | 'joinedServerIds' | 'eulaAccepted' | 'termsAccepted' | 'tourDone'> {
     const s = parseSettings(raw);
-    return { selectedServerId: s.selectedServerId, joinedServerIds: s.joinedServerIds, eulaAccepted: s.eulaAccepted, termsAccepted: s.termsAccepted };
+    return {
+        selectedServerId: s.selectedServerId, joinedServerIds: s.joinedServerIds, eulaAccepted: s.eulaAccepted, termsAccepted: s.termsAccepted,
+        tourDone: s.tourDone,
+    };
 }
 
 function parseServerSettings(raw: unknown): ServerSettings {

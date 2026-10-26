@@ -182,6 +182,8 @@ describe('legacy import', () => {
             joinedServerIds: ['srvB', 'srvC'],
             eulaAccepted: false,
             termsAccepted: 0,
+            tourDone: false,
+            serversFolder: '',
             notifications: true,
             notificationSound: true,
             theme: 'light',

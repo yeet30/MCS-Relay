@@ -4,7 +4,8 @@ import GreetingSection from '../../components/greeting-section';
 import BurgerMenu from '../../components/burger-menu';
 import MembersSection from '../../components/members-section';
 import TermsGate from '../../components/terms-gate';
-import ServerSetupHost from '../../components/server-setup/host';
+import CreateServerHost from '../../components/create-server';
+import Tour from '../../components/tour';
 import { TERMS_VERSION } from '../../../shared/types';
 import { useAuthStore } from '../../stores/authStore';
 import { useServersStore } from '../../stores/serversStore';
@@ -45,7 +46,8 @@ export default function MainPage() {
             <section id='menu-section'>
                 <BurgerMenu />
             </section>
-            <ServerSetupHost />
+            <CreateServerHost />
+            <Tour />
         </section>
     );
 }

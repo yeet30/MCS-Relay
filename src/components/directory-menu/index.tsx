@@ -1,6 +1,6 @@
 import './directory-menu.css';
 import { useRef, useState } from 'react';
-import { Archive, CloudDownload, Download, CloudSync, CloudUpload, EyeOff, FileDiff, FolderCog, FolderOpen } from 'lucide-react';
+import { Archive, CloudDownload, CloudSync, CloudUpload, EyeOff, FileDiff, FolderCog, FolderOpen } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { ServerSummary } from '../../../shared/types';
 import { useConfirm } from '../../hooks/useConfirm';
@@ -8,7 +8,6 @@ import { isSessionBusy, manualSyncBlockers } from '../../lib/sync';
 import type { IModalItems } from '../../lib/ui-types';
 import { request } from '../../stores/request';
 import { reportFor, useSessionStore } from '../../stores/sessionStore';
-import { useUiStore } from '../../stores/uiStore';
 import BackupsPanel from '../backups-panel';
 import ChangesPanel from '../changes-panel';
 import Modal from '../modal';
@@ -82,11 +81,6 @@ export function DirectoryMenu({ server, canWrite }: { server: ServerSummary | nu
                             {canWrite && (
                                 <button className='side-option' onClick={() => show([{ title: 'Ignored files', content: <SyncRules serverId={server.id} /> }])}>
                                     <EyeOff size={15} /> Ignored files
-                                </button>
-                            )}
-                            {server.localPath && canWrite && (
-                                <button className='side-option' onClick={() => { close(); useUiStore.getState().openServerSetup(server.id); }}>
-                                    <Download size={15} /> Download a server
                                 </button>
                             )}
                             {server.localPath && (

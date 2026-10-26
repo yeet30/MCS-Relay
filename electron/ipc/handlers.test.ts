@@ -9,7 +9,8 @@ import type { HandlerDeps } from './handlers';
 // A literal with every command: adding a command to shared/ipc.ts without listing it here is a compile error.
 const ALL_COMMANDS: Record<CommandName, true> = {
     'auth:status': true, 'auth:login': true, 'auth:logout': true,
-    'servers:list': true, 'servers:create': true, 'servers:delete': true, 'servers:rename': true, 'servers:invite': true,
+    'servers:list': true, 'servers:create': true, 'servers:serversFolder': true, 'servers:pickFolder': true,
+    'servers:checkFolder': true, 'servers:setUpFolder': true, 'servers:delete': true, 'servers:rename': true, 'servers:invite': true,
     'servers:removeMember': true, 'servers:leave': true, 'servers:join': true, 'servers:chooseLocalPath': true,
     'servers:openFolder': true, 'servers:info': true, 'servers:select': true,
     'session:get': true, 'session:preflight': true, 'session:lastReport': true, 'session:start': true, 'session:stop': true,

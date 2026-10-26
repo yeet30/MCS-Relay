@@ -7,15 +7,14 @@ import { formatCount } from '../../lib/format';
 import { isMySession } from '../../lib/sync';
 import { useNoticeStore } from '../../stores/noticeStore';
 import { request } from '../../stores/request';
-import { askForServerFolder, chooseLocalPath } from '../../stores/serverActions';
+import { chooseLocalPath } from '../../stores/serverActions';
 import { useServersStore } from '../../stores/serversStore';
 import { useSessionStore } from '../../stores/sessionStore';
-import { useUiStore } from '../../stores/uiStore';
 import PermissionsList from '../permissions-list';
 
 const MAX_NAME = 60;
 
-/** One server in Settings > Drive Folders: its name, its folder on this PC and its members. Downloading and
+/** One server in Settings > Servers: its name, its folder on this PC and its members. Downloading and
  *  uploading happen only through a session. */
 export default function ServerSlot({ server }: { server: ServerSummary }) {
     const { confirm, popup } = useConfirm();
@@ -30,10 +29,7 @@ export default function ServerSlot({ server }: { server: ServerSummary }) {
     const [loading, setLoading] = useState<'edit' | null>(null);
     const leaving = useServersStore((s) => server.id in s.leaving);
     const leaveProgress = useServersStore((s) => s.leaving[server.id] ?? null);
-    const renameId = useUiStore((s) => s.renameId);
     const cardRef = useRef<HTMLDivElement>(null);
-    /** The server was just created: once it is named, its folder on this PC is asked for. */
-    const namingNew = useRef(false);
 
     useEffect(() => {
         if (!isEditing) setNameBuffer(server.name);
@@ -41,24 +37,17 @@ export default function ServerSlot({ server }: { server: ServerSummary }) {
 
     async function handleSave() {
         const name = nameBuffer.trim();
-        let saved = true;
         if (name && name !== server.name) {
             setLoading('edit');
             const res = await request('servers:rename', server.id, name);
             if (res.ok) useServersStore.getState().setName(server.id, name);
             else setNameBuffer(server.name);
-            saved = res.ok;
             setLoading(null);
         }
         setIsEditing(false);
-        if (namingNew.current && saved) {
-            namingNew.current = false;
-            await askForServerFolder({ ...server, name: name || server.name }, confirm);
-        }
     }
 
     function cancelEditing() {
-        namingNew.current = false;
         setIsEditing(false);
     }
 
@@ -90,14 +79,6 @@ World files you uploaded stay in the server, because the others still need them,
         setIsEditing(true);
         setTimeout(() => inputRef.current?.select(), 0);
     }
-
-    // A server that was just created opens with its name selected, as if the pen button had been pressed.
-    useEffect(() => {
-        if (renameId !== server.id || !useUiStore.getState().takeRename(server.id)) return;
-        cardRef.current?.scrollIntoView({ block: 'nearest' });
-        namingNew.current = true;
-        startEditing();
-    }, [renameId, server.id]);
 
     return (
         <div className={`server-card ${isEditing ? 'renaming' : ''} ${leaving ? 'leaving' : ''}`} ref={cardRef} aria-busy={leaving}>

@@ -35,7 +35,16 @@ export interface Commands {
     'auth:logout': () => void;
 
     'servers:list': () => ServerSummary[];
-    'servers:create': () => ServerSummary;
+    /** A new server folder in my Drive with this name (the wizard's first step). */
+    'servers:create': (name: string) => ServerSummary;
+    /** Where new server folders go on this PC. */
+    'servers:serversFolder': () => string;
+    'servers:pickFolder': (kind: 'parent' | 'existing', current: string | null) => string | null;
+    /** Checks a folder for a server before it is created: "new" takes the parent, "existing" the server folder.
+     *  Returns the server's folder. */
+    'servers:checkFolder': (mode: 'new' | 'existing', folder: string, name: string) => string;
+    /** Makes the new server's folder, or links its existing one, and sets it as the server's folder on this PC. */
+    'servers:setUpFolder': (serverId: ServerId, mode: 'new' | 'existing', folder: string, name: string) => string;
     'servers:delete': (serverId: ServerId) => void;
     'servers:rename': (serverId: ServerId, name: string) => void;
     /** The new member, as Drive describes them. */

@@ -62,6 +62,12 @@ export class SettingsService {
             }
             next.termsAccepted = version;
         }
+        if ('tourDone' in patch) next.tourDone = requireBoolean(patch.tourDone, 'tourDone');
+        if ('serversFolder' in patch) {
+            const p: unknown = patch.serversFolder;
+            if (typeof p !== 'string' || (p.trim() !== '' && !path.isAbsolute(p.trim()))) throw invalid('Choose the folder with the folder picker.');
+            next.serversFolder = p.trim();
+        }
         if ('notifications' in patch) next.notifications = requireBoolean(patch.notifications, 'notifications');
         if ('notificationSound' in patch) next.notificationSound = requireBoolean(patch.notificationSound, 'notificationSound');
         if ('playitPrimary' in patch) {
@@ -109,7 +115,7 @@ export class SettingsService {
                 throw invalid('Choose the server folder with the folder picker.');
             }
             const chosen = path.resolve(localPath.trim());
-            const clash = this.serverUsingFolder(id, chosen, listed);
+            const clash = this.folderInUse(chosen, id, listed);
             if (clash) {
                 throw invalid('This folder is already used by another server (or contains it). Choose a separate folder for each server.', `${chosen} overlaps ${clash}`);
             }
@@ -152,7 +158,7 @@ export class SettingsService {
     private validateJavaPath(value: unknown, serverFolder: string | null): string {
         if (typeof value !== 'string' || !path.isAbsolute(value.trim())) throw invalid('Choose the Java program with the file picker.');
         const chosen = path.resolve(value.trim());
-        if (!/^java(.exe)?$/i.test(path.basename(chosen))) throw invalid('Choose java.exe, in the bin folder of a Java installation.');
+        if (!/^java(\.exe)?$/i.test(path.basename(chosen))) throw invalid('Choose java.exe, in the bin folder of a Java installation.');
         if (serverFolder) {
             const key = (p: string) => (this.platform === 'win32' || this.platform === 'darwin' ? path.resolve(p).toLowerCase() : path.resolve(p));
             if (isInside(key(chosen), key(serverFolder))) {
@@ -163,7 +169,7 @@ export class SettingsService {
     }
 
     /** Two servers syncing the same folder (or one inside the other) would overwrite each other's worlds. */
-    private serverUsingFolder(id: string, chosen: string, listed?: ReadonlySet<string>): string | null {
+    folderInUse(chosen: string, id: string | null, listed?: ReadonlySet<string>): string | null {
         const key = (p: string) => {
             const resolved = path.resolve(p);
             return this.platform === 'win32' || this.platform === 'darwin' ? resolved.toLowerCase() : resolved;

@@ -164,7 +164,8 @@ const reports = new ReportService({
 });
 
 const servers = new ServersService({
-    drive, launcher, auth, settings, appData, dialogs,
+    drive, launcher, auth, settings, appData, dialogs, homeDir: app.getPath('home'),
+    writeShortcut: (link, target) => shell.writeShortcutLink(link, 'create', { target }),
     beforeDelete: async (serverId) => {
         const view = await lock.inspect(serverId);
         if (view.state === 'held' || view.state === 'mine') {
