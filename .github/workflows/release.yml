@@ -1,7 +1,8 @@
 # Builds the Windows installer and publishes it as a GitHub Release whenever a version tag is pushed:
-#   1. set "version" in package.json (for example 1.0.1) and commit it
+#   1. set "version" in package.json (for example 1.0.1), write what changed in release-notes.md, and commit both
 #   2. git tag v1.0.1 && git push origin v1.0.1
-# The installed apps find the new release by themselves (electron-updater reads latest.yml from it).
+# The installed apps find the new release by themselves (electron-updater reads latest.yml from it, notes included).
+# The same notes become the text of the release on GitHub.
 #
 # Needs one repository secret, GOOGLE_CLIENT_SECRET_JSON: the whole content of config/client_secret.json, which is
 # never committed (Settings > Secrets and variables > Actions > New repository secret).
@@ -33,6 +34,11 @@ jobs:
             echo "::error::The tag is $GITHUB_REF_NAME but package.json says $version. Change one of them so they match."
             exit 1
           fi
+          # Notes left over from the last release would be published as this one's.
+          if ! head -n 1 release-notes.md | grep -qF "MCS-Relay ${version#v}"; then
+            echo "::error::release-notes.md does not start with '## MCS-Relay ${version#v}'. Write this version's notes first."
+            exit 1
+          fi
 
       - run: npm ci
 
@@ -56,3 +62,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run release
+
+      - name: Release notes on the release page
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$GITHUB_REF_NAME" --notes-file release-notes.md

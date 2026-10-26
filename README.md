@@ -146,7 +146,8 @@ npm run dev
 
 ### Releasing
 
-Set the new `version` in `package.json`, commit it, then push a matching tag:
+Set the new `version` in `package.json`, write what changed in `release-notes.md` (it starts with
+`## MCS-Relay <version>`), commit both, then push a matching tag:
 
 ```bash
 git tag v1.0.1
@@ -156,8 +157,8 @@ git tag v1.0.1
 git push origin v1.0.1
 ```
 
-GitHub Actions checks, tests and builds the installer and publishes it as a release; installed apps update
-themselves from it. The workflow needs one repository secret, `GOOGLE_CLIENT_SECRET_JSON`, holding the contents of
+GitHub Actions checks, tests and builds the installer and publishes it as a release, with the notes as its text;
+installed apps update themselves from it. The workflow needs one repository secret, `GOOGLE_CLIENT_SECRET_JSON`, holding the contents of
 `config/client_secret.json`.
 
 ## License
