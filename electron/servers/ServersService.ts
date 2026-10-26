@@ -97,6 +97,7 @@ export class ServersService {
         ]);
         const servers = [...owned, ...joined.filter((s): s is ServerSummary => s !== null)];
         this.listed = new Set(servers.map((s) => s.id));
+        console.log(`[servers] listed ${owned.length} owned and ${servers.length - owned.length} joined: ${servers.map((s) => `${s.name} (${s.id})`).join(', ') || 'none'}`);
         void this.forgetDeleted(this.listed).catch((err: unknown) => console.warn('[servers] could not tidy up deleted servers:', err));
         return servers;
     }

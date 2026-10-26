@@ -7,6 +7,10 @@ interface UiStore {
     driveFoldersRequested: boolean;
     openDriveFolders: () => void;
     clearDriveFoldersRequest: () => void;
+    /** The window the settings menu has open (Servers, after a server was created there) should close. */
+    closeRequested: boolean;
+    closeServers: () => void;
+    clearCloseRequest: () => void;
     /** The "create a server" wizard is open. */
     creating: boolean;
     openCreate: (open: boolean) => void;
@@ -19,6 +23,9 @@ export const useUiStore = create<UiStore>()((set) => ({
     driveFoldersRequested: false,
     openDriveFolders: () => set({ driveFoldersRequested: true }),
     clearDriveFoldersRequest: () => set({ driveFoldersRequested: false }),
+    closeRequested: false,
+    closeServers: () => set({ closeRequested: true }),
+    clearCloseRequest: () => set({ closeRequested: false }),
     creating: false,
     openCreate: (creating) => set({ creating }),
     touring: false,

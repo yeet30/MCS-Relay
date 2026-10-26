@@ -19,8 +19,8 @@ import type { SettingsService } from '../settings/SettingsService';
 const MOJANG_MANIFEST = 'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json';
 const PAPER = 'https://fill.papermc.io/v3/projects/paper';
 const FABRIC = 'https://meta.fabricmc.net/v2';
-/** Mojang offers no server download before 1.2.5 (April 2012). */
-const FIRST_SERVER_RELEASE = Date.parse('2012-03-01T00:00:00Z');
+/** The oldest version Mojang offers a server download for: 1.0 to 1.2.4 have none. */
+const FIRST_WITH_SERVER = '1.2.5';
 const PROGRESS_MS = 250;
 
 export type FetchFn = (url: string, init?: { headers?: Record<string, string>; signal?: AbortSignal }) => Promise<Response>;
@@ -79,9 +79,11 @@ export class ServerInstaller {
         if (cached) return cached;
         let list: InstallableVersion[];
         if (kind === 'vanilla') {
-            const manifest = await this.json<{ versions: Array<{ id: string; type: string; releaseTime: string }> }>(MOJANG_MANIFEST);
-            list = manifest.versions
-                .filter((v) => (v.type === 'release' || v.type === 'snapshot') && Date.parse(v.releaseTime) >= FIRST_SERVER_RELEASE)
+            const manifest = await this.json<{ versions: Array<{ id: string; type: string }> }>(MOJANG_MANIFEST);
+            // The list is newest first: everything up to 1.2.5 has a server download, nothing after it does.
+            const oldest = manifest.versions.findIndex((v) => v.id === FIRST_WITH_SERVER);
+            list = (oldest >= 0 ? manifest.versions.slice(0, oldest + 1) : manifest.versions)
+                .filter((v) => v.type === 'release' || v.type === 'snapshot')
                 .map((v) => ({ id: v.id, stable: v.type === 'release' }));
         } else if (kind === 'paper') {
             const project = await this.json<{ versions: Record<string, string[]> }>(PAPER);

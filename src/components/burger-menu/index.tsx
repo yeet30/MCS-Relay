@@ -23,6 +23,7 @@ export default function BurgerMenu() {
     // Servers holds cards with member lists, so it gets a larger window than the settings panels.
     const [wide, setWide] = useState(false);
     const driveFoldersRequested = useUiStore((s) => s.driveFoldersRequested);
+    const closeRequested = useUiStore((s) => s.closeRequested);
 
     async function handleLogout() {
         setLoggingOut(true);
@@ -56,6 +57,13 @@ export default function BurgerMenu() {
             { title: 'Joined servers', content: <JoinedDriveFolders /> },
         ]);
     }, [driveFoldersRequested]);
+
+    // A server was created from Servers: it closes, so the page (and the tour on it) is in view.
+    useEffect(() => {
+        if (!closeRequested) return;
+        useUiStore.getState().clearCloseRequest();
+        setModalItems(null);
+    }, [closeRequested]);
 
     const state = isMenuOpen ? 'open' : 'close';
     return (

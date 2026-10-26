@@ -52,66 +52,6 @@
         color: var(--muted);
     }
 
-    .ram-sliders {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        padding: 10px 12px;
-        border-radius: 10px;
-        background: var(--panel);
-    }
-
-    .ram-row {
-        display: grid;
-        grid-template-columns: 5.5rem 1fr 4.2rem;
-        align-items: center;
-        gap: 12px;
-
-        label {
-            display: flex;
-            flex-direction: column;
-            font-size: 0.85rem;
-            line-height: 1.2;
-
-            small {
-                font-family: var(--mono);
-                font-size: 0.7rem;
-                color: var(--muted);
-            }
-        }
-    }
-
-    .ram-value {
-        text-align: right;
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
-    }
-
-    /* A flat slider: the part up to the thumb is filled with the accent. */
-    input[type='range'] {
-        appearance: none;
-        width: 100%;
-        height: 6px;
-        margin: 0;
-        border-radius: 999px;
-        background: linear-gradient(to right, var(--accent) var(--fill, 0%), var(--panel-3) var(--fill, 0%));
-        cursor: pointer;
-    }
-
-    input[type='range']::-webkit-slider-thumb {
-        appearance: none;
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: var(--text);
-        border: 3px solid var(--accent);
-    }
-
-    input[type='range']:focus-visible {
-        outline: 2px solid rgba(var(--accent-rgb), 0.7);
-        outline-offset: 4px;
-    }
-
     .flags-input {
         width: 100%;
         box-sizing: border-box;

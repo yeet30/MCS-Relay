@@ -30,26 +30,13 @@
         word-break: break-all;
     }
 
+    .ram-sliders {
+        background: var(--panel-2);
+    }
+
     /* The version list is shorter here: the choice above it shares the window. */
     .setup-versions {
         max-height: 128px;
-    }
-}
-
-/* Four dashes for the four questions. */
-.wizard-progress {
-    display: flex;
-    gap: 6px;
-
-    span {
-        flex: 1;
-        height: 4px;
-        border-radius: 2px;
-        background: var(--panel-3);
-    }
-
-    span.on {
-        background: var(--accent);
     }
 }
 
@@ -284,6 +271,28 @@
     }
 }
 
-.wizard-spacer {
+/* Where the questions stand, between Cancel and Back: small outlined squares, the current one filled. Kept apart
+   from the window's own tab underline, so the two red marks do not read as one. */
+.wizard-steps {
     flex: 1;
+    display: flex;
+    justify-content: center;
+    gap: 7px;
+
+    span {
+        width: 9px;
+        height: 9px;
+        border-radius: 3px;
+        border: 1.5px solid var(--line-strong);
+    }
+
+    span.done {
+        border-color: var(--line-strong);
+        background: var(--line-strong);
+    }
+
+    span.current {
+        border-color: var(--text);
+        background: var(--text);
+    }
 }

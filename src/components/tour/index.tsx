@@ -37,10 +37,13 @@ export default function Tour() {
         void useSettingsStore.getState().update({ tourDone: true });
     }
 
-    const cardTop = box.top + box.height + 70;
-    const cardRight = Math.max(16, window.innerWidth - (box.left + box.width));
-    // From under the card's top right corner up to the lit menu.
-    const arrowX = box.left + box.width / 2;
+    // The note sits below and to the left of the menu; the arrow leaves its top right corner and ends at the menu's
+    // left side, beside it rather than under it.
+    const cardTop = box.top + box.height + 34;
+    const cardRight = Math.max(16, window.innerWidth - box.left + 24);
+    const fromX = window.innerWidth - cardRight - 30;
+    const toX = box.left - 10;
+    const toY = box.top + box.height / 2;
     return (
         <div className='tour' role='dialog' aria-label='Where your servers are managed'>
             <div className='tour-spot' style={{ top: box.top, left: box.left, width: box.width, height: box.height }} />
@@ -51,7 +54,7 @@ export default function Tour() {
                     </marker>
                 </defs>
                 <path
-                    d={`M ${arrowX - 70} ${cardTop - 6} Q ${arrowX - 60} ${box.top + box.height + 20} ${arrowX - 8} ${box.top + box.height + 8}`}
+                    d={`M ${fromX} ${cardTop - 8} Q ${fromX + 4} ${toY} ${toX} ${toY}`}
                     stroke='#ffffff'
                     strokeWidth='2.5'
                     fill='none'

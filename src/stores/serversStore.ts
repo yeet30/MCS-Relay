@@ -48,6 +48,10 @@ export function selectSelectedServer(s: ServersStore): ServerSummary | null {
     return s.servers.find((server) => server.id === s.selectedId) ?? null;
 }
 
+/** Servers deleted or left in this window: a list asked for before that finished (and answered after it) must not
+ *  bring one back. */
+const removed = new Set<ServerId>();
+
 export const useServersStore = create<ServersStore>()((set, get) => ({
     servers: [],
     loading: false,
@@ -64,7 +68,7 @@ export const useServersStore = create<ServersStore>()((set, get) => ({
             set({ loading: false, error: res.error.message });
             return false;
         }
-        set({ servers: res.value, loading: false, loaded: true, error: null });
+        set({ servers: res.value.filter((server) => !removed.has(server.id)), loading: false, loaded: true, error: null });
         return true;
     },
 
@@ -84,6 +88,7 @@ export const useServersStore = create<ServersStore>()((set, get) => ({
     })),
 
     remove: (serverId) => {
+        removed.add(serverId);
         const servers = get().servers.filter((server) => server.id !== serverId);
         set({ servers });
         if (get().selectedId === serverId) void get().select(servers[0]?.id ?? null);
@@ -102,6 +107,7 @@ export const useServersStore = create<ServersStore>()((set, get) => ({
     })),
 
     add: (server) => {
+        removed.delete(server.id);
         set((s) => ({ servers: [...s.servers.filter((other) => other.id !== server.id), server], loaded: true }));
         // Checking the new server (Drive requests) runs in the background, so nothing waits for it.
         if (get().selectedId === null && !isSessionBusy(useSessionStore.getState().state.phase)) void get().select(server.id);

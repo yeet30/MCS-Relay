@@ -12,6 +12,7 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useUiStore } from '../../stores/uiStore';
 import Modal from '../modal';
+import RamSliders from '../ram-slider';
 import { useCloseGuard } from '../modal/close-guard';
 import { kindName } from '../../lib/serverKinds';
 import VersionPicker, { JavaLine } from '../server-setup';
@@ -21,7 +22,6 @@ type Source = 'new' | 'existing';
 type TaskState = 'waiting' | 'running' | 'done' | 'failed';
 
 const STEPS: Step[] = ['name', 'source', 'place', 'start'];
-const MEMORY_GB = [2, 4, 6, 8, 12];
 
 interface Task {
     id: string;
@@ -41,7 +41,7 @@ function Wizard({ onClose }: { onClose: () => void }) {
     const [existing, setExisting] = useState('');
     const [usePlayit, setUsePlayit] = useState(false);
     const [playitPath, setPlayitPath] = useState('');
-    const [memoryGb, setMemoryGb] = useState(4);
+    const [ram, setRam] = useState({ maxRAM: 4096, minRAM: 2048 });
     const [error, setError] = useState<string | null>(null);
     const [checking, setChecking] = useState(false);
     const [tasks, setTasks] = useState<Task[]>([]);
@@ -149,8 +149,7 @@ function Wizard({ onClose }: { onClose: () => void }) {
         if (playitChanged && !(await settingsStore.update({ usePlayitgg: usePlayit, ...(usePlayit ? { playitggPath: playitPath } : {}) }))) {
             return fail('settings', 'playit.gg could not be saved. Set it in Settings > Scripts.');
         }
-        const maxRAM = memoryGb * 1024;
-        const flags = await settingsStore.updateServer(server.id, { javaFlags: { maxRAM, minRAM: Math.min(2048, maxRAM) } });
+        const flags = await settingsStore.updateServer(server.id, { javaFlags: ram });
         if (!flags) return fail('settings', 'The memory could not be saved. Set it in Settings > Scripts.');
         const info = await invoke('installer:folder', server.id);
         setJava({ needed, found: info.ok ? info.value.javaFound : null });
@@ -160,6 +159,8 @@ function Wizard({ onClose }: { onClose: () => void }) {
     /** The new server becomes the selected one, and an account's first server shows where servers are managed. */
     const afterCreate = useCallback(async (server: ServerSummary | null) => {
         if (!server) return;
+        // Servers may be open under the wizard (Create was pressed there): it closes too, so the page is in view.
+        useUiStore.getState().closeServers();
         if (!isSessionBusy(useSessionStore.getState().state.phase)) await useServersStore.getState().select(server.id);
         const settings = useSettingsStore.getState().settings ?? (await useSettingsStore.getState().load());
         if (settings && !settings.tourDone) useUiStore.getState().openTour(true);
@@ -272,14 +273,8 @@ function Wizard({ onClose }: { onClose: () => void }) {
                     </div>
                 )}
                 <span className='field-label'>Memory for the server</span>
-                <div className='wizard-memory' role='radiogroup' aria-label='Memory'>
-                    {MEMORY_GB.map((gb) => (
-                        <button key={gb} role='radio' aria-checked={memoryGb === gb} className={`wizard-chip ${memoryGb === gb ? 'selected' : ''}`} onClick={() => setMemoryGb(gb)}>
-                            {gb} GB
-                        </button>
-                    ))}
-                </div>
-                <p className='wizard-hint'>4 GB suits a few friends; modded servers want more. You can change all of this later in Settings &gt; Scripts.</p>
+                <RamSliders maxRAM={ram.maxRAM} minRAM={ram.minRAM} onChange={setRam} idPrefix='wizard-ram' />
+                <p className='wizard-hint'>4 GB suits a few friends; modded servers want more. Leave a few GB for Windows. You can change all of this later in Settings &gt; Scripts.</p>
             </>
         );
     } else {
@@ -311,9 +306,6 @@ function Wizard({ onClose }: { onClose: () => void }) {
 
     return (
         <div className='wizard'>
-            <div className='wizard-progress' aria-hidden>
-                {STEPS.map((s, i) => <span key={s} className={i <= index || step === 'creating' ? 'on' : ''} />)}
-            </div>
             <div className='wizard-body'>{body}</div>
             {error && <p className='wizard-error'><CircleAlert size={14} /> {error}</p>}
             <div className='wizard-buttons'>
@@ -326,7 +318,9 @@ function Wizard({ onClose }: { onClose: () => void }) {
                     : (
                         <>
                             <button className='text-button' onClick={onClose}>Cancel</button>
-                            <span className='wizard-spacer' />
+                            <span className='wizard-steps' aria-label={`Step ${index + 1} of ${STEPS.length}`}>
+                                {STEPS.map((s, i) => <span key={s} className={i === index ? 'current' : i < index ? 'done' : ''} />)}
+                            </span>
                             {index > 0 && <button className='text-button' onClick={back}><ArrowLeft size={13} /> Back</button>}
                             <button className='text-button primary' disabled={!canNext || checking} onClick={() => void next()}>
                                 {checking ? <Loader2 size={13} className='spinner' /> : null}

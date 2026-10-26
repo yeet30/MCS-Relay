@@ -10,10 +10,7 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useCloseGuard } from '../modal/close-guard';
 import OptionRow from '../option-row';
-
-const RAM_STEP = 512;
-const RAM_SLIDER_MIN = 512;
-const RAM_SLIDER_MAX = 32768;
+import RamSliders from '../ram-slider';
 
 /** Java gets the flags on one line; the box shows one flag per line, which wraps far better. */
 const flagsToLines = (flags: string): string => flags.trim().split(/\s+/).filter(Boolean).join('\n');
@@ -32,40 +29,6 @@ function hasChanges(
     if (edited.javaPath !== (server.javaPath ?? '')) return true;
     return edited.flags.maxRAM !== server.javaFlags.maxRAM || edited.flags.minRAM !== server.javaFlags.minRAM
         || linesToFlags(edited.flagsText) !== linesToFlags(server.javaFlags.customFlags);
-}
-
-/** 6144 -> "6 GB", 2560 -> "2.5 GB", 768 -> "768 MB". */
-function formatRam(mb: number): string {
-    if (mb < 1024) return `${mb} MB`;
-    const gb = mb / 1024;
-    return `${Number.isInteger(gb) ? gb : gb.toFixed(1)} GB`;
-}
-
-/** One memory slider; the value is in MB, shown in GB. */
-function RamSlider({ id, label, hint, value, onChange }: {
-    id: string; label: string; hint: string; value: number; onChange: (mb: number) => void;
-}) {
-    const max = Math.max(RAM_SLIDER_MAX, value);
-    const fill = ((Math.min(value, max) - RAM_SLIDER_MIN) / (max - RAM_SLIDER_MIN)) * 100;
-    return (
-        <div className='ram-row'>
-            <label htmlFor={id}>
-                {label}
-                <small>{hint}</small>
-            </label>
-            <input
-                id={id}
-                type='range'
-                min={RAM_SLIDER_MIN}
-                max={max}
-                step={RAM_STEP}
-                value={value}
-                style={{ '--fill': `${Math.max(0, fill)}%` } as React.CSSProperties}
-                onChange={(e) => onChange(Number(e.target.value))}
-            />
-            <span className='ram-value'>{formatRam(value)}</span>
-        </div>
-    );
 }
 
 /** What a session starts on this PC. Downloading and uploading are no longer options: every session
@@ -164,9 +127,6 @@ export default function ScriptsOptions() {
     useCloseGuard(dirty ? guard : null);
 
     if (!settings) return <p className='scripts-loading'><Loader2 size={14} className='spinner' /> Loading…</p>;
-    // The maximum pulls the minimum down with it, and the other way round, so min <= max always holds.
-    const setMax = (maxRAM: number) => flags && setFlags({ ...flags, maxRAM, minRAM: Math.min(flags.minRAM, maxRAM) });
-    const setMin = (minRAM: number) => flags && setFlags({ ...flags, minRAM, maxRAM: Math.max(flags.maxRAM, minRAM) });
     return (
         <div className='scripts-wrapper'>
             {popup}
@@ -188,10 +148,7 @@ export default function ScriptsOptions() {
                 {server && flags ? (
                     <>
                         <span className='section-label'>Memory for {server.name}</span>
-                        <div className='ram-sliders'>
-                            <RamSlider id='max-ram' label='Maximum' hint='-Xmx' value={flags.maxRAM} onChange={setMax} />
-                            <RamSlider id='min-ram' label='At start' hint='-Xms' value={flags.minRAM} onChange={setMin} />
-                        </div>
+                        <RamSliders maxRAM={flags.maxRAM} minRAM={flags.minRAM} onChange={(ram) => setFlags({ ...flags, ...ram })} />
                         <span className='section-label'>Java for {server.name}</span>
                         <div className='program-path'>
                             <Coffee size={14} />
