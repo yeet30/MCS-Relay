@@ -8,6 +8,7 @@ import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import type { Readable } from 'node:stream';
 import type { JavaFlags } from '../../shared/types';
+import { NEEDS_JAVA_PREFIX } from '../../shared/types';
 import { AppError } from '../errors';
 
 /** Runs a program to completion; rejects when it cannot start or exits with a non-zero code. */
@@ -43,6 +44,15 @@ const MAX_PARTIAL_LINE = 64 * 1024;
 // CSI sequences (colours, cursor movement, "?25l"), OSC sequences (window titles) and two-byte escapes.
 // eslint-disable-next-line no-control-regex
 const ANSI_RE = /\x1B(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1B]*(?:\x07|\x1B\\)|[@-Z\\-_])/g;
+
+/** The Java a server needs, from Java's own complaint that it is too old: "compiled by a more recent version of the
+ *  Java Runtime (class file version 65.0)". Class file version 52 is Java 8, and every Java adds one. */
+export function javaNeededFromOutput(text: string): number | null {
+    const m = /class file version (\d+)/.exec(text);
+    if (!m) return null;
+    const major = Number(m[1]) - 44;
+    return major >= 8 && major < 100 ? major : null;
+}
 
 export function stripAnsi(text: string): string {
     return text.replace(ANSI_RE, '');
@@ -564,6 +574,14 @@ export class MinecraftProcess {
     private earlyExitError(code: number | null): AppError {
         if (this.spawnError) return new AppError('JAVA', 'Java could not be started.', this.spawnError.message);
         if (this.expectedExit) return new AppError('JAVA', 'The Minecraft server was stopped before it finished starting.', this.tailText());
+        const needed = javaNeededFromOutput(this.tailText());
+        if (needed !== null) {
+            return new AppError(
+                'JAVA',
+                `This server needs Java ${needed}, newer than the Java it started with.`,
+                `${NEEDS_JAVA_PREFIX}${needed}\nExit code ${code ?? 'none'}. Last output:\n${this.tailText()}`,
+            );
+        }
         return new AppError(
             'JAVA',
             `The Minecraft server stopped while starting (exit code ${code ?? 'none'}). The console shows why.`,

@@ -253,6 +253,19 @@ describe('MinecraftProcess.start', () => {
         expect(h.mc.isRunning()).toBe(false);
     });
 
+    it('says which Java the server needs when Java is too old for it', async () => {
+        const h = harness();
+        const started = h.mc.start({ serverPath: dir, javaFlags: FLAGS, readyTimeoutMs: 5000 });
+        await until(() => h.spawn.calls.length === 1);
+        const child = h.spawn.calls[0].child;
+        child.print('java.lang.UnsupportedClassVersionError: net/minecraft/bundler/Main has been compiled by a more recent version of the Java Runtime (class file version 69.0)\n', 'stderr');
+        await new Promise((r) => setTimeout(r, 20));
+        child.exit(1);
+        const err = await expectAppError(started, 'JAVA');
+        expect(err.message).toBe('This server needs Java 25, newer than the Java it started with.');
+        expect(err.detail?.split('\n')[0]).toBe('needs-java:25');
+    });
+
     it('rejects with the last 20 output lines when the server exits before "Done ("', async () => {
         const h = harness();
         const started = h.mc.start({ serverPath: dir, javaFlags: FLAGS, readyTimeoutMs: 5000 });

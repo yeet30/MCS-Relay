@@ -291,7 +291,7 @@ function Wizard({ onClose }: { onClose: () => void }) {
                         </li>
                     ))}
                 </ul>
-                {finished && java && <JavaLine needed={java.needed} found={java.found} />}
+                {finished && java && created && <JavaLine needed={java.needed} found={java.found} serverId={created.id} />}
                 {finished && (
                     <p className='wizard-hint'>
                         Press the power button to start it. The first start makes the world, and the first upload shares it with

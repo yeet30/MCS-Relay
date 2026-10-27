@@ -24,6 +24,7 @@ import { LockService } from './lock/LockService';
 import { AppLog } from './log/AppLog';
 import { MinecraftProcess } from './processes/MinecraftProcess';
 import { PlayitLink } from './playit/PlayitLink';
+import { JavaInstaller } from './installer/JavaInstaller';
 import { PlayitRunner } from './playit/PlayitRunner';
 import { PlayitProcess } from './processes/PlayitProcess';
 import { ReportService } from './report/ReportService';
@@ -175,6 +176,12 @@ setInterval(() => {
 const installer = new ServerInstaller({
     settings, appVersion: app.getVersion(),
     isBusy: (serverId) => session.isBusy() && session.getState().serverId === serverId,
+    emit: (progress) => events.emit('installer:progress', progress),
+});
+
+// Java for a server that needs a newer one than this PC has (Eclipse Temurin from Adoptium).
+const java = new JavaInstaller({
+    dir: path.join(userData, 'java'), settings, appVersion: app.getVersion(),
     emit: (progress) => events.emit('installer:progress', progress),
 });
 
@@ -563,7 +570,7 @@ if (!app.requestSingleInstanceLock()) {
     void app.whenReady().then(async () => {
         appData.migrateLegacy();
         registerHandlers(createHandle(ipcMain, isTrustedUrl), {
-            auth, servers, session, settings, sync, transfers, changes, dialogs, report: reports, backups, installer, playit: playitLink,
+            auth, servers, session, settings, sync, transfers, changes, dialogs, report: reports, backups, installer, java, playit: playitLink,
             app: {
                 quitResponse, openExternal: (url) => shell.openExternal(url), setLogoState: applyLogoState,
                 updateState: () => updates.get(), checkForUpdates: () => updates.check(), installUpdate,

@@ -1,9 +1,10 @@
 import './progress-card.css';
 import { useEffect, useState } from 'react';
-import { Ban, Check, ChevronRight, CirclePause, CircleX, Clock, CloudUpload, ExternalLink, Info, Loader2, Play, RotateCcw, X } from 'lucide-react';
+import { Ban, Check, ChevronRight, CirclePause, CircleX, Clock, CloudUpload, Download, ExternalLink, Info, Loader2, Play, RotateCcw, X } from 'lucide-react';
 import type {
     LaneView, RunKind, ServerId, SessionPhase, SessionProgress, StepMessage, TransferKind, TransferSnapshot,
 } from '../../../shared/types';
+import { NEEDS_JAVA_PREFIX } from '../../../shared/types';
 import { invoke } from '../../api';
 import { useConfirm } from '../../hooks/useConfirm';
 import {
@@ -228,6 +229,24 @@ function WaitingActions({ kind, phase }: { kind: RunKind | null; phase: SessionP
     }
 
     const playitPage = error?.code === 'PLAYIT' && error.detail ? PLAYIT_PAGES[error.detail] : undefined;
+    // The server needs a newer Java than it started with: download it for this server, then start again.
+    const javaNeeded = error?.code === 'JAVA' && error.detail?.startsWith(NEEDS_JAVA_PREFIX)
+        ? Number(error.detail.slice(NEEDS_JAVA_PREFIX.length).split('\n')[0]) || null
+        : null;
+
+    async function getJavaAndRetry(major: number) {
+        if (!serverId) return;
+        setBusy(true);
+        const res = await invoke('installer:installJava', serverId, major);
+        if (!res.ok) {
+            setBusy(false);
+            useNoticeStore.getState().error(res.error);
+            return;
+        }
+        await invoke('session:dismiss');
+        await continueRun('start', serverId);
+        setBusy(false);
+    }
     // Not after the playit.gg link was removed: the start would go on without playit.gg until it is linked again.
     const linkGone = error?.code === 'PLAYIT' && LINK_GONE_REASONS.has(error.detail ?? '');
     const startFailed = phase === 'failed' && (kind === 'start' || (kind === null && error?.code === 'PLAYIT')) && serverId !== null && !linkGone;
@@ -249,7 +268,12 @@ function WaitingActions({ kind, phase }: { kind: RunKind | null; phase: SessionP
                 ? (
                     <>
                         <button className='text-button' disabled={busy} onClick={() => void run('session:dismiss')}>Dismiss</button>
-                        {startFailed && (
+                        {javaNeeded !== null && (
+                            <button className='text-button primary' disabled={busy} onClick={() => void getJavaAndRetry(javaNeeded)}>
+                                {busy ? <Loader2 size={12} className='spinner' /> : <Download size={12} />} Get Java {javaNeeded} and try again
+                            </button>
+                        )}
+                        {startFailed && javaNeeded === null && (
                             <button className='text-button primary' disabled={busy} onClick={() => void retryStart()}>
                                 {busy ? <Loader2 size={12} className='spinner' /> : <RotateCcw size={12} />} Try again
                             </button>

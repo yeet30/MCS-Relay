@@ -1,29 +1,54 @@
 import './server-setup.css';
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, ExternalLink, Loader2, Search, TriangleAlert } from 'lucide-react';
+import { CheckCircle2, Download, ExternalLink, Loader2, Search, TriangleAlert } from 'lucide-react';
 import type { InstallableVersion, ServerKind } from '../../../shared/types';
 import { invoke } from '../../api';
+import { formatBytesPair } from '../../lib/format';
 import { KINDS } from '../../lib/serverKinds';
+import { useBackupStore } from '../../stores/backupStore';
+import { useNoticeStore } from '../../stores/noticeStore';
 
 const javaDownload = (major: number) => `https://adoptium.net/temurin/releases/?version=${major}`;
 
-/** Whether this PC's Java can run the server, with a link to the right Java when it cannot. */
-export function JavaLine({ needed, found }: { needed: number | null; found: number | null }) {
+/** Whether this PC's Java can run the server. When it cannot, Java can be downloaded for the server (Eclipse Temurin,
+ *  from Adoptium), or fetched by hand from Adoptium's site. */
+export function JavaLine({ needed, found, serverId }: { needed: number | null; found: number | null; serverId: string }) {
+    const [downloaded, setDownloaded] = useState<number | null>(null);
+    const [busy, setBusy] = useState(false);
+    const progress = useBackupStore((s) => (s.install?.serverId === serverId ? s.install : null));
     if (needed === null) return null;
-    const ok = found !== null && found >= needed;
+    const have = downloaded ?? found;
+    const ok = have !== null && have >= needed;
+
+    async function download(major: number) {
+        setBusy(true);
+        const res = await invoke('installer:installJava', serverId, major);
+        setBusy(false);
+        if (res.ok) setDownloaded(res.value.major);
+        else useNoticeStore.getState().error(res.error);
+    }
+
     return (
-        <p className={`setup-java ${ok ? 'ok' : 'missing'}`}>
+        <div className={`setup-java ${ok ? 'ok' : 'missing'}`}>
             {ok ? <CheckCircle2 size={14} /> : <TriangleAlert size={14} />}
             <span>
                 This version needs Java {needed}.{' '}
-                {found === null ? 'No Java was found on this PC.' : `This PC has Java ${found}.`}
+                {downloaded !== null
+                    ? `MCS-Relay downloaded Java ${downloaded} for this server.`
+                    : found === null ? 'No Java was found on this PC.' : `This PC has Java ${found}.`}
                 {!ok && (
-                    <button className='setup-link' onClick={() => void invoke('app:openExternal', javaDownload(needed))}>
-                        Get Java {needed} <ExternalLink size={11} />
-                    </button>
+                    <span className='setup-java-actions'>
+                        <button className='text-button primary' disabled={busy} onClick={() => void download(needed)}>
+                            {busy ? <Loader2 size={12} className='spinner' /> : <Download size={12} />}
+                            {busy ? `Downloading Java ${needed}${progress && progress.total > 0 ? ` (${formatBytesPair(progress.done, progress.total)})` : '…'}` : `Download Java ${needed}`}
+                        </button>
+                        <button className='setup-link' onClick={() => void invoke('app:openExternal', javaDownload(needed))}>
+                            or get it yourself <ExternalLink size={11} />
+                        </button>
+                    </span>
                 )}
             </span>
-        </p>
+        </div>
     );
 }
 

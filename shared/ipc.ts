@@ -3,7 +3,7 @@
 // The main process registers handlers with handle() (electron/ipc/handle.ts), the renderer
 // calls them with invoke() (src/api.ts). A renamed or mistyped channel is a compile error.
 import type {
-    AppErrorInfo, AppSettings, BackupInfo, BackupList, BackupProgress, InstallableVersion, InstallProgress, InstallResult,
+    AppErrorInfo, AppSettings, BackupInfo, BackupList, BackupProgress, InstallableVersion, InstallProgress, InstallResult, JavaInstallResult,
     PlayitLinkState, ServerFolderInfo, ServerKind, ChangeBatch, ConflictChoice, LockView, LogoState, MemberRole, ServerId, ServerMember,
     ServerSettings, ServerSettingsPatch, ServerSummary, SessionProgress, SessionState, StepMessage, SyncReport, SyncRules,
     TransferSnapshot, UpdateState, UserInfo,
@@ -128,6 +128,8 @@ export interface Commands {
     'installer:folder': (serverId: ServerId) => ServerFolderInfo;
     /** Downloads the server program from its official source into the server's folder on this PC. */
     'installer:install': (serverId: ServerId, kind: ServerKind, version: string) => InstallResult;
+    /** Downloads Java `major` (Eclipse Temurin, from Adoptium) and makes it the server's Java on this PC. */
+    'installer:installJava': (serverId: ServerId, major: number) => JavaInstallResult;
 
     'playit:state': () => PlayitLinkState;
     /** Links this PC to the user's playit.gg account: downloads the agent, opens playit.gg's approval page in the

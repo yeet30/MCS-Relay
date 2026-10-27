@@ -8,6 +8,7 @@ import { toPosix } from '../../shared/paths';
 import { AppError } from '../errors';
 import type { GoogleAuth } from '../auth/GoogleAuth';
 import type { BackupService } from '../backups/BackupService';
+import type { JavaInstaller } from '../installer/JavaInstaller';
 import type { ServerInstaller } from '../installer/ServerInstaller';
 import type { PlayitLink } from '../playit/PlayitLink';
 import { isValidServerId } from '../store/appData';
@@ -36,6 +37,7 @@ export interface HandlerDeps {
     dialogs: Pick<Dialogs, 'chooseFolder' | 'chooseFile' | 'openPath'>;
     report: Pick<ReportService, 'send' | 'save'>;
     installer: Pick<ServerInstaller, 'versions' | 'folder' | 'install'>;
+    java: Pick<JavaInstaller, 'install'>;
     playit: Pick<PlayitLink, 'getState' | 'link' | 'cancelLink' | 'check' | 'reopen' | 'unlink'>;
     backups: Pick<BackupService, 'list' | 'create' | 'upload' | 'download' | 'restore' | 'restoreAuto' | 'deleteLocal' | 'deleteCloud' | 'localFolder' | 'isBusy'>;
     app: {
@@ -258,6 +260,11 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
     handle('installer:install', (serverId, kind, version) => {
         notDuringBackup();
         return d.installer.install(id(serverId), oneOf(kind, KINDS, 'server type'), text(version, 'version', { max: 100 }));
+    });
+    handle('installer:installJava', (serverId, major) => {
+        if (typeof major !== 'number' || !Number.isInteger(major) || major < 8 || major > 99) throw invalid('That Java version is not valid.');
+        if (d.session.isBusy() && d.session.getState().serverId === serverId) throw new AppError('BUSY', 'Java can be changed between sessions.');
+        return d.java.install(id(serverId), major);
     });
 
     handle('backups:openFolder', async (serverId) => d.dialogs.openPath(await d.backups.localFolder(id(serverId))));

@@ -169,6 +169,15 @@ export interface InstallResult {
     javaNeeded: number | null;          // the Java this Minecraft version needs
 }
 
+/** Java downloaded for a server (Eclipse Temurin), now its Java on this PC. */
+export interface JavaInstallResult {
+    javaPath: string;
+    major: number;                      // may be newer than asked for when Adoptium has no build of that version
+}
+
+/** A start that failed because the server needs a newer Java carries this at the start of its error detail. */
+export const NEEDS_JAVA_PREFIX = 'needs-java:';
+
 /** A server program download; done and total count bytes (total 0: unknown). */
 export interface InstallProgress {
     serverId: ServerId;

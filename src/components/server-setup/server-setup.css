@@ -204,6 +204,24 @@
     color: var(--warn);
 }
 
+.setup-java-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+    margin-top: 6px;
+
+    .text-button {
+        flex: none;
+        padding: 4px 10px;
+        font-size: 0.8rem;
+    }
+
+    .setup-link {
+        margin-left: 2px;
+    }
+}
+
 .setup-link {
     display: inline-flex;
     align-items: center;
