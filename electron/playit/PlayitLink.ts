@@ -24,7 +24,7 @@ import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import type { PlayitLinkState, PlayitTunnel } from '../../shared/types';
 import type { SafeStorageLike } from '../auth/GoogleAuth';
 import { AppError, toAppError } from '../errors';
-import { PlayitApi, PlayitRefusal, tunnelAddress } from './PlayitApi';
+import { PlayitApi, PlayitRefusal, tunnelAddress, tunnelLocalPort } from './PlayitApi';
 import type { FetchFn, PlayitTunnelInfo } from './PlayitApi';
 
 /** The agent MCS-Relay runs: playitd.exe of playit's newest stable release (the Windows .exe of a release is
@@ -366,28 +366,28 @@ export class PlayitLink {
 
     /** This PC's Minecraft Java tunnel, made if missing and pointed at `port`, once playit.gg gave it an address. */
     private async ensureTunnel(api: PlayitApi, agentId: string, port: number, signal?: AbortSignal): Promise<{ id: string; address: string }> {
-        const list = await api.listTunnels(agentId);
-        const mine = (t: PlayitTunnelInfo) => t.origin?.type === 'agent' && (t.origin.data as { agent_id?: string }).agent_id === agentId;
-        let tunnel = list.tunnels.find((t) => t.id === this.stored?.tunnelId)
-            ?? list.tunnels.find((t) => mine(t) && t.tunnel_type === 'minecraft-java');
+        const tunnels = await api.listTunnels();
+        const mine = (t: PlayitTunnelInfo) => t.origin.type === 'agent' && (t.origin.details as { agent_id?: string }).agent_id === agentId;
+        let tunnel = tunnels.find((t) => t.id === this.stored?.tunnelId && mine(t))
+            ?? tunnels.find((t) => mine(t) && t.tunnel_type === 'minecraft-java');
         if (!tunnel) {
             console.log(`[playit] creating a Minecraft Java tunnel to port ${port}`);
             const id = await this.createTunnel(api, agentId, port, signal);
             await this.remember({ tunnelId: id });
-            tunnel = await this.waitForAddress(api, agentId, id, signal);
+            tunnel = await this.waitForAddress(api, id, signal);
         } else {
             if (tunnel.id !== this.stored?.tunnelId) await this.remember({ tunnelId: tunnel.id });
-            const origin = tunnel.origin?.type === 'agent' ? (tunnel.origin.data as { local_port?: number | null }) : null;
-            if (origin?.local_port !== port || tunnel.disabled_reason) {
-                console.log(`[playit] pointing the tunnel at port ${port}`);
-                await api.updateTunnel(tunnel.id, agentId, port);
+            // Also repairs a tunnel made before MCS-Relay set the agent config (it had no local_port).
+            if (tunnelLocalPort(tunnel) !== port) {
+                console.log(`[playit] pointing the tunnel at port ${port} (was ${tunnelLocalPort(tunnel) ?? 'not set'})`);
+                await api.configureTunnel(tunnel.id, port);
             }
-            if (tunnel.alloc?.status !== 'allocated') tunnel = await this.waitForAddress(api, agentId, tunnel.id, signal);
+            if (!tunnel.user_enabled) await api.enableTunnel(tunnel.id);
+            if (!tunnelAddress(tunnel)) tunnel = await this.waitForAddress(api, tunnel.id, signal);
         }
-        const address = tunnelAddress(tunnel);
-        if (!address) throw new AppError('PLAYIT', 'playit.gg has not given the tunnel an address yet. Try again in a minute.');
+        const address = tunnelAddress(tunnel)!;
         if (address !== this.stored?.address) {
-            console.log(`[playit] tunnel address: ${address} (${JSON.stringify(tunnel.alloc)})`);
+            console.log(`[playit] tunnel address: ${address} (${JSON.stringify(tunnel.connect_addresses)})`);
             await this.remember({ address });
         }
         return { id: tunnel.id, address };
@@ -406,17 +406,17 @@ export class PlayitLink {
         }
     }
 
-    private async waitForAddress(api: PlayitApi, agentId: string, id: string, signal?: AbortSignal): Promise<PlayitTunnelInfo> {
+    private async waitForAddress(api: PlayitApi, id: string, signal?: AbortSignal): Promise<PlayitTunnelInfo> {
         const endAt = Date.now() + (this.d.tunnelWaitMs ?? 30_000);
         for (;;) {
-            const tunnel = (await api.listTunnels(agentId)).tunnels.find((t) => t.id === id);
+            const tunnel = (await api.listTunnels()).find((t) => t.id === id);
             if (!tunnel) throw new AppError('PLAYIT', 'The playit.gg tunnel disappeared while it was being made. Try again.');
-            if (tunnel.alloc?.status === 'allocated') return tunnel;
-            if (tunnel.alloc?.status === 'disabled') {
-                const reason = (tunnel.alloc as { data: { reason: string } }).data.reason;
-                throw new AppError('PLAYIT', reason === 'over-port-limit'
-                    ? 'Your playit.gg account has no free tunnels left. Delete one at playit.gg, then try again.'
-                    : `playit.gg switched the tunnel off (${reason}).`, reason);
+            if (tunnelAddress(tunnel)) return tunnel;
+            const blocked = tunnel.offline_reasons?.find((r) => r !== 'PublicAllocationPending' && r !== 'TunnelDisabled');
+            if (blocked) {
+                throw new AppError('PLAYIT', blocked === 'AgentOverLimit'
+                    ? 'Your playit.gg account has more agents than its plan allows. Delete one at playit.gg, then try again.'
+                    : `playit.gg cannot put the tunnel online (${blocked}).`, blocked);
             }
             if (Date.now() > endAt) throw new AppError('TIMEOUT', 'playit.gg took too long to give the tunnel an address. Try again in a minute.');
             await sleep(1_500, signal);

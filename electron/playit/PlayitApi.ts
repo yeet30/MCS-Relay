@@ -3,6 +3,9 @@
 // open-source agent (github.com/playit-cloud/playit-agent, packages/api_client/src/api.rs). auto-mcs, another
 // Minecraft server manager, makes the same tunnel calls (github.com/macarooni-man/auto-mcs, source/core/tools/playit.py).
 // Every call is a POST with a JSON body; the answer is {status: "success"|"fail"|"error", data}.
+// Tunnels use the "v1" calls: playit's 1.0 agent sends a tunnel's connections to the local_ip and local_port of the
+// tunnel's agent config, which only those calls set (a tunnel made with the older /tunnels/create has none, and the
+// agent then drops its connections).
 import { AppError } from '../errors';
 
 export const PLAYIT_API = 'https://api.playit.gg';
@@ -18,23 +21,30 @@ export interface AgentRunData {
     account_status: string;
 }
 
+export interface ConfigField {
+    name: string;
+    value: string;
+}
+
+/** A tunnel of the account, as /v1/tunnels/list describes it (the parts MCS-Relay reads). */
 export interface PlayitTunnelInfo {
     id: string;
     name: string | null;
     tunnel_type: string | null;
-    port_type: string;
-    alloc: { status: 'pending' } | { status: 'disabled'; data: { reason: string } } | {
-        status: 'allocated';
-        data: { assigned_domain: string; assigned_srv: string | null; port_start: number };
-    };
-    origin: { type: 'agent'; data: { agent_id: string; local_ip: string; local_port: number | null } } | { type: string; data: unknown } | null;
-    disabled_reason: string | null;
+    user_enabled: boolean;
+    /** Why it is not online: "PublicAllocationPending" while its address is being made, "AgentOverLimit", ... */
+    offline_reasons: string[] | null;
+    origin:
+        | { type: 'agent'; details: { agent_id: string; config_data: { fields: ConfigField[] } } }
+        | { type: 'not-set'; details: unknown };
+    /** How players reach it: "auto" (the playit.gg name), "domain" (a custom one), "addr4" (ip:port), ... */
+    connect_addresses: Array<{ type: string; value: { address?: unknown } }>;
 }
 
-export interface TunnelList {
-    tunnels: PlayitTunnelInfo[];
-    tcp_alloc: { allowed: number; claimed: number };
-}
+/** The agent config of a tunnel to this PC's port. */
+const localConfig = (port: number): { fields: ConfigField[] } => ({
+    fields: [{ name: 'local_ip', value: '127.0.0.1' }, { name: 'local_port', value: String(port) }],
+});
 
 type Answer<T> = { status: 'success'; data: T } | { status: 'fail'; data: unknown } | { status: 'error'; data: unknown };
 
@@ -45,11 +55,13 @@ export class PlayitRefusal extends AppError {
     }
 }
 
-/** The name playit gives the reason, from a "fail" ("CodeExpired") or an "error" ({type, message}) answer. */
+/** The name playit gives the reason, from a "fail" ("CodeExpired", or {error: "NothingToUpdate"}) or an "error"
+ *  ({type, message}) answer. */
 function reasonOf(data: unknown): string {
     if (typeof data === 'string') return data;
     if (data && typeof data === 'object') {
-        const d = data as { type?: unknown; message?: unknown };
+        const d = data as { type?: unknown; message?: unknown; error?: unknown };
+        if (typeof d.error === 'string') return d.error;
         if (typeof d.message === 'string') return d.message;
         if (d.message && typeof d.message === 'object') return JSON.stringify(d.message);
         if (typeof d.type === 'string') return d.type;
@@ -94,28 +106,35 @@ export class PlayitApi {
         return this.call('/agents/rename', { agent_id: agentId, name });
     }
 
-    listTunnels(agentId: string): Promise<TunnelList> {
-        return this.call('/tunnels/list', { tunnel_id: null, agent_id: agentId });
+    /** Every tunnel of the account. */
+    async listTunnels(): Promise<PlayitTunnelInfo[]> {
+        return (await this.call<{ tunnels: PlayitTunnelInfo[] }>('/v1/tunnels/list', {})).tunnels;
     }
 
     /** A Minecraft Java tunnel to this PC's port; its id. */
     async createTunnel(agentId: string, name: string, localPort: number): Promise<string> {
-        const created = await this.call<{ id: string }>('/tunnels/create', {
-            name,
-            tunnel_type: 'minecraft-java',
-            port_type: 'tcp',
-            port_count: 1,
-            origin: { type: 'agent', data: { agent_id: agentId, local_ip: '127.0.0.1', local_port: localPort } },
+        const created = await this.call<{ id: string }>('/v1/tunnels/create', {
+            ports: { type: 'tunnel-type', details: 'minecraft-java' },
+            origin: { type: 'agent', data: { agent_id: agentId, config: localConfig(localPort) } },
             enabled: true,
             alloc: null,
+            name,
             firewall_id: null,
-            proxy_protocol: null,
         });
         return created.id;
     }
 
-    updateTunnel(tunnelId: string, agentId: string, localPort: number): Promise<unknown> {
-        return this.call('/tunnels/update', { tunnel_id: tunnelId, local_ip: '127.0.0.1', local_port: localPort, agent_id: agentId, enabled: true });
+    /** Points the tunnel at another port on this PC. */
+    async configureTunnel(tunnelId: string, localPort: number): Promise<void> {
+        try {
+            await this.call('/v1/tunnels/config', { tunnel_id: tunnelId, new_agent_id: null, new_config: localConfig(localPort) });
+        } catch (err) {
+            if (!(err instanceof PlayitRefusal) || err.reason !== 'NothingToUpdate') throw err;
+        }
+    }
+
+    enableTunnel(tunnelId: string): Promise<unknown> {
+        return this.call('/tunnels/enable', { tunnel_id: tunnelId, enabled: true });
     }
 
     deleteTunnel(tunnelId: string): Promise<unknown> {
@@ -143,10 +162,19 @@ export class PlayitApi {
     }
 }
 
-/** The address friends type: the Minecraft name (an SRV record, no port needed), else the domain with its port. */
+/** The address friends type: a custom domain, else playit.gg's name for the tunnel (with an SRV record, so no port is
+ *  needed), else its IP and port; null while playit.gg is still making it. */
 export function tunnelAddress(tunnel: PlayitTunnelInfo): string | null {
-    if (tunnel.alloc?.status !== 'allocated') return null;
-    const a = tunnel.alloc.data;
-    const srv = a.assigned_srv?.replace(/^_minecraft\._tcp\./, '');
-    return srv || `${a.assigned_domain}:${a.port_start}`;
+    for (const kind of ['domain', 'auto', 'addr4']) {
+        const found = tunnel.connect_addresses?.find((a) => a.type === kind && typeof a.value?.address === 'string');
+        if (found) return found.value.address as string;
+    }
+    return null;
+}
+
+/** The port on this PC the tunnel's agent config sends players to; null when it has none. */
+export function tunnelLocalPort(tunnel: PlayitTunnelInfo): number | null {
+    if (tunnel.origin.type !== 'agent') return null;
+    const field = (tunnel.origin.details as { config_data?: { fields?: ConfigField[] } }).config_data?.fields?.find((f) => f.name === 'local_port');
+    return field ? Number(field.value) : null;
 }
