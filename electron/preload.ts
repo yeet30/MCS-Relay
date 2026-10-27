@@ -10,7 +10,7 @@ const EVENTS: Record<EventName, true> = {
     'sync:checking': true, 'servers:deleting': true,
     'transfer:progress': true, 'changes:batch': true, 'changes:reset': true, 'console:output': true,
     'app:confirmQuit': true, 'app:quitting': true, 'app:chime': true, 'app:update': true, 'backups:progress': true,
-    'installer:progress': true,
+    'installer:progress': true, 'playit:state': true,
 };
 
 const api: BridgeApi = {

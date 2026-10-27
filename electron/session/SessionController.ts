@@ -11,7 +11,7 @@ import { localJoinAddress } from './localAddress';
 import { AppError, toAppError } from '../errors';
 import type { LockService } from '../lock/LockService';
 import type { MinecraftProcess } from '../processes/MinecraftProcess';
-import type { PlayitProcess } from '../processes/PlayitProcess';
+import type { PlayitRunner } from '../playit/PlayitRunner';
 import type { SettingsService } from '../settings/SettingsService';
 import type { ChangeTracker } from '../sync/changeTracker';
 import type { SyncEngine } from '../sync/SyncEngine';
@@ -31,7 +31,7 @@ export interface SessionDeps {
         | 'discardJournal' | 'baseRevision' | 'cleanupMyPlaceholders' | 'unfinishedRepair' | 'commitPartial'>;
     changes: Pick<ChangeTracker, 'start' | 'stop' | 'clear' | 'all'>;
     minecraft: Pick<MinecraftProcess, 'start' | 'stopAndWait' | 'isRunning' | 'send' | 'pauseSaving'>;
-    playit: Pick<PlayitProcess, 'start' | 'stop'>;
+    playit: Pick<PlayitRunner, 'enabled' | 'start' | 'stop'>;
     settings: Pick<SettingsService, 'get' | 'set' | 'getServer'>;
     events: EventSink;
     me: () => Promise<UserInfo>;
@@ -265,7 +265,7 @@ export class SessionController {
         this.lockLost = false;
         this.setState({ ...IDLE, phase: 'checking', serverId });
         const settings = this.d.settings.get();
-        const usePlayit = settings.usePlayitgg && Boolean(settings.playitggPath);
+        const usePlayit = this.d.playit.enabled(settings);
         const known = this.report?.serverId === serverId ? this.report : null;
         this.progress.begin('Starting the server', [
             { key: 'check', label: 'Checking the server', total: 1 },
@@ -317,9 +317,10 @@ export class SessionController {
             let address: string | null = null;
             if (usePlayit) {
                 this.progress.enter('playit', 'Starting playit.gg');
-                const tunnels = await this.d.playit.start(
-                    settings.playitggPath, this.d.timeouts?.playitMs ?? 60_000, signal, (next) => void this.tunnelsChanged(serverId, next),
-                );
+                const tunnels = await this.d.playit.start({
+                    serverPath: server.localPath ?? '', settings, timeoutMs: this.d.timeouts?.playitMs ?? 60_000, signal,
+                    onTunnels: (next) => void this.tunnelsChanged(serverId, next),
+                });
                 address = primaryTunnel(tunnels, settings.playitPrimary)?.address ?? null;
                 this.setState({ address, tunnels });
                 const more = tunnels.length > 1 ? ` (and ${tunnels.length - 1} more)` : '';

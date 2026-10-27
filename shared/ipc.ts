@@ -4,7 +4,7 @@
 // calls them with invoke() (src/api.ts). A renamed or mistyped channel is a compile error.
 import type {
     AppErrorInfo, AppSettings, BackupInfo, BackupList, BackupProgress, InstallableVersion, InstallProgress, InstallResult,
-    ServerFolderInfo, ServerKind, ChangeBatch, ConflictChoice, LockView, LogoState, MemberRole, ServerId, ServerMember,
+    PlayitLinkState, ServerFolderInfo, ServerKind, ChangeBatch, ConflictChoice, LockView, LogoState, MemberRole, ServerId, ServerMember,
     ServerSettings, ServerSettingsPatch, ServerSummary, SessionProgress, SessionState, StepMessage, SyncReport, SyncRules,
     TransferSnapshot, UpdateState, UserInfo,
 } from './types';
@@ -128,6 +128,16 @@ export interface Commands {
     'installer:folder': (serverId: ServerId) => ServerFolderInfo;
     /** Downloads the server program from its official source into the server's folder on this PC. */
     'installer:install': (serverId: ServerId, kind: ServerKind, version: string) => InstallResult;
+
+    'playit:state': () => PlayitLinkState;
+    /** Links this PC to the user's playit.gg account: downloads the agent, opens playit.gg's approval page in the
+     *  browser and makes the Minecraft Java tunnel. Resolves when linked, or quietly when cancelled. */
+    'playit:link': () => void;
+    'playit:cancelLink': () => void;
+    /** Opens the approval page again, for a closed browser tab. */
+    'playit:reopen': () => void;
+    /** Forgets the link on this PC and deletes its tunnel. Refused while a session is busy. */
+    'playit:unlink': () => void;
 }
 
 /** Every event the main process pushes: channel -> payload. */
@@ -155,6 +165,7 @@ export interface Events {
     'backups:progress': BackupProgress | null;
     /** A server program download: how far it is; null when it has ended. */
     'installer:progress': InstallProgress | null;
+    'playit:state': PlayitLinkState;
 }
 
 export type CommandName = keyof Commands;
@@ -169,4 +180,4 @@ export interface BridgeApi {
     on: (channel: string, listener: (payload: unknown) => void) => () => void;
 }
 
-export const COMMAND_PREFIXES = ['auth:', 'servers:', 'session:', 'settings:', 'rules:', 'app:', 'report:', 'backups:', 'installer:'] as const;
+export const COMMAND_PREFIXES = ['auth:', 'servers:', 'session:', 'settings:', 'rules:', 'app:', 'report:', 'backups:', 'installer:', 'playit:'] as const;

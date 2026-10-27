@@ -277,6 +277,21 @@ export interface SyncReport {
     remoteIncomplete?: IncompleteUpload | null;
 }
 
+/* ------------------------------------------------------------------ playit.gg link */
+
+/** playit.gg linked to this PC through MCS-Relay: the app downloads playit's agent, runs it and makes the
+ *  Minecraft Java tunnel itself. Without a link, a playit program chosen by hand still works. */
+export interface PlayitLinkState {
+    linked: boolean;
+    /** This PC's Minecraft Java address on playit.gg, once playit.gg gave one. */
+    address: string | null;
+    /** Linking right now: downloading the agent (`done` of `total` bytes), waiting for the approval in the browser
+     *  (`url` is the page), or finishing (making the tunnel). */
+    linking: { step: 'download' | 'browser' | 'finishing'; done: number; total: number; url: string | null } | null;
+    /** Why the last attempt to link ended without a link. */
+    error: AppErrorInfo | null;
+}
+
 /* ------------------------------------------------------------------ lock */
 
 export type LockPhase =

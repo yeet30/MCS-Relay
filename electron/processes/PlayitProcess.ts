@@ -28,6 +28,8 @@ const CLAIM_RE = /https?:\/\/playit\.gg\/claim\/[A-Za-z0-9_-]+/;
 const BUFFER_CHARS = 16 * 1024;
 const TAIL_LINES = 20;
 const EXIT_WAIT_MS = 5_000;
+/** How many lines of the in-app agent's log reach the app log before only its warnings and errors do. */
+const AGENT_LOG_LINES = 15;
 
 export interface PlayitScreen {
     tunnels: PlayitTunnel[];
@@ -91,18 +93,6 @@ export class PlayitProcess {
             throw new AppError('PLAYIT', 'The playit.gg program was not found. Choose it again in the settings.', executable);
         }
 
-        let child: ChildProcess;
-        try {
-            child = this.spawnImpl(executable, [], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
-        } catch (err) {
-            throw new AppError('PLAYIT', 'playit.gg could not be started.', err instanceof Error ? err.message : String(err));
-        }
-        console.log(`[playit] started ${executable} (pid ${child.pid ?? '?'})`);
-        this.child = child;
-        this.stopRequested = false;
-        this.output = '';
-
-        let spawnError: Error | null = null;
         let onText: () => void = () => undefined;
         let reported: PlayitTunnel[] | null = null;
         // After the start: tell the session when the list changes.
@@ -114,40 +104,9 @@ export class PlayitProcess {
             console.log(`[playit] tunnels now: ${tunnels.map((t) => `${t.address} (${t.type})`).join(', ')}`);
             onTunnels(tunnels);
         };
-        // Output is always read, also after the address was found: a full pipe would block the agent.
-        const onData = (chunk: Buffer | string) => {
-            this.output = (this.output + chunk.toString()).slice(-BUFFER_CHARS);
+        const launched = this.launch(executable, [], () => {
             onText();
             followTunnels();
-        };
-        child.stdout?.on('data', onData);
-        child.stderr?.on('data', onData);
-        this.exitPromise = new Promise((resolve) => {
-            let done = false;
-            let closeFallback: ReturnType<typeof setTimeout> | null = null;
-            const finish = (code: number | null) => {
-                if (done) return;
-                done = true;
-                if (closeFallback) clearTimeout(closeFallback);
-                if (this.child === child) this.child = null;
-                if (!this.stopRequested) console.warn(`[playit] exited with code ${code}`);
-                resolve(code);
-            };
-            child.on('error', (err) => {
-                // Without a pid the program never started; otherwise a kill failed and it still runs.
-                if (child.pid === undefined) {
-                    spawnError = err;
-                    finish(null);
-                } else {
-                    console.warn('[playit] process error:', err.message);
-                }
-            });
-            // 'close' comes after the last output (for the error detail); the fallback covers a child
-            // process of the agent that keeps the pipes open.
-            child.on('exit', (code) => {
-                closeFallback = setTimeout(() => finish(code), 1_000);
-            });
-            child.on('close', (code: number | null) => finish(code));
         });
 
         return new Promise<PlayitTunnel[]>((resolve, reject) => {
@@ -215,6 +174,7 @@ export class PlayitProcess {
             signal?.addEventListener('abort', onAbort, { once: true });
             void this.exitPromise.then((code) => {
                 if (!settle()) return;
+                const spawnError = launched.spawnError();
                 if (spawnError) reject(new AppError('PLAYIT', 'playit.gg could not be started.', spawnError.message));
                 else if (this.stopRequested) reject(new AppError('PLAYIT', 'playit.gg was stopped before it listed its tunnels.', this.tailText()));
                 else reject(new AppError('PLAYIT', `playit.gg stopped before it listed its tunnels (exit code ${code ?? 'none'}).`, this.tailText()));
@@ -223,6 +183,104 @@ export class PlayitProcess {
             onText();
             if (signal?.aborted) onAbort();
         });
+    }
+
+    /** Starts the agent of a link made in the app: it gets its key on the command line and logs instead of drawing
+     *  a screen, and its tunnel comes from playit.gg's API (PlayitLink). Resolves once it kept running for
+     *  `settleMs`; AppError('PLAYIT') when it stops before that. */
+    async run(executable: string, args: string[], settleMs: number, signal?: AbortSignal): Promise<void> {
+        if (this.child) throw new AppError('BUSY', 'playit.gg is already running.');
+        if (signal?.aborted) throw abortError(signal);
+        let partial = '';
+        let logged = 0;
+        const launched = this.launch(executable, args, (chunk) => {
+            // Its log goes into the app's log: the first lines, and after that warnings and errors only.
+            const lines = (partial + chunk).split(/\r?\n/);
+            partial = lines.pop() ?? '';
+            for (const raw of lines) {
+                const line = stripAnsi(raw).trim();
+                if (!line || (logged >= AGENT_LOG_LINES && !/warn|error|fail/i.test(line))) continue;
+                logged += 1;
+                console.log(`[playit] agent: ${line}`);
+            }
+        });
+        await new Promise<void>((resolve, reject) => {
+            let settled = false;
+            const settle = (): boolean => {
+                if (settled) return false;
+                settled = true;
+                clearTimeout(timer);
+                signal?.removeEventListener('abort', onAbort);
+                return true;
+            };
+            const timer = setTimeout(() => {
+                if (settle()) resolve();
+            }, settleMs);
+            const onAbort = () => {
+                if (!settle() || !signal) return;
+                const err = abortError(signal);
+                void this.stop().then(() => reject(err), () => reject(err));
+            };
+            signal?.addEventListener('abort', onAbort, { once: true });
+            void this.exitPromise.then((code) => {
+                if (!settle()) return;
+                const spawnError = launched.spawnError();
+                if (spawnError) reject(new AppError('PLAYIT', 'playit.gg could not be started.', spawnError.message));
+                else reject(new AppError('PLAYIT', `playit.gg stopped right after it started (exit code ${code ?? 'none'}).`, this.tailText()));
+            });
+            if (signal?.aborted) onAbort();
+        });
+    }
+
+    /** Spawns the agent and keeps reading its output (a full pipe would block it); `onData` hears every piece. */
+    private launch(executable: string, args: string[], onData: (chunk: string) => void): { spawnError: () => Error | null } {
+        let child: ChildProcess;
+        try {
+            child = this.spawnImpl(executable, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+        } catch (err) {
+            throw new AppError('PLAYIT', 'playit.gg could not be started.', err instanceof Error ? err.message : String(err));
+        }
+        console.log(`[playit] started ${executable} (pid ${child.pid ?? '?'})`);
+        this.child = child;
+        this.stopRequested = false;
+        this.output = '';
+
+        let spawnError: Error | null = null;
+        const read = (chunk: Buffer | string) => {
+            const text = chunk.toString();
+            this.output = (this.output + text).slice(-BUFFER_CHARS);
+            onData(text);
+        };
+        child.stdout?.on('data', read);
+        child.stderr?.on('data', read);
+        this.exitPromise = new Promise((resolve) => {
+            let done = false;
+            let closeFallback: ReturnType<typeof setTimeout> | null = null;
+            const finish = (code: number | null) => {
+                if (done) return;
+                done = true;
+                if (closeFallback) clearTimeout(closeFallback);
+                if (this.child === child) this.child = null;
+                if (!this.stopRequested) console.warn(`[playit] exited with code ${code}`);
+                resolve(code);
+            };
+            child.on('error', (err) => {
+                // Without a pid the program never started; otherwise a kill failed and it still runs.
+                if (child.pid === undefined) {
+                    spawnError = err;
+                    finish(null);
+                } else {
+                    console.warn('[playit] process error:', err.message);
+                }
+            });
+            // 'close' comes after the last output (for the error detail); the fallback covers a child
+            // process of the agent that keeps the pipes open.
+            child.on('exit', (code) => {
+                closeFallback = setTimeout(() => finish(code), 1_000);
+            });
+            child.on('close', (code: number | null) => finish(code));
+        });
+        return { spawnError: () => spawnError };
     }
 
     /** Windows: `taskkill /PID <pid> /T /F` awaited; else SIGTERM then SIGKILL. Never throws. */

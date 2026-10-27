@@ -206,6 +206,30 @@ describe('PlayitProcess.start', () => {
     });
 });
 
+describe('PlayitProcess.run (the agent of an in-app link)', () => {
+    it('passes the arguments and resolves once the agent kept running', async () => {
+        const h = harness();
+        const running = h.playit.run(exe, ['--secret', 'k', '-s', 'start'], 50);
+        const child = await spawned(h);
+        expect(h.spawn.calls[0].args).toEqual(['--secret', 'k', '-s', 'start']);
+        child.print('INFO playit agent started\n');
+        await expect(running).resolves.toBeUndefined();
+        expect(h.playit.isRunning()).toBe(true);
+    });
+
+    it('fails with PLAYIT and its log when the agent stops before that', async () => {
+        const h = harness();
+        const running = h.playit.run(exe, [], 5000);
+        const child = await spawned(h);
+        child.print('ERROR invalid secret key\n', 'stderr');
+        await new Promise((r) => setTimeout(r, 20));
+        child.exit(1);
+        const err = await expectAppError(running, 'PLAYIT');
+        expect(err.message).toContain('exit code 1');
+        expect(err.detail).toContain('invalid secret key');
+    });
+});
+
 describe('PlayitProcess.stop', () => {
     async function running(h: ReturnType<typeof harness>): Promise<FakeChildProcess> {
         const started = h.playit.start(exe, 2000);

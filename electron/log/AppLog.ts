@@ -18,6 +18,9 @@ const SECRETS: Array<[RegExp, string]> = [
     [/ya29\.[\w.-]+/g, 'ya29.[hidden]'],                                         // access tokens
     [/\b1\/\/[\w-]{20,}/g, '1//[hidden]'],                                      // refresh tokens
     [/GOCSPX-[\w-]+/g, 'GOCSPX-[hidden]'],                                      // client secrets
+    [/(Agent-Key\s+)\S+/gi, '$1[hidden]'],                                      // playit.gg agent keys
+    [/(--secret\s+)\S+/g, '$1[hidden]'],
+    [/("secret(?:_key)?"\s*:\s*")[^"]*"/g, '$1[hidden]"'],
     [/("(?:access_token|refresh_token|id_token|client_secret|code)"\s*:\s*")[^"]*"/g, '$1[hidden]"'],
     [/([?&](?:code|access_token|refresh_token)=)[^&\s"']+/g, '$1[hidden]'],
 ];

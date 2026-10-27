@@ -23,6 +23,8 @@ import { registerHandlers } from './ipc/handlers';
 import { LockService } from './lock/LockService';
 import { AppLog } from './log/AppLog';
 import { MinecraftProcess } from './processes/MinecraftProcess';
+import { PlayitLink } from './playit/PlayitLink';
+import { PlayitRunner } from './playit/PlayitRunner';
 import { PlayitProcess } from './processes/PlayitProcess';
 import { ReportService } from './report/ReportService';
 import { ServersService } from './servers/ServersService';
@@ -118,7 +120,16 @@ const minecraft = new MinecraftProcess({
     onPlayers: (players) => session.onPlayers(players),
     onExit: (code, expected) => session.onMinecraftExit(code, expected),
 });
-const playit = new PlayitProcess();
+// playit.gg linked in the app (Settings > Scripts), or a playit program chosen by hand.
+const playitLink = new PlayitLink({
+    dir: path.join(userData, 'playit'),
+    agentName: `MCS-Relay (${os.hostname()})`,
+    openExternal: (url) => shell.openExternal(url),
+    safeStorage,
+    emit: (state) => events.emit('playit:state', state),
+    onLinked: (address) => playitLinked(address),
+});
+const playit = new PlayitRunner(playitLink, new PlayitProcess());
 const session: SessionController = new SessionController({
     lock, sync, changes, minecraft, playit, settings, events, me,
     notify: (n) => notifyUser(n),
@@ -173,7 +184,7 @@ const reports = new ReportService({
             `Electron ${process.versions.electron}, Chrome ${process.versions.chrome}, Node ${process.versions.node}`,
             `Selected server: ${name(s.selectedServerId)}`,
             `Session: ${state.phase}, server ${name(state.serverId)}${state.error ? `, error: ${state.error.message}` : ''}`,
-            `Settings: Minecraft server ${s.launchServer ? 'on' : 'off'}, playit.gg ${s.usePlayitgg ? 'on' : 'off'}, theme ${s.theme}`,
+            `Settings: Minecraft server ${s.launchServer ? 'on' : 'off'}, playit.gg ${s.usePlayitgg ? 'on' : 'off'} (${playitLink.isLinked() ? 'linked in the app' : s.playitggPath ? 'own program' : 'not set up'}), theme ${s.theme}`,
             `Update: ${updates.get().status}`,
         ];
     },
@@ -241,6 +252,32 @@ function notifyUser(n: { title: string; body: string; outcome: 'done' | 'failed'
     const notification = new Notification({ title: n.title, body: n.body, silent: true, icon: path.join(process.env.VITE_PUBLIC, 'launcher.ico') });
     notification.on('click', showWindow);
     notification.show();
+}
+
+/** playit.gg was approved in the browser. The user is still looking at playit.gg's page, which does not say to come
+ *  back, so a notification does (always, whatever the notification setting: they are waiting for it), and the
+ *  window comes forward. Windows may only flash its taskbar button while another app is in front. */
+function playitLinked(address: string | null): void {
+    if (Notification.isSupported()) {
+        const notification = new Notification({
+            title: 'playit.gg is linked',
+            body: address
+                ? `Everything is set. You can close the browser tab and go back to MCS-Relay. Friends will join at ${address}.`
+                : 'Everything is set. You can close the browser tab and go back to MCS-Relay.',
+            icon: path.join(process.env.VITE_PUBLIC, 'launcher.ico'),
+        });
+        notification.on('click', showWindow);
+        notification.show();
+    }
+    if (!win) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.moveTop();
+    win.focus();
+    if (!win.isFocused()) {
+        win.flashFrame(true);
+        win.once('focus', () => win?.flashFrame(false));
+    }
 }
 
 /* ------------------------------------------------------------------ quit flow */
@@ -520,7 +557,7 @@ if (!app.requestSingleInstanceLock()) {
     void app.whenReady().then(async () => {
         appData.migrateLegacy();
         registerHandlers(createHandle(ipcMain, isTrustedUrl), {
-            auth, servers, session, settings, sync, transfers, changes, dialogs, report: reports, backups, installer,
+            auth, servers, session, settings, sync, transfers, changes, dialogs, report: reports, backups, installer, playit: playitLink,
             app: {
                 quitResponse, openExternal: (url) => shell.openExternal(url), setLogoState: applyLogoState,
                 updateState: () => updates.get(), checkForUpdates: () => updates.check(), installUpdate,

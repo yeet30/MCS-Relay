@@ -5,6 +5,7 @@ import type { LockView, PlayitTunnel, SessionPhase, SessionProgress, SyncReport,
 import { AppError } from '../errors';
 import { SessionController } from './SessionController';
 import type { SessionDeps } from './SessionController';
+import type { PlayitStartOptions } from '../playit/PlayitRunner';
 
 const ME: UserInfo = { name: 'Alice', email: 'alice@example.com', picture: '' };
 const FREE: LockView = { state: 'free', lock: null };
@@ -87,9 +88,8 @@ function setup(overrides: { report?: SyncReport; journal?: boolean } = {}) {
         send: vi.fn(),
     };
     const playit = {
-        start: vi.fn<(path: string, ms: number, signal?: AbortSignal, onTunnels?: (tunnels: PlayitTunnel[]) => void) => Promise<PlayitTunnel[]>>(
-            async () => [VOICE, JAVA],
-        ),
+        enabled: vi.fn((s: { usePlayitgg: boolean; playitggPath: string }) => s.usePlayitgg && Boolean(s.playitggPath)),
+        start: vi.fn<(o: PlayitStartOptions) => Promise<PlayitTunnel[]>>(async () => [VOICE, JAVA]),
         stop: vi.fn(async () => undefined),
     };
     const settings = {
@@ -615,7 +615,7 @@ describe('SessionController: playit.gg tunnels', () => {
         const t = setup();
         t.playit.start.mockResolvedValueOnce([JAVA]);
         await t.session.start('s1');
-        const onTunnels = t.playit.start.mock.calls[0][3]!;
+        const onTunnels = t.playit.start.mock.calls[0][0].onTunnels!;
         t.lock.update.mockClear();
         onTunnels([JAVA, VOICE]);
         await vi.waitFor(() => expect(t.lock.update).toHaveBeenCalledWith('s1', { address: JAVA.address, tunnels: [JAVA, VOICE] }));

@@ -9,6 +9,7 @@ import { AppError } from '../errors';
 import type { GoogleAuth } from '../auth/GoogleAuth';
 import type { BackupService } from '../backups/BackupService';
 import type { ServerInstaller } from '../installer/ServerInstaller';
+import type { PlayitLink } from '../playit/PlayitLink';
 import { isValidServerId } from '../store/appData';
 import type { ServersService } from '../servers/ServersService';
 import type { SessionController } from '../session/SessionController';
@@ -35,6 +36,7 @@ export interface HandlerDeps {
     dialogs: Pick<Dialogs, 'chooseFolder' | 'chooseFile' | 'openPath'>;
     report: Pick<ReportService, 'send' | 'save'>;
     installer: Pick<ServerInstaller, 'versions' | 'folder' | 'install'>;
+    playit: Pick<PlayitLink, 'getState' | 'link' | 'cancelLink' | 'reopen' | 'unlink'>;
     backups: Pick<BackupService, 'list' | 'create' | 'upload' | 'download' | 'restore' | 'restoreAuto' | 'deleteLocal' | 'deleteCloud' | 'localFolder' | 'isBusy'>;
     app: {
         quitResponse(confirmed: boolean): void;
@@ -259,4 +261,13 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
     });
 
     handle('backups:openFolder', async (serverId) => d.dialogs.openPath(await d.backups.localFolder(id(serverId))));
+
+    handle('playit:state', () => d.playit.getState());
+    handle('playit:link', () => d.playit.link());
+    handle('playit:cancelLink', () => d.playit.cancelLink());
+    handle('playit:reopen', () => d.playit.reopen());
+    handle('playit:unlink', () => {
+        if (d.session.isBusy()) throw new AppError('BUSY', 'playit.gg can be unlinked between sessions.');
+        return d.playit.unlink();
+    });
 }
