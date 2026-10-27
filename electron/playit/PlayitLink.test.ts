@@ -7,7 +7,7 @@ import type { PlayitLinkState } from '../../shared/types';
 import type { SafeStorageLike } from '../auth/GoogleAuth';
 import { PLAYIT_API, tunnelAddress } from './PlayitApi';
 import type { FetchFn, PlayitTunnelInfo } from './PlayitApi';
-import { PlayitLink } from './PlayitLink';
+import { PlayitLink, agentArgs } from './PlayitLink';
 import type { AgentRelease } from './PlayitLink';
 import { PlayitRunner } from './PlayitRunner';
 
@@ -24,7 +24,8 @@ const ok = (data: unknown) => new Response(JSON.stringify({ status: 'success', d
 const fail = (data: unknown) => new Response(JSON.stringify({ status: 'fail', data }));
 
 /** playit.gg in memory: the claim flow, the agent's run data and its tunnels. */
-function fakePlayit(o: { approveAfter?: number; reject?: boolean; accountStatus?: string; agentBytes?: Buffer } = {}) {
+function fakePlayit(o: { approveAfter?: number; reject?: boolean; accountStatus?: string; agentBytes?: Buffer; unseenFor?: number } = {}) {
+    let unseen = o.unseenFor ?? 0;
     let accountStatus = o.accountStatus ?? 'ready';
     let revoked = false;
     const calls: Array<{ route: string; body: Record<string, unknown>; auth: string | undefined }> = [];
@@ -59,6 +60,11 @@ function fakePlayit(o: { approveAfter?: number; reject?: boolean; accountStatus?
                     : t));
                 return ok({ tunnels, tcp_alloc: { allowed: 4, claimed: tunnels.length } });
             case '/tunnels/create': {
+                // An agent playit.gg has not registered yet.
+                if (unseen > 0) {
+                    unseen -= 1;
+                    return fail('AgentVersionTooOld');
+                }
                 created += 1;
                 const origin = body.origin as { data: { agent_id: string; local_port: number } };
                 tunnels.push({
@@ -119,7 +125,7 @@ function setup(playit = fakePlayit(), dir?: string, agentProcess = fakeAgent()) 
         dir: folder, agentName: 'MCS-Relay (TEST-PC)', fetchImpl: playit.fetchImpl, safeStorage: fakeSafe, agent: AGENT,
         openExternal: async (url) => void opened.push(url),
         emit: (state) => void states.push(state),
-        onLinked, pollMs: 1, linkTimeoutMs: 5_000, tunnelWaitMs: 5_000, agentProcess,
+        onLinked, pollMs: 1, linkTimeoutMs: 5_000, tunnelWaitMs: 5_000, createRetryMs: 1, agentProcess,
     });
     return { link, playit, folder, states, opened, onLinked, agentProcess };
 }
@@ -144,7 +150,7 @@ describe('PlayitLink.link', () => {
 
         // playit.gg's page waits for the approved agent to connect, and makes no tunnel for an agent it has not seen
         // run: the agent runs first, the tunnel comes after, then the agent stops until a server is hosted.
-        expect(t.agentProcess.run).toHaveBeenCalledWith(path.join(t.folder, 'playit-0.16.2.exe'), ['--secret', SECRET, '-s', 'start'], expect.any(Number), expect.anything());
+        expect(t.agentProcess.run).toHaveBeenCalledWith(path.join(t.folder, 'playit-0.16.2.exe'), agentArgs(SECRET), expect.any(Number), expect.anything());
         const created = t.playit.calls.findIndex((c) => c.route === '/tunnels/create');
         expect(created).toBeGreaterThan(-1);
         expect(t.agentProcess.run.mock.invocationCallOrder[0]).toBeLessThan(t.agentProcess.stop.mock.invocationCallOrder[0]);
@@ -236,6 +242,13 @@ describe('PlayitLink after linking', () => {
         expect(JSON.parse(fs.readFileSync(path.join(first.folder, 'link.json'), 'utf8'))).toMatchObject({ tunnelId: '1', address: 't1.joinmc.link' });
     });
 
+    it('waits for playit.gg to register a just-started agent before giving up on the tunnel', async () => {
+        const t = setup(fakePlayit({ unseenFor: 2 }));
+        await t.link.link();
+        expect(t.link.getState().address).toBe('t1.joinmc.link');
+        expect(t.playit.routes().filter((r) => r === '/tunnels/create')).toHaveLength(3);
+    });
+
     it('makes a new tunnel when its tunnel was deleted on playit.gg', async () => {
         const t = setup();
         await t.link.link();
@@ -296,7 +309,7 @@ describe('PlayitRunner', () => {
         expect(runner.enabled({ usePlayitgg: true, playitggPath: '' })).toBe(true);
         expect(runner.enabled({ usePlayitgg: false, playitggPath: '' })).toBe(false);
         const tunnels = await runner.start({ serverPath: '', settings: { playitggPath: '' }, timeoutMs: 1000 });
-        expect(p.run).toHaveBeenCalledWith('C:/p/playit.exe', ['--secret', SECRET, '-s', 'start'], expect.any(Number), undefined);
+        expect(p.run).toHaveBeenCalledWith('C:/p/playit.exe', agentArgs(SECRET), expect.any(Number), undefined);
         expect(link.openTunnel).toHaveBeenCalledWith(25565, undefined);
         expect(p.run.mock.invocationCallOrder[0]).toBeLessThan(link.openTunnel.mock.invocationCallOrder[0]);
         expect(p.start).not.toHaveBeenCalled();

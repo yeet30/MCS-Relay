@@ -63,7 +63,7 @@ const REASONS: Record<string, string> = {
     EmailMustBeVerified: 'Your playit.gg account\'s email address is not verified yet. Open the email from playit.gg, then try again.',
     RequiresVerifiedAccount: 'Your playit.gg account\'s email address is not verified yet. Open the email from playit.gg, then try again.',
     RequiresPlayitPremium: 'playit.gg says this needs playit.gg Premium.',
-    AgentVersionTooOld: 'playit.gg no longer accepts the agent version MCS-Relay uses. Update MCS-Relay.',
+    AgentVersionTooOld: 'playit.gg refused the playit.gg agent built into this MCS-Relay as too old.',
     UserRejected: 'The link was declined on playit.gg.',
     CodeExpired: 'The playit.gg link page expired. Try linking again.',
     CodeNotFound: 'The playit.gg link page expired. Try linking again.',

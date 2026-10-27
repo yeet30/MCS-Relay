@@ -47,9 +47,10 @@ export default function PlayitSetup({ ownPath, onPickOwn, onLinked, busy = false
 
     async function unlink() {
         const yes = await confirm({
-            message: 'Unlink playit.gg from this PC?\n\nIts tunnel is deleted, so friends cannot join through it any more. You can link again at any time.',
+            message: 'Unlink playit.gg from this PC?\n\nIts tunnel is deleted, so friends cannot join through it any more. The agent itself stays in your playit.gg account, where it counts toward your agent limit: delete it there if you will not link this PC again. Linking again makes a new agent.',
             confirmText: 'Unlink',
             cancelText: 'Keep it',
+            link: { label: 'Your agents on playit.gg', url: 'https://playit.gg/account/agents' },
         });
         if (yes) await usePlayitStore.getState().unlink();
     }

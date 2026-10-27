@@ -27,13 +27,15 @@ import { AppError, toAppError } from '../errors';
 import { PlayitApi, PlayitRefusal, tunnelAddress } from './PlayitApi';
 import type { FetchFn, PlayitTunnelInfo } from './PlayitApi';
 
-/** The agent MCS-Relay runs. 0.16.2 is the last version that runs as a plain program; from 1.0 playit's agent is a
- *  Windows service, which needs an administrator to install. auto-mcs uses the same version. */
+/** The agent MCS-Relay runs: playitd.exe of playit's newest stable release (the Windows .exe of a release is
+ *  playitd; checksum from GitHub's release page). Its installer sets it up as a Windows service, but the program also
+ *  runs by itself with --secret, which is how MCS-Relay runs it: no service, no administrator. playit.gg refuses
+ *  tunnels for agents it considers too old (0.16.2 was, in October 2026), so this pin needs updating now and then. */
 export const AGENT: AgentRelease = {
-    version: '0.16.2',
-    url: 'https://github.com/playit-cloud/playit-agent/releases/download/v0.16.2/playit-windows-x86_64-signed.exe',
-    sha256: '40aa922c70a33f77c4eb0947aacd9d1c663c7b096d10d1717916c359b2e391d0',
-    size: 4_469_320,
+    version: '1.0.10',
+    url: 'https://github.com/playit-cloud/playit-agent/releases/download/v1.0.10/playit-windows-x86_64-signed.exe',
+    sha256: '2dbdaad119844cbbc062cc9774b8b462afa5f1b4b7832a9fc5ef4676cae887cf',
+    size: 4_822_072,
 };
 
 export interface AgentRelease {
@@ -64,8 +66,10 @@ export interface AgentProcess {
     isRunning(): boolean;
 }
 
-/** The agent's command line: its key, and its log on stdout instead of a screen. */
-export const agentArgs = (secret: string): string[] => ['--secret', secret, '-s', 'start'];
+/** playitd's control pipe; its own name, so a playit.gg installed separately (\\.\pipe\playitd-system) is not disturbed. */
+const AGENT_PIPE = '\\\\.\\pipe\\mcs-relay-playitd';
+/** The agent's command line: its key and its own control pipe. It logs to stderr. */
+export const agentArgs = (secret: string): string[] => ['--secret', secret, '--socket-path', AGENT_PIPE];
 /** The agent counts as started once it kept running this long. */
 export const AGENT_SETTLE_MS = 4_000;
 
@@ -87,6 +91,8 @@ export interface PlayitLinkDeps {
     pollMs?: number;
     linkTimeoutMs?: number;
     tunnelWaitMs?: number;
+    createTries?: number;
+    createRetryMs?: number;
 }
 
 const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
@@ -146,7 +152,7 @@ export class PlayitLink {
             const code = randomBytes(5).toString('hex');
             const url = `https://playit.gg/claim/${code}`;
             // The first call registers the code, so the page knows it when it opens.
-            await this.api.claimSetup(code, `playit-cli ${this.agent.version}`);
+            await this.api.claimSetup(code, this.versionText());
             this.set({ linking: { step: 'browser', done: 0, total: 0, url } });
             console.log('[playit] link: opened the approval page in the browser');
             await this.d.openExternal(url);
@@ -281,6 +287,11 @@ export class PlayitLink {
         return this.downloading;
     }
 
+    /** How the agent describes itself to playit.gg, as playit's own program does. */
+    private versionText(): string {
+        return `playit ${this.agent.version}`;
+    }
+
     private async download(target: string, onProgress?: (done: number, total: number) => void): Promise<string> {
         await fs.mkdir(this.d.dir, { recursive: true });
         console.log(`[playit] downloading the agent ${this.agent.version} from GitHub`);
@@ -314,6 +325,10 @@ export class PlayitLink {
             throw new AppError('NETWORK', 'The download of playit.gg\'s program was interrupted. Try again.', err instanceof Error ? err.message : String(err));
         }
         console.log('[playit] agent downloaded and checked');
+        // Agents of earlier MCS-Relay builds are not used any more.
+        for (const name of await fs.readdir(this.d.dir).catch(() => [])) {
+            if (/^playit-.+\.exe$/.test(name) && path.join(this.d.dir, name) !== target) await fs.rm(path.join(this.d.dir, name), { force: true }).catch(() => undefined);
+        }
         return target;
     }
 
@@ -328,7 +343,7 @@ export class PlayitLink {
             if (Date.now() > endAt) throw new AppError('TIMEOUT', 'The playit.gg page was not approved in time. Try linking again.');
             let status;
             try {
-                status = await this.api.claimSetup(code, `playit-cli ${this.agent.version}`);
+                status = await this.api.claimSetup(code, this.versionText());
                 failures = 0;
             } catch (err) {
                 // A refusal ends it; a network hiccup is tried again a few times.
@@ -350,7 +365,7 @@ export class PlayitLink {
             ?? list.tunnels.find((t) => mine(t) && t.tunnel_type === 'minecraft-java');
         if (!tunnel) {
             console.log(`[playit] creating a Minecraft Java tunnel to port ${port}`);
-            const id = await api.createTunnel(agentId, TUNNEL_NAME, port);
+            const id = await this.createTunnel(api, agentId, port, signal);
             await this.remember({ tunnelId: id });
             tunnel = await this.waitForAddress(api, agentId, id, signal);
         } else {
@@ -369,6 +384,19 @@ export class PlayitLink {
             await this.remember({ address });
         }
         return { id: tunnel.id, address };
+    }
+
+    /** The agent may not be registered with playit.gg yet right after it started ("AgentVersionTooOld"): a few tries. */
+    private async createTunnel(api: PlayitApi, agentId: string, port: number, signal?: AbortSignal): Promise<string> {
+        for (let attempt = 1; ; attempt++) {
+            try {
+                return await api.createTunnel(agentId, TUNNEL_NAME, port);
+            } catch (err) {
+                if (!(err instanceof PlayitRefusal) || err.reason !== 'AgentVersionTooOld' || attempt >= (this.d.createTries ?? 5)) throw err;
+                console.log(`[playit] playit.gg has not seen the agent yet (try ${attempt}); waiting`);
+                await sleep(this.d.createRetryMs ?? 3_000, signal);
+            }
+        }
     }
 
     private async waitForAddress(api: PlayitApi, agentId: string, id: string, signal?: AbortSignal): Promise<PlayitTunnelInfo> {
