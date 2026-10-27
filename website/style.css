@@ -160,6 +160,15 @@ img {
     font-size: 0.85rem;
 }
 
+.fine-print a {
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.fine-print a:hover {
+    text-decoration: underline;
+}
+
 /* The main screen and the console next to each other; one above the other on a phone. */
 .screenshots {
     display: grid;

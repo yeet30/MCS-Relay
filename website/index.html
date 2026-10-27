@@ -36,7 +36,10 @@
                 <a class="button primary" href="https://github.com/yeet30/MCS-Relay/releases/latest">Download for Windows</a>
                 <a class="button" href="https://github.com/yeet30/MCS-Relay">Source code</a>
             </div>
-            <p class="fine-print">Free and open source · Windows 10 and 11 · Updates itself</p>
+            <p class="fine-print">
+                <a id="version" href="https://github.com/yeet30/MCS-Relay/releases/tag/v1.1.0">Version 1.1.0 · What's new</a><br>
+                Free and open source · Windows 10 and 11 · Updates itself
+            </p>
             <!-- The app in the same theme as the page: dark when the visitor's system is dark. -->
             <div class="screenshots">
                 <picture>
@@ -233,5 +236,18 @@
             <span>Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.</span>
         </div>
     </footer>
+    <script>
+        // The newest release, so the version above stays right after each release (1.1.0 is written in for when GitHub
+        // cannot be reached).
+        fetch('https://api.github.com/repos/yeet30/MCS-Relay/releases/latest')
+            .then((response) => (response.ok ? response.json() : null))
+            .then((release) => {
+                if (!release || typeof release.tag_name !== 'string' || typeof release.html_url !== 'string') return;
+                const link = document.getElementById('version');
+                link.textContent = `Version ${release.tag_name.replace(/^v/, '')} · What's new`;
+                link.href = release.html_url;
+            })
+            .catch(() => undefined);
+    </script>
 </body>
 </html>
