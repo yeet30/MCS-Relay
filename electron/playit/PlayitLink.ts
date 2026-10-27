@@ -48,7 +48,7 @@ export interface AgentRelease {
 const TUNNEL_NAME = 'MCS-Relay';
 /** playit.gg's answers that mean this PC's key is dead: the agent or the account was deleted. */
 const KEY_GONE = new Set(['InvalidAgentKey', 'NoLongerValid', 'AccountDoesNotExist', 'AgentNotFound']);
-const LINK_GONE = 'This PC\'s playit.gg agent was deleted on playit.gg, so MCS-Relay removed the link. Link playit.gg again in Settings > Scripts.';
+const LINK_GONE = 'This PC\'s playit.gg agent was deleted on playit.gg, so MCS-Relay removed the link. Link playit.gg again in Settings > Server settings.';
 const LINK_FILE = 'link.json';
 
 interface StoredLink {
@@ -246,9 +246,9 @@ export class PlayitLink {
     /** What starting the agent needs: the program and its key, once playit.gg said the agent may run. */
     async prepare(): Promise<{ executable: string; secret: string }> {
         const stored = this.stored;
-        if (!stored) throw new AppError('PLAYIT', 'playit.gg is not linked on this PC. Link it in Settings > Scripts.');
+        if (!stored) throw new AppError('PLAYIT', 'playit.gg is not linked on this PC. Link it in Settings > Server settings.');
         const secret = this.secret(stored);
-        if (!secret) throw new AppError('PLAYIT', 'This PC\'s playit.gg link could not be read. Link playit.gg again in Settings > Scripts.');
+        if (!secret) throw new AppError('PLAYIT', 'This PC\'s playit.gg link could not be read. Link playit.gg again in Settings > Server settings.');
         const executable = await this.ensureAgent();
         const run = await this.guard(() => this.api.withSecret(secret).runData());
         const blocked = ACCOUNT_STATUS[run.account_status] ?? null;
@@ -261,7 +261,7 @@ export class PlayitLink {
     async openTunnel(port: number, signal?: AbortSignal): Promise<PlayitTunnel[]> {
         const stored = this.stored;
         const secret = stored && this.secret(stored);
-        if (!stored || !secret) throw new AppError('PLAYIT', 'playit.gg is not linked on this PC. Link it in Settings > Scripts.');
+        if (!stored || !secret) throw new AppError('PLAYIT', 'playit.gg is not linked on this PC. Link it in Settings > Server settings.');
         const { address } = await this.guard(() => this.ensureTunnel(this.api.withSecret(secret), stored.agentId, port, signal));
         if (address !== this.state.address) this.set({ address });
         return [{ address, type: 'minecraft-java', local: `127.0.0.1:${port}` }];
@@ -495,7 +495,7 @@ export class PlayitLink {
 const ACCOUNT_STATUS: Record<string, string> = {
     'email-not-verified': 'Your playit.gg account\'s email address is not verified yet. Open the email from playit.gg, then start again.',
     banned: 'playit.gg has banned this playit.gg account.',
-    'account-delete-scheduled': 'This playit.gg account is about to be deleted. Link another account in Settings > Scripts.',
+    'account-delete-scheduled': 'This playit.gg account is about to be deleted. Link another account in Settings > Server settings.',
     'agent-disabled': 'This PC\'s playit.gg agent is switched off on playit.gg. Switch it on there, or link playit.gg again.',
     'agent-over-limit': 'Your playit.gg account has more agents than its plan allows, so playit.gg will not run this PC\'s. Delete one you no longer use at playit.gg (the one of playit.gg\'s own program, say), then try again.',
 };

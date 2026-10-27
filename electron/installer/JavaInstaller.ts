@@ -61,7 +61,7 @@ export class JavaInstaller {
                 await this.download(serverId, asset, folder);
                 return this.use(serverId, folder, version);
             }
-            throw new AppError('NOT_FOUND', `Adoptium has no Java ${major} for Windows to download. Get it from adoptium.net and choose it in Settings > Scripts.`);
+            throw new AppError('NOT_FOUND', `Adoptium has no Java ${major} for Windows to download. Get it from adoptium.net and choose it in Settings > Server settings.`);
         } finally {
             this.running = false;
             this.d.emit(null);

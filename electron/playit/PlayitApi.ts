@@ -58,8 +58,8 @@ function reasonOf(data: unknown): string {
 }
 
 const REASONS: Record<string, string> = {
-    InvalidAgentKey: 'playit.gg no longer accepts this PC\'s link. Link playit.gg again in Settings > Scripts.',
-    NoLongerValid: 'playit.gg no longer accepts this PC\'s link. Link playit.gg again in Settings > Scripts.',
+    InvalidAgentKey: 'playit.gg no longer accepts this PC\'s link. Link playit.gg again in Settings > Server settings.',
+    NoLongerValid: 'playit.gg no longer accepts this PC\'s link. Link playit.gg again in Settings > Server settings.',
     EmailMustBeVerified: 'Your playit.gg account\'s email address is not verified yet. Open the email from playit.gg, then try again.',
     RequiresVerifiedAccount: 'Your playit.gg account\'s email address is not verified yet. Open the email from playit.gg, then try again.',
     RequiresPlayitPremium: 'playit.gg says this needs playit.gg Premium.',

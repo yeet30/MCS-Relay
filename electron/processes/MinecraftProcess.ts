@@ -381,7 +381,7 @@ export class MinecraftProcess {
     static resolveLaunch(serverPath: string, javaFlags: JavaFlags, platform: NodeJS.Platform = process.platform, javaPath: string | null = null): { command: string; args: string[] } {
         if (!existsSync(serverPath)) throw new AppError('NO_LOCAL_PATH', 'The server folder does not exist on this PC.', serverPath);
         if (javaPath && !existsSync(javaPath)) {
-            throw new AppError('JAVA', 'The Java program chosen for this server is not on this PC anymore. Choose it again in Settings > Scripts.', javaPath);
+            throw new AppError('JAVA', 'The Java program chosen for this server is not on this PC anymore. Choose it again in Settings > Server settings.', javaPath);
         }
         const argsFile = findArgsFile(serverPath, platform);
         const launch = argsFile

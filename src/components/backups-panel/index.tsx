@@ -166,7 +166,7 @@ export default function BackupsPanel({ server, canWrite }: { server: ServerSumma
                 </div>
             )}
             {list && !list.auto && autoMinutes > 0 && (
-                <p className='backup-hint'>An automatic backup is made every {autoMinutes} minutes while you host this server (Settings &gt; Scripts).</p>
+                <p className='backup-hint'>An automatic backup is made every {autoMinutes} minutes while you host this server (Settings &gt; Server settings).</p>
             )}
             <ul className='backup-list'>
                 {backups.map((backup) => (

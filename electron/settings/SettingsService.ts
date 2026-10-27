@@ -149,7 +149,7 @@ export class SettingsService {
         return chosen ? chosen.trim() : null;
     }
 
-    /** Asks for the playit.gg program; null when cancelled. Nothing is stored: the Scripts panel saves it with
+    /** Asks for the playit.gg program; null when cancelled. Nothing is stored: the Hosting tab saves it with
      *  its other changes (settings:set validates it then). */
     async pickPlayitPath(): Promise<string | null> {
         const filters = this.platform === 'win32' ? [{ name: 'Programs', extensions: ['exe'] }] : undefined;

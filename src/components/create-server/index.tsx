@@ -150,10 +150,10 @@ function Wizard({ onClose }: { onClose: () => void }) {
         const prefs = settingsStore.settings;
         const playitChanged = !prefs || prefs.usePlayitgg !== usePlayit || (usePlayit && prefs.playitggPath !== playitPath);
         if (playitChanged && !(await settingsStore.update({ usePlayitgg: usePlayit, ...(usePlayit ? { playitggPath: playitPath } : {}) }))) {
-            return fail('settings', 'playit.gg could not be saved. Set it in Settings > Scripts.');
+            return fail('settings', 'playit.gg could not be saved. Set it in Settings > Server settings.');
         }
         const flags = await settingsStore.updateServer(server.id, { javaFlags: ram });
-        if (!flags) return fail('settings', 'The memory could not be saved. Set it in Settings > Scripts.');
+        if (!flags) return fail('settings', 'The memory could not be saved. Set it in Settings > Server settings.');
         const info = await invoke('installer:folder', server.id);
         setJava({ needed, found: info.ok ? info.value.javaFound : null });
         mark('settings', 'done');
@@ -272,7 +272,7 @@ function Wizard({ onClose }: { onClose: () => void }) {
                 )}
                 <span className='field-label'>Memory for the server</span>
                 <RamSliders maxRAM={ram.maxRAM} minRAM={ram.minRAM} onChange={setRam} idPrefix='wizard-ram' />
-                <p className='wizard-hint'>4 GB suits a few friends; modded servers want more. Leave a few GB for Windows. You can change all of this later in Settings &gt; Scripts.</p>
+                <p className='wizard-hint'>4 GB suits a few friends; modded servers want more. Leave a few GB for Windows. You can change all of this later in Settings &gt; Server settings.</p>
             </>
         );
     } else {

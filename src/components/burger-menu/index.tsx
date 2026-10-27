@@ -1,7 +1,7 @@
 import './burger-menu.css';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bug, FolderTree, LoaderCircle, LogOut, SlidersHorizontal, Terminal } from 'lucide-react';
+import { Bug, FolderTree, LoaderCircle, LogOut, ServerCog, SlidersHorizontal } from 'lucide-react';
 import type { IModalItems } from '../../lib/ui-types';
 import { useAuthStore } from '../../stores/authStore';
 import { useServersStore } from '../../stores/serversStore';
@@ -12,6 +12,7 @@ import OwnedDriveFolders from '../owned-drive-folders';
 import Preferences from '../preferences';
 import ReportProblem from '../report-problem';
 import ScriptsOptions from '../scripts-options';
+import ServerPropertiesPanel from '../server-properties';
 
 export default function BurgerMenu() {
     const user = useAuthStore((s) => s.user);
@@ -91,8 +92,11 @@ export default function BurgerMenu() {
                         </div>
                     )}
                     <ul>
-                        <li onClick={() => open([{ title: 'Scripts', content: <ScriptsOptions /> }], true)}>
-                            <Terminal size={15} /> Scripts
+                        <li onClick={() => open([
+                            { title: 'Hosting', content: <ScriptsOptions /> },
+                            { title: 'server.properties', content: <ServerPropertiesPanel /> },
+                        ], true)}>
+                            <ServerCog size={15} /> Server settings
                         </li>
                         <li onClick={() => open(driveFolders, true)}>
                             <FolderTree size={15} /> Servers

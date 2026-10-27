@@ -167,7 +167,7 @@ describe('local paths', () => {
 });
 
 describe('playit.gg path', () => {
-    test('picks the program without storing it (the Scripts panel saves it)', async () => {
+    test('picks the program without storing it (the Hosting tab saves it)', async () => {
         const exe = path.join(root, 'playit.exe');
         dialogs.chooseFile.mockResolvedValueOnce(exe);
         await expect(settings.pickPlayitPath()).resolves.toBe(exe);

@@ -65,7 +65,7 @@ export default function Tour() {
                 <h3>Your server is ready</h3>
                 <p>
                     Everything about your servers is in this menu. <b>Servers</b> holds their names, folders and members, and
-                    where you invite your friends. <b>Scripts</b> holds Java, memory and playit.gg.
+                    where you invite your friends. <b>Server settings</b> holds playit.gg, Java, memory and server.properties.
                 </p>
                 <button className='text-button primary' onClick={done} autoFocus>Got it</button>
             </div>

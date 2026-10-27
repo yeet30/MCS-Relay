@@ -90,7 +90,7 @@ export class PlayitProcess {
         if (this.child) throw new AppError('BUSY', 'playit.gg is already running.');
         if (signal?.aborted) throw abortError(signal);
         if (!executable || !existsSync(executable)) {
-            throw new AppError('PLAYIT', 'The playit.gg program you chose was not found: it may have been uninstalled or moved. Link playit.gg in Settings > Scripts instead.', executable);
+            throw new AppError('PLAYIT', 'The playit.gg program you chose was not found: it may have been uninstalled or moved. Link playit.gg in Settings > Server settings instead.', executable);
         }
 
         let onText: () => void = () => undefined;

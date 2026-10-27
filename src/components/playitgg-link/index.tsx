@@ -34,7 +34,7 @@ export default function PlayitggLink() {
                     <CopyButton text={lan} />
                 </span>
                 <p className='link-hint'>
-                    On this PC, join with <b>localhost</b>. For friends elsewhere, turn on playit.gg in Settings &gt; Scripts.
+                    On this PC, join with <b>localhost</b>. For friends elsewhere, turn on playit.gg in Settings &gt; Server settings.
                 </p>
             </div>
         );
