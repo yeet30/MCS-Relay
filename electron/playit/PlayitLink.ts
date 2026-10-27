@@ -262,9 +262,22 @@ export class PlayitLink {
         const stored = this.stored;
         const secret = stored && this.secret(stored);
         if (!stored || !secret) throw new AppError('PLAYIT', 'playit.gg is not linked on this PC. Link it in Settings > Server settings.');
-        const { address } = await this.guard(() => this.ensureTunnel(this.api.withSecret(secret), stored.agentId, port, signal));
+        const api = this.api.withSecret(secret);
+        const { address } = await this.guard(() => this.ensureTunnel(api, stored.agentId, port, signal));
         if (address !== this.state.address) this.set({ address });
+        void this.logDiagnostics(api, stored.agentId);
         return [{ address, type: 'minecraft-java', local: `127.0.0.1:${port}` }];
+    }
+
+    /** For problem reports: the tunnel and the agent as playit.gg sees them (no keys in either). */
+    private async logDiagnostics(api: PlayitApi, agentId: string): Promise<void> {
+        try {
+            const tunnel = (await api.listTunnels()).find((t) => t.id === this.stored?.tunnelId);
+            console.log(`[playit] tunnel as playit.gg sees it: ${JSON.stringify(tunnel ?? null)}`);
+            console.log(`[playit] agent ${agentId} as playit.gg sees it: ${JSON.stringify(await api.runDataV1())}`);
+        } catch (err) {
+            console.warn('[playit] could not read the tunnel details:', toAppError(err).message);
+        }
     }
 
     /** Runs a call with this PC's key; a key playit.gg no longer accepts makes the app forget the link. */

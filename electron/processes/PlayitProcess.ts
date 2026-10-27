@@ -28,8 +28,10 @@ const CLAIM_RE = /https?:\/\/playit\.gg\/claim\/[A-Za-z0-9_-]+/;
 const BUFFER_CHARS = 16 * 1024;
 const TAIL_LINES = 20;
 const EXIT_WAIT_MS = 5_000;
-/** How many lines of the in-app agent's log reach the app log before only its warnings and errors do. */
-const AGENT_LOG_LINES = 15;
+/** How long all of the in-app agent's log reaches the app log (players connecting included); after that, only its
+ *  warnings and errors, and never more than AGENT_LOG_LINES lines in all. */
+const AGENT_LOG_ALL_MS = 120_000;
+const AGENT_LOG_LINES = 400;
 
 export interface PlayitScreen {
     tunnels: PlayitTunnel[];
@@ -193,13 +195,15 @@ export class PlayitProcess {
         if (signal?.aborted) throw abortError(signal);
         let partial = '';
         let logged = 0;
+        const startedAt = Date.now();
         const launched = this.launch(executable, args, (chunk) => {
-            // Its log goes into the app's log: the first lines, and after that warnings and errors only.
+            // Its log goes into the app's log: everything at first, and after that warnings and errors only.
             const lines = (partial + chunk).split(/\r?\n/);
             partial = lines.pop() ?? '';
             for (const raw of lines) {
                 const line = stripAnsi(raw).trim();
-                if (!line || (logged >= AGENT_LOG_LINES && !/warn|error|fail/i.test(line))) continue;
+                const early = Date.now() - startedAt < AGENT_LOG_ALL_MS;
+                if (!line || logged >= AGENT_LOG_LINES || (!early && !/warn|error|fail/i.test(line))) continue;
                 logged += 1;
                 console.log(`[playit] agent: ${line}`);
             }

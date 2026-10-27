@@ -102,6 +102,11 @@ export class PlayitApi {
         return this.call('/agents/rundata', {});
     }
 
+    /** What playit's 1.0 agent itself loads: its tunnels with their agent config, and playit.gg's notices to it. */
+    runDataV1(): Promise<unknown> {
+        return this.call('/v1/agents/rundata', {});
+    }
+
     renameAgent(agentId: string, name: string): Promise<unknown> {
         return this.call('/agents/rename', { agent_id: agentId, name });
     }
