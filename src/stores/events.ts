@@ -6,6 +6,7 @@ import { useAuthStore } from './authStore';
 import { useBackupStore } from './backupStore';
 import { useServersStore } from './serversStore';
 import { useSessionStore } from './sessionStore';
+import { usePlayitStore } from './playitStore';
 import { useUpdateStore } from './updateStore';
 
 /** The active unsubscribe functions; null while not subscribed. Module singleton (one renderer, one bridge). */
@@ -34,6 +35,7 @@ export function startEventSubscriptions(): void {
         on('app:update', (state) => useUpdateStore.getState().apply(state)),
         on('backups:progress', (progress) => useBackupStore.getState().apply(progress)),
         on('installer:progress', (progress) => useBackupStore.getState().applyInstall(progress)),
+        on('playit:state', (state) => usePlayitStore.getState().apply(state)),
         onSignedOut((message) => {
             useAuthStore.getState().markSignedOut(message);
             useServersStore.getState().reset();
@@ -42,6 +44,7 @@ export function startEventSubscriptions(): void {
     // Catch up with anything that happened before this window subscribed (e.g. after a reload).
     void session().resync();
     void useUpdateStore.getState().load();
+    void usePlayitStore.getState().load();
 }
 
 export function stopEventSubscriptions(): void {

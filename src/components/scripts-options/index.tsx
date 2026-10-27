@@ -1,15 +1,17 @@
 import './scripts-options.css';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Coffee, FileCog, FolderInput, Loader2, RotateCcw, Save } from 'lucide-react';
+import { Coffee, FolderInput, Loader2, RotateCcw, Save } from 'lucide-react';
 import type { AppSettings, JavaFlags, ServerSettings } from '../../../shared/types';
 import { useConfirm } from '../../hooks/useConfirm';
 import { isSessionBusy } from '../../lib/sync';
 import { useNoticeStore } from '../../stores/noticeStore';
+import { usePlayitStore } from '../../stores/playitStore';
 import { selectSelectedServer, useServersStore } from '../../stores/serversStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useCloseGuard } from '../modal/close-guard';
 import OptionRow from '../option-row';
+import PlayitSetup from '../playit-setup';
 import RamSliders from '../ram-slider';
 
 /** Java gets the flags on one line; the box shows one flag per line, which wraps far better. */
@@ -38,6 +40,7 @@ export default function ScriptsOptions() {
     const server = useServersStore(selectSelectedServer);
     const serverSettings = useSettingsStore((s) => (server ? s.servers[server.id] ?? null : null));
     const busy = useSessionStore((s) => isSessionBusy(s.state.phase));
+    const linked = usePlayitStore((s) => s.state?.linked ?? false);
     const [usePlayit, setUsePlayit] = useState(false);
     const [playitPath, setPlayitPath] = useState('');
     const [launchServer, setLaunchServer] = useState(true);
@@ -86,8 +89,8 @@ export default function ScriptsOptions() {
             useNoticeStore.getState().info('There are no new changes to save.');
             return true;
         }
-        if (usePlayit && !playitPath) {
-            useNoticeStore.getState().error('Choose the playit.gg program first, or turn playit.gg off.');
+        if (usePlayit && !linked && !playitPath) {
+            useNoticeStore.getState().error('Link playit.gg first, or turn playit.gg off.');
             return false;
         }
         setSaving(true);
@@ -140,15 +143,7 @@ export default function ScriptsOptions() {
             {popup}
             <OptionRow title='playit.gg' enable={usePlayit} onChange={setUsePlayit}>
                 <p>Starts playit.gg with the server, so friends can join from anywhere.</p>
-                <div className='program-path'>
-                    <FileCog size={14} />
-                    <span className={`path-text ${playitPath ? '' : 'missing'}`} title={playitPath || undefined}>
-                        {playitPath || 'No playit.gg program chosen yet'}
-                    </span>
-                    <button className='text-button' onClick={() => void handlePickPlayit()}>
-                        <FolderInput size={12} /> {playitPath ? 'Change' : 'Choose'}
-                    </button>
-                </div>
+                <PlayitSetup ownPath={playitPath} onPickOwn={() => void handlePickPlayit()} onLinked={() => setUsePlayit(true)} busy={busy} />
             </OptionRow>
 
             <OptionRow title='Minecraft server' enable={launchServer} onChange={setLaunchServer}>

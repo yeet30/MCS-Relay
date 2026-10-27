@@ -7,11 +7,13 @@ import { invoke } from '../../api';
 import { formatBytesPair } from '../../lib/format';
 import { isSessionBusy } from '../../lib/sync';
 import { useBackupStore } from '../../stores/backupStore';
+import { usePlayitStore } from '../../stores/playitStore';
 import { useServersStore } from '../../stores/serversStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useUiStore } from '../../stores/uiStore';
 import Modal from '../modal';
+import PlayitSetup from '../playit-setup';
 import RamSliders from '../ram-slider';
 import { useCloseGuard } from '../modal/close-guard';
 import { kindName } from '../../lib/serverKinds';
@@ -48,6 +50,7 @@ function Wizard({ onClose }: { onClose: () => void }) {
     const [created, setCreated] = useState<ServerSummary | null>(null);
     const [java, setJava] = useState<{ needed: number | null; found: number | null } | null>(null);
     const download = useBackupStore((s) => s.install);
+    const playitLinked = usePlayitStore((s) => s.state?.linked ?? false);
     const onVersion = useCallback((v: string | null) => setVersion(v), []);
 
     useEffect(() => {
@@ -90,8 +93,8 @@ function Wizard({ onClose }: { onClose: () => void }) {
             }
             setStep('start');
         } else if (step === 'start') {
-            if (usePlayit && !playitPath) {
-                setError('Choose the playit.gg program, or leave playit.gg off for now.');
+            if (usePlayit && !playitLinked && !playitPath) {
+                setError('Link playit.gg, or leave it off for now.');
                 return;
             }
             void create();
@@ -265,12 +268,7 @@ function Wizard({ onClose }: { onClose: () => void }) {
                     </span>
                 </label>
                 {usePlayit && (
-                    <div className='wizard-path'>
-                        <span className={`wizard-path-text ${playitPath ? '' : 'empty'}`} title={playitPath}>{playitPath || 'Choose the playit.gg program (playit.exe)'}</span>
-                        <button className='text-button' onClick={() => void useSettingsStore.getState().pickPlayitPath().then((p) => p && setPlayitPath(p))}>
-                            <FolderOpen size={13} /> Browse
-                        </button>
-                    </div>
+                    <PlayitSetup ownPath={playitPath} onPickOwn={() => void useSettingsStore.getState().pickPlayitPath().then((p) => p && setPlayitPath(p))} />
                 )}
                 <span className='field-label'>Memory for the server</span>
                 <RamSliders maxRAM={ram.maxRAM} minRAM={ram.minRAM} onChange={setRam} idPrefix='wizard-ram' />
