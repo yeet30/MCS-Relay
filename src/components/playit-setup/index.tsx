@@ -80,7 +80,7 @@ export default function PlayitSetup({ ownPath, onPickOwn, onLinked, busy = false
                     </>
                 )}
                 {linking.step === 'finishing' && (
-                    <span className='playit-setup-line'><Loader2 size={14} className='spinner' /> Approved. Making your Minecraft tunnel…</span>
+                    <span className='playit-setup-line'><Loader2 size={14} className='spinner' /> Approved. Starting playit.gg and making your Minecraft tunnel…</span>
                 )}
                 <div className='playit-setup-buttons'>
                     {linking.step === 'browser' && (

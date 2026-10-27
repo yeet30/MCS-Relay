@@ -268,7 +268,7 @@ function Wizard({ onClose }: { onClose: () => void }) {
                     </span>
                 </label>
                 {usePlayit && (
-                    <PlayitSetup ownPath={playitPath} onPickOwn={() => void useSettingsStore.getState().pickPlayitPath().then((p) => p && setPlayitPath(p))} />
+                    <PlayitSetup ownPath={playitPath} onPickOwn={() => void useSettingsStore.getState().pickPlayitPath().then((p) => p && setPlayitPath(p))} onLinked={() => setPlayitPath('')} />
                 )}
                 <span className='field-label'>Memory for the server</span>
                 <RamSliders maxRAM={ram.maxRAM} minRAM={ram.minRAM} onChange={setRam} idPrefix='wizard-ram' />

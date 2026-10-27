@@ -121,15 +121,21 @@ const minecraft = new MinecraftProcess({
     onExit: (code, expected) => session.onMinecraftExit(code, expected),
 });
 // playit.gg linked in the app (Settings > Scripts), or a playit program chosen by hand.
+const playitProcess = new PlayitProcess();
 const playitLink = new PlayitLink({
     dir: path.join(userData, 'playit'),
     agentName: `MCS-Relay (${os.hostname()})`,
     openExternal: (url) => shell.openExternal(url),
     safeStorage,
     emit: (state) => events.emit('playit:state', state),
-    onLinked: (address) => playitLinked(address),
+    agentProcess: playitProcess,
+    onLinked: (address) => {
+        // The link replaces a playit program chosen by hand (which may since have been uninstalled).
+        settings.set({ usePlayitgg: true, playitggPath: '' });
+        playitLinked(address);
+    },
 });
-const playit = new PlayitRunner(playitLink, new PlayitProcess());
+const playit = new PlayitRunner(playitLink, playitProcess);
 const session: SessionController = new SessionController({
     lock, sync, changes, minecraft, playit, settings, events, me,
     notify: (n) => notifyUser(n),

@@ -99,7 +99,17 @@ afterEach(() => {
     for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
 
-function setup(playit = fakePlayit(), dir?: string) {
+/** The agent program: running or not. */
+function fakeAgent() {
+    let running = false;
+    return {
+        run: vi.fn(async () => void (running = true)),
+        stop: vi.fn(async () => void (running = false)),
+        isRunning: () => running,
+    };
+}
+
+function setup(playit = fakePlayit(), dir?: string, agentProcess = fakeAgent()) {
     const folder = dir ?? fs.mkdtempSync(path.join(os.tmpdir(), 'mcs-playit-'));
     if (!dir) dirs.push(folder);
     const states: PlayitLinkState[] = [];
@@ -109,13 +119,13 @@ function setup(playit = fakePlayit(), dir?: string) {
         dir: folder, agentName: 'MCS-Relay (TEST-PC)', fetchImpl: playit.fetchImpl, safeStorage: fakeSafe, agent: AGENT,
         openExternal: async (url) => void opened.push(url),
         emit: (state) => void states.push(state),
-        onLinked, pollMs: 1, linkTimeoutMs: 5_000, tunnelWaitMs: 5_000,
+        onLinked, pollMs: 1, linkTimeoutMs: 5_000, tunnelWaitMs: 5_000, agentProcess,
     });
-    return { link, playit, folder, states, opened, onLinked };
+    return { link, playit, folder, states, opened, onLinked, agentProcess };
 }
 
 describe('PlayitLink.link', () => {
-    it('downloads the agent, waits for the approval in the browser and keeps the key encrypted', async () => {
+    it('downloads the agent, waits for the approval, keeps the key encrypted, and runs the agent once to make the tunnel', async () => {
         const t = setup();
         await t.link.link();
 
@@ -129,13 +139,18 @@ describe('PlayitLink.link', () => {
         // The key is not stored as it is.
         const stored = fs.readFileSync(path.join(t.folder, 'link.json'), 'utf8');
         expect(stored).not.toContain(SECRET);
-        expect(JSON.parse(stored)).toMatchObject({ encrypted: true, agentId: 'agent-1', tunnelId: null, address: null });
+        expect(JSON.parse(stored)).toMatchObject({ encrypted: true, agentId: 'agent-1', tunnelId: '1', address: 't1.joinmc.link' });
         expect(t.playit.calls.find((c) => c.route === '/agents/rename')?.body).toEqual({ agent_id: 'agent-1', name: 'MCS-Relay (TEST-PC)' });
 
-        // No tunnel yet: playit.gg refuses one before the agent has run.
-        expect(t.playit.routes()).not.toContain('/tunnels/create');
-        expect(t.link.getState()).toEqual({ linked: true, address: null, linking: null, error: null, warning: null });
-        expect(t.onLinked).toHaveBeenCalledTimes(1);
+        // playit.gg's page waits for the approved agent to connect, and makes no tunnel for an agent it has not seen
+        // run: the agent runs first, the tunnel comes after, then the agent stops until a server is hosted.
+        expect(t.agentProcess.run).toHaveBeenCalledWith(path.join(t.folder, 'playit-0.16.2.exe'), ['--secret', SECRET, '-s', 'start'], expect.any(Number), expect.anything());
+        const created = t.playit.calls.findIndex((c) => c.route === '/tunnels/create');
+        expect(created).toBeGreaterThan(-1);
+        expect(t.agentProcess.run.mock.invocationCallOrder[0]).toBeLessThan(t.agentProcess.stop.mock.invocationCallOrder[0]);
+        expect(t.agentProcess.isRunning()).toBe(false);
+        expect(t.link.getState()).toEqual({ linked: true, address: 't1.joinmc.link', linking: null, error: null, warning: null });
+        expect(t.onLinked).toHaveBeenCalledWith('t1.joinmc.link');
         expect(t.states.map((s) => s.linking?.step ?? null)).toEqual(expect.arrayContaining(['download', 'browser', 'finishing']));
     });
 
@@ -143,6 +158,28 @@ describe('PlayitLink.link', () => {
         const t = setup(fakePlayit({ accountStatus: 'agent-over-limit' }));
         await t.link.link();
         expect(t.link.getState()).toMatchObject({ linked: true, warning: expect.stringMatching(/more agents than its plan allows/) });
+        expect(t.agentProcess.run).not.toHaveBeenCalled();         // playit.gg would not run it
+    });
+
+    it('still links when the first run of the agent fails; the next start makes the tunnel', async () => {
+        const agent = fakeAgent();
+        agent.run.mockRejectedValueOnce(new Error('playit.gg stopped right after it started'));
+        const t = setup(fakePlayit(), undefined, agent);
+        await t.link.link();
+        expect(t.link.getState()).toMatchObject({ linked: true, address: null, error: null });
+        expect(agent.stop).toHaveBeenCalled();
+        expect(t.playit.routes()).not.toContain('/tunnels/create');
+    });
+
+    it('does not run a second agent while one is running for a hosted server', async () => {
+        const agent = fakeAgent();
+        await agent.run();
+        agent.run.mockClear();
+        const t = setup(fakePlayit(), undefined, agent);
+        await t.link.link();
+        expect(agent.run).not.toHaveBeenCalled();
+        expect(agent.stop).not.toHaveBeenCalled();
+        expect(t.link.getState()).toMatchObject({ linked: true, address: null });
     });
 
     it('does not use an agent that does not match the official one', async () => {

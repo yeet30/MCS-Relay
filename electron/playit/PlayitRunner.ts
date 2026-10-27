@@ -3,10 +3,9 @@
 import type { AppSettings, PlayitTunnel } from '../../shared/types';
 import type { PlayitProcess } from '../processes/PlayitProcess';
 import { serverPort } from '../session/localAddress';
+import { AGENT_SETTLE_MS, agentArgs } from './PlayitLink';
 import type { PlayitLink } from './PlayitLink';
 
-/** The in-app agent counts as started once it kept running this long (its tunnel comes from the API, not its output). */
-const AGENT_SETTLE_MS = 4_000;
 
 export interface PlayitStartOptions {
     serverPath: string;
@@ -31,7 +30,7 @@ export class PlayitRunner {
     async start(o: PlayitStartOptions): Promise<PlayitTunnel[]> {
         if (!this.link.isLinked()) return this.process.start(o.settings.playitggPath, o.timeoutMs, o.signal, o.onTunnels);
         const { executable, secret } = await this.link.prepare();
-        await this.process.run(executable, ['--secret', secret, '-s', 'start'], AGENT_SETTLE_MS, o.signal);
+        await this.process.run(executable, agentArgs(secret), AGENT_SETTLE_MS, o.signal);
         // The tunnel only once the agent runs: playit.gg refuses one for an agent it has not seen.
         try {
             return await this.link.openTunnel(serverPort(o.serverPath), o.signal);

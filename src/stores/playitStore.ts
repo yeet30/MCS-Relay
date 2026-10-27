@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import type { PlayitLinkState } from '../../shared/types';
 import { invoke } from '../api';
 import { request } from './request';
+import { useSettingsStore } from './settingsStore';
 
 interface PlayitStore {
     state: PlayitLinkState | null;
@@ -27,7 +28,9 @@ export const usePlayitStore = create<PlayitStore>()((set, get) => ({
     link: async () => {
         const res = await invoke('playit:link');
         await get().load();
-        return res.ok && get().state?.linked === true;
+        const linked = res.ok && get().state?.linked === true;
+        if (linked) await useSettingsStore.getState().load();
+        return linked;
     },
     cancel: async () => {
         await invoke('playit:cancelLink');

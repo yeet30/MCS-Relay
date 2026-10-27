@@ -143,7 +143,10 @@ export default function ScriptsOptions() {
             {popup}
             <OptionRow title='playit.gg' enable={usePlayit} onChange={setUsePlayit}>
                 <p>Starts playit.gg with the server, so friends can join from anywhere.</p>
-                <PlayitSetup ownPath={playitPath} onPickOwn={() => void handlePickPlayit()} onLinked={() => setUsePlayit(true)} busy={busy} />
+                <PlayitSetup ownPath={playitPath} onPickOwn={() => void handlePickPlayit()} onLinked={() => {
+                    setUsePlayit(true);
+                    setPlayitPath('');
+                }} busy={busy} />
             </OptionRow>
 
             <OptionRow title='Minecraft server' enable={launchServer} onChange={setLaunchServer}>

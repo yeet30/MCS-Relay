@@ -3,9 +3,11 @@
 //   1. download playit's agent from its GitHub release, checked against the sha256 below;
 //   2. make a random code and open https://playit.gg/claim/<code> in the browser, where the user signs in (or makes an
 //      account) and approves; meanwhile ask /claim/setup every few seconds whether they did;
-//   3. trade the code for the agent's secret key (/claim/exchange), kept encrypted like the Google sign-in;
-//   4. at the first start, once the agent itself is running (playit.gg refuses a tunnel for an agent it has not seen
-//      run: "AgentVersionTooOld"), make a Minecraft Java tunnel to this PC (/tunnels/create) and read its address.
+//   3. trade the code for the agent's secret key (/claim/exchange), kept encrypted like the Google sign-in, and run
+//      the agent for a moment: playit.gg's page waits until the approved agent connects ("Please start the playit
+//      program...") and only then says it is done;
+//   4. while it runs (playit.gg refuses a tunnel for an agent it has not seen run: "AgentVersionTooOld"), make a
+//      Minecraft Java tunnel to this PC (/tunnels/create) and read its address. A start points it at the server's port.
 // A key playit.gg no longer accepts (the agent was deleted on playit.gg) makes the app forget the link, so the
 // "Link playit.gg" button comes back instead of every start failing.
 // The Google sign-in cannot be used for playit.gg: Google issues it to MCS-Relay only, so playit.gg's own page is the
@@ -56,6 +58,17 @@ interface StoredLink {
     address: string | null;
 }
 
+export interface AgentProcess {
+    run(executable: string, args: string[], settleMs: number, signal?: AbortSignal): Promise<void>;
+    stop(): Promise<void>;
+    isRunning(): boolean;
+}
+
+/** The agent's command line: its key, and its log on stdout instead of a screen. */
+export const agentArgs = (secret: string): string[] => ['--secret', secret, '-s', 'start'];
+/** The agent counts as started once it kept running this long. */
+export const AGENT_SETTLE_MS = 4_000;
+
 export interface PlayitLinkDeps {
     /** <userData>/playit: the agent program and link.json. */
     dir: string;
@@ -66,6 +79,8 @@ export interface PlayitLinkDeps {
     onLinked: (address: string | null) => void;
     safeStorage?: SafeStorageLike;
     fetchImpl?: FetchFn;
+    /** Runs the agent right after the approval (the same PlayitProcess hosting uses; skipped while it is busy). */
+    agentProcess?: AgentProcess;
     /** Tests download a stand-in. */
     agent?: AgentRelease;
     /** Tests make these short. */
@@ -125,7 +140,7 @@ export class PlayitLink {
         const signal = controller.signal;
         try {
             this.set({ error: null, linking: { step: 'download', done: 0, total: this.agent.size, url: null } });
-            await this.ensureAgent((done, total) => this.progress(done, total));
+            const executable = await this.ensureAgent((done, total) => this.progress(done, total));
             signal.throwIfAborted();
 
             const code = randomBytes(5).toString('hex');
@@ -145,8 +160,10 @@ export class PlayitLink {
             await api.renameAgent(run.agent_id, this.d.agentName).catch((err) => console.warn('[playit] could not name the agent:', toAppError(err).detail));
             this.stored = { ...this.protect(secret), agentId: run.agent_id, tunnelId: null, address: null };
             await this.write();
-            this.set({ linked: true, address: null, linking: null, warning: ACCOUNT_STATUS[run.account_status] ?? null });
-            this.d.onLinked(null);
+            const warning = ACCOUNT_STATUS[run.account_status] ?? null;
+            const address = warning ? null : await this.firstRun(executable, secret, run.agent_id, signal);
+            this.set({ linked: true, address, linking: null, warning });
+            this.d.onLinked(address);
         } catch (err) {
             const cancelled = signal.aborted;
             const info = toAppError(err);
@@ -155,6 +172,24 @@ export class PlayitLink {
             if (!cancelled) throw err;
         } finally {
             this.linking = null;
+        }
+    }
+
+    /** Runs the new agent so playit.gg's page sees it connect, and makes the tunnel meanwhile (port 25565 until a server
+     *  with another port starts). Problems here are not fatal: the next start tries again. */
+    private async firstRun(executable: string, secret: string, agentId: string, signal: AbortSignal): Promise<string | null> {
+        const agent = this.d.agentProcess;
+        if (!agent || agent.isRunning()) return null;
+        try {
+            console.log('[playit] link: running the agent once so playit.gg sees it connect');
+            await agent.run(executable, agentArgs(secret), AGENT_SETTLE_MS, signal);
+            return (await this.ensureTunnel(this.api.withSecret(secret), agentId, 25565, signal)).address;
+        } catch (err) {
+            const info = toAppError(err);
+            console.warn(`[playit] link: the first run did not finish (${info.message}); the next start tries again`);
+            return null;
+        } finally {
+            await agent.stop();
         }
     }
 
