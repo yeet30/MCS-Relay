@@ -32,6 +32,9 @@ const EXIT_WAIT_MS = 5_000;
  *  warnings and errors, and never more than AGENT_LOG_LINES lines in all. */
 const AGENT_LOG_ALL_MS = 120_000;
 const AGENT_LOG_LINES = 400;
+/** The in-app agent's log level (playitd reads PLAYIT_LOG): its session with playit.gg's relay and new players in
+ *  detail, the rest as usual. */
+const AGENT_LOG_LEVEL = 'info,playit_agent_core=debug';
 
 export interface PlayitScreen {
     tunnels: PlayitTunnel[];
@@ -106,7 +109,7 @@ export class PlayitProcess {
             console.log(`[playit] tunnels now: ${tunnels.map((t) => `${t.address} (${t.type})`).join(', ')}`);
             onTunnels(tunnels);
         };
-        const launched = this.launch(executable, [], () => {
+        const launched = this.launch(executable, [], {}, () => {
             onText();
             followTunnels();
         });
@@ -196,7 +199,7 @@ export class PlayitProcess {
         let partial = '';
         let logged = 0;
         const startedAt = Date.now();
-        const launched = this.launch(executable, args, (chunk) => {
+        const launched = this.launch(executable, args, { PLAYIT_LOG: AGENT_LOG_LEVEL }, (chunk) => {
             // Its log goes into the app's log: everything at first, and after that warnings and errors only.
             const lines = (partial + chunk).split(/\r?\n/);
             partial = lines.pop() ?? '';
@@ -237,10 +240,10 @@ export class PlayitProcess {
     }
 
     /** Spawns the agent and keeps reading its output (a full pipe would block it); `onData` hears every piece. */
-    private launch(executable: string, args: string[], onData: (chunk: string) => void): { spawnError: () => Error | null } {
+    private launch(executable: string, args: string[], env: Record<string, string>, onData: (chunk: string) => void): { spawnError: () => Error | null } {
         let child: ChildProcess;
         try {
-            child = this.spawnImpl(executable, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+            child = this.spawnImpl(executable, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, env: { ...process.env, ...env } });
         } catch (err) {
             throw new AppError('PLAYIT', 'playit.gg could not be started.', err instanceof Error ? err.message : String(err));
         }
