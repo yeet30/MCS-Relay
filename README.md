@@ -88,7 +88,8 @@ can use your own [Java](https://adoptium.net/).
 To let friends join from anywhere without port forwarding, press **Link playit.gg** in Settings → Server settings (or in the
 last step of creating a server) and sign in to [playit.gg](https://playit.gg), or create a free account, in your
 browser. MCS-Relay downloads playit.gg, makes your Minecraft tunnel and tells you when everything is set. Each Link
-adds an agent to your playit.gg account; delete the ones you no longer use on playit.gg.
+adds an agent to your playit.gg account; delete the ones you no longer use on playit.gg. Phone hotspots often block
+playit.gg: friends then time out while joining, so host from a normal internet connection.
 
 ## Your data
 
