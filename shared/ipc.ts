@@ -4,6 +4,7 @@
 // calls them with invoke() (src/api.ts). A renamed or mistyped channel is a compile error.
 import type {
     AppErrorInfo, AppSettings, BackupInfo, BackupList, BackupProgress, InstallableVersion, InstallProgress, InstallResult, JavaInstallResult,
+    ServerPropertiesInfo,
     PlayitLinkState, ServerFolderInfo, ServerKind, ChangeBatch, ConflictChoice, LockView, LogoState, MemberRole, ServerId, ServerMember,
     ServerSettings, ServerSettingsPatch, ServerSummary, SessionProgress, SessionState, StepMessage, SyncReport, SyncRules,
     TransferSnapshot, UpdateState, UserInfo,
@@ -57,6 +58,10 @@ export interface Commands {
     'servers:openFolder': (serverId: ServerId) => void;
     'servers:info': (serverId: ServerId) => ServerInfo;
     'servers:select': (serverId: ServerId | null) => void;
+    /** The server's server.properties on this PC. */
+    'servers:properties': (serverId: ServerId) => ServerPropertiesInfo;
+    /** Changes values in it (new keys are added); refused while this server is hosted from this PC. */
+    'servers:setProperties': (serverId: ServerId, changes: Record<string, string>) => ServerPropertiesInfo;
 
     'session:get': () => SessionState;
     'session:preflight': (serverId: ServerId) => SyncReport;

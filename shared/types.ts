@@ -169,6 +169,13 @@ export interface InstallResult {
     javaNeeded: number | null;          // the Java this Minecraft version needs
 }
 
+/** A server's server.properties on this PC: whether it exists yet (Minecraft makes it on the first start), and its
+ *  values as text, exactly as Minecraft reads them. */
+export interface ServerPropertiesInfo {
+    exists: boolean;
+    values: Record<string, string>;
+}
+
 /** Java downloaded for a server (Eclipse Temurin), now its Java on this PC. */
 export interface JavaInstallResult {
     javaPath: string;

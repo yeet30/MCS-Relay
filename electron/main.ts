@@ -25,6 +25,7 @@ import { AppLog } from './log/AppLog';
 import { MinecraftProcess } from './processes/MinecraftProcess';
 import { PlayitLink } from './playit/PlayitLink';
 import { JavaInstaller } from './installer/JavaInstaller';
+import { ServerProperties } from './servers/ServerProperties';
 import { PlayitRunner } from './playit/PlayitRunner';
 import { PlayitProcess } from './processes/PlayitProcess';
 import { ReportService } from './report/ReportService';
@@ -121,7 +122,7 @@ const minecraft = new MinecraftProcess({
     onPlayers: (players) => session.onPlayers(players),
     onExit: (code, expected) => session.onMinecraftExit(code, expected),
 });
-// playit.gg linked in the app (Settings > Scripts), or a playit program chosen by hand.
+// playit.gg linked in the app (Settings > Server settings), or a playit program chosen by hand.
 const playitProcess = new PlayitProcess();
 const playitLink = new PlayitLink({
     dir: path.join(userData, 'playit'),
@@ -184,6 +185,8 @@ const java = new JavaInstaller({
     dir: path.join(userData, 'java'), settings, appVersion: app.getVersion(),
     emit: (progress) => events.emit('installer:progress', progress),
 });
+
+const properties = new ServerProperties({ settings });
 
 const reports = new ReportService({
     log: appLog, drive, me, chooseSaveFile: dialogs.chooseSaveFile,
@@ -570,7 +573,7 @@ if (!app.requestSingleInstanceLock()) {
     void app.whenReady().then(async () => {
         appData.migrateLegacy();
         registerHandlers(createHandle(ipcMain, isTrustedUrl), {
-            auth, servers, session, settings, sync, transfers, changes, dialogs, report: reports, backups, installer, java, playit: playitLink,
+            auth, servers, session, settings, sync, transfers, changes, dialogs, report: reports, backups, installer, java, properties, playit: playitLink,
             app: {
                 quitResponse, openExternal: (url) => shell.openExternal(url), setLogoState: applyLogoState,
                 updateState: () => updates.get(), checkForUpdates: () => updates.check(), installUpdate,

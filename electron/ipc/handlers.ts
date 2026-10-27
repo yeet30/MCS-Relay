@@ -12,6 +12,7 @@ import type { JavaInstaller } from '../installer/JavaInstaller';
 import type { ServerInstaller } from '../installer/ServerInstaller';
 import type { PlayitLink } from '../playit/PlayitLink';
 import { isValidServerId } from '../store/appData';
+import type { ServerProperties } from '../servers/ServerProperties';
 import type { ServersService } from '../servers/ServersService';
 import type { SessionController } from '../session/SessionController';
 import type { ReportService } from '../report/ReportService';
@@ -38,6 +39,7 @@ export interface HandlerDeps {
     report: Pick<ReportService, 'send' | 'save'>;
     installer: Pick<ServerInstaller, 'versions' | 'folder' | 'install'>;
     java: Pick<JavaInstaller, 'install'>;
+    properties: Pick<ServerProperties, 'read' | 'write'>;
     playit: Pick<PlayitLink, 'getState' | 'link' | 'cancelLink' | 'check' | 'reopen' | 'unlink'>;
     backups: Pick<BackupService, 'list' | 'create' | 'upload' | 'download' | 'restore' | 'restoreAuto' | 'deleteLocal' | 'deleteCloud' | 'localFolder' | 'isBusy'>;
     app: {
@@ -260,6 +262,17 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
     handle('installer:install', (serverId, kind, version) => {
         notDuringBackup();
         return d.installer.install(id(serverId), oneOf(kind, KINDS, 'server type'), text(version, 'version', { max: 100 }));
+    });
+    handle('servers:properties', (serverId) => d.properties.read(id(serverId)));
+    handle('servers:setProperties', (serverId, changes) => {
+        if (!changes || typeof changes !== 'object' || Array.isArray(changes)) throw invalid('The changes must be a list of properties.');
+        const entries = Object.entries(changes as Record<string, unknown>);
+        if (entries.length > 500) throw invalid('Too many properties at once.');
+        if (entries.some(([, value]) => typeof value !== 'string')) throw invalid('Property values must be text.');
+        if (d.session.isBusy() && d.session.getState().serverId === serverId) {
+            throw new AppError('BUSY', 'server.properties can be changed between sessions: Minecraft reads it when the server starts.');
+        }
+        return d.properties.write(id(serverId), Object.fromEntries(entries) as Record<string, string>);
     });
     handle('installer:installJava', (serverId, major) => {
         if (typeof major !== 'number' || !Number.isInteger(major) || major < 8 || major > 99) throw invalid('That Java version is not valid.');
