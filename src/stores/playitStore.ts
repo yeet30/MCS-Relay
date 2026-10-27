@@ -11,6 +11,8 @@ interface PlayitStore {
     /** true once linked. A failure shows in the state's error, so it is not also a toast. */
     link: () => Promise<boolean>;
     cancel: () => Promise<void>;
+    /** Asks playit.gg again whether this PC's agent may run (quietly: the state shows the answer). */
+    check: () => Promise<void>;
     reopen: () => Promise<void>;
     unlink: () => Promise<boolean>;
 }
@@ -29,6 +31,9 @@ export const usePlayitStore = create<PlayitStore>()((set, get) => ({
     },
     cancel: async () => {
         await invoke('playit:cancelLink');
+    },
+    check: async () => {
+        await invoke('playit:check');
     },
     reopen: async () => {
         await request('playit:reopen');

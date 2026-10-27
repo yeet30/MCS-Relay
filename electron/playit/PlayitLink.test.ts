@@ -25,6 +25,8 @@ const fail = (data: unknown) => new Response(JSON.stringify({ status: 'fail', da
 
 /** playit.gg in memory: the claim flow, the agent's run data and its tunnels. */
 function fakePlayit(o: { approveAfter?: number; reject?: boolean; accountStatus?: string; agentBytes?: Buffer } = {}) {
+    let accountStatus = o.accountStatus ?? 'ready';
+    let revoked = false;
     const calls: Array<{ route: string; body: Record<string, unknown>; auth: string | undefined }> = [];
     const polls = new Map<string, number>();
     let tunnels: PlayitTunnelInfo[] = [];
@@ -35,7 +37,7 @@ function fakePlayit(o: { approveAfter?: number; reject?: boolean; accountStatus?
         const body = JSON.parse(init?.body ?? '{}') as Record<string, unknown>;
         const auth = init?.headers?.Authorization;
         calls.push({ route, body, auth });
-        const authorised = auth === `Agent-Key ${SECRET}`;
+        const authorised = auth === `Agent-Key ${SECRET}` && !revoked;
         switch (route) {
             case '/claim/setup': {
                 const n = (polls.get(body.code as string) ?? 0) + 1;
@@ -47,7 +49,7 @@ function fakePlayit(o: { approveAfter?: number; reject?: boolean; accountStatus?
                 return ok({ secret_key: SECRET });
             case '/agents/rundata':
                 if (!authorised) return new Response(JSON.stringify({ status: 'error', data: { type: 'auth', message: 'InvalidAgentKey' } }));
-                return ok({ agent_id: 'agent-1', account_status: o.accountStatus ?? 'ready' });
+                return ok({ agent_id: 'agent-1', account_status: accountStatus });
             case '/agents/rename':
                 return ok(null);
             case '/tunnels/list':
@@ -78,7 +80,12 @@ function fakePlayit(o: { approveAfter?: number; reject?: boolean; accountStatus?
                 return fail('NotFound');
         }
     };
-    return { calls, fetchImpl, tunnels: () => tunnels, routes: () => calls.map((c) => c.route) };
+    return {
+        calls, fetchImpl, tunnels: () => tunnels, routes: () => calls.map((c) => c.route),
+        setAccountStatus: (status: string) => void (accountStatus = status),
+        /** The agent was deleted on playit.gg. */
+        revoke: () => void (revoked = true),
+    };
 }
 
 const fakeSafe: SafeStorageLike = {
@@ -108,7 +115,7 @@ function setup(playit = fakePlayit(), dir?: string) {
 }
 
 describe('PlayitLink.link', () => {
-    it('downloads the agent, waits for the approval in the browser, keeps the key encrypted and makes the tunnel', async () => {
+    it('downloads the agent, waits for the approval in the browser and keeps the key encrypted', async () => {
         const t = setup();
         await t.link.link();
 
@@ -122,15 +129,20 @@ describe('PlayitLink.link', () => {
         // The key is not stored as it is.
         const stored = fs.readFileSync(path.join(t.folder, 'link.json'), 'utf8');
         expect(stored).not.toContain(SECRET);
-        expect(JSON.parse(stored)).toMatchObject({ encrypted: true, agentId: 'agent-1', tunnelId: '1', address: 't1.joinmc.link' });
-
+        expect(JSON.parse(stored)).toMatchObject({ encrypted: true, agentId: 'agent-1', tunnelId: null, address: null });
         expect(t.playit.calls.find((c) => c.route === '/agents/rename')?.body).toEqual({ agent_id: 'agent-1', name: 'MCS-Relay (TEST-PC)' });
-        expect(t.playit.tunnels()).toHaveLength(1);
-        expect(t.playit.tunnels()[0]).toMatchObject({ tunnel_type: 'minecraft-java', origin: { data: { local_port: 25565 } } });
 
-        expect(t.link.getState()).toEqual({ linked: true, address: 't1.joinmc.link', linking: null, error: null });
-        expect(t.onLinked).toHaveBeenCalledWith('t1.joinmc.link');
+        // No tunnel yet: playit.gg refuses one before the agent has run.
+        expect(t.playit.routes()).not.toContain('/tunnels/create');
+        expect(t.link.getState()).toEqual({ linked: true, address: null, linking: null, error: null, warning: null });
+        expect(t.onLinked).toHaveBeenCalledTimes(1);
         expect(t.states.map((s) => s.linking?.step ?? null)).toEqual(expect.arrayContaining(['download', 'browser', 'finishing']));
+    });
+
+    it('links an account with too many agents, and says so', async () => {
+        const t = setup(fakePlayit({ accountStatus: 'agent-over-limit' }));
+        await t.link.link();
+        expect(t.link.getState()).toMatchObject({ linked: true, warning: expect.stringMatching(/more agents than its plan allows/) });
     });
 
     it('does not use an agent that does not match the official one', async () => {
@@ -170,68 +182,100 @@ describe('PlayitLink.link', () => {
 });
 
 describe('PlayitLink after linking', () => {
-    it('is still linked after a restart, and points the tunnel at the server\'s port for a start', async () => {
+    it('is still linked after a restart; with the agent running, it makes the tunnel and points it at the server\'s port', async () => {
         const first = setup();
         await first.link.link();
         const again = setup(first.playit, first.folder);
         expect(again.link.isLinked()).toBe(true);
+
+        expect(await again.link.prepare()).toEqual({ executable: path.join(first.folder, 'playit-0.16.2.exe'), secret: SECRET });
+        expect(await again.link.openTunnel(25565)).toEqual([{ address: 't1.joinmc.link', type: 'minecraft-java', local: '127.0.0.1:25565' }]);
         expect(again.link.getState().address).toBe('t1.joinmc.link');
 
-        const prepared = await again.link.prepare(25570);
-        expect(prepared).toEqual({
-            executable: path.join(first.folder, 'playit-0.16.2.exe'),
-            secret: SECRET,
-            tunnels: [{ address: 't1.joinmc.link', type: 'minecraft-java', local: '127.0.0.1:25570' }],
-        });
-        expect(first.playit.tunnels()).toHaveLength(1);              // the same tunnel, not a new one
+        // Another server with another port: the same tunnel, pointed elsewhere.
+        await again.link.openTunnel(25570);
+        expect(first.playit.tunnels()).toHaveLength(1);
         expect(first.playit.tunnels()[0].origin).toMatchObject({ data: { local_port: 25570 } });
+        expect(JSON.parse(fs.readFileSync(path.join(first.folder, 'link.json'), 'utf8'))).toMatchObject({ tunnelId: '1', address: 't1.joinmc.link' });
     });
 
-    it('makes the tunnel at the start when linking could not', async () => {
+    it('makes a new tunnel when its tunnel was deleted on playit.gg', async () => {
         const t = setup();
         await t.link.link();
-        fs.writeFileSync(path.join(t.folder, 'link.json'), JSON.stringify({ ...JSON.parse(fs.readFileSync(path.join(t.folder, 'link.json'), 'utf8')), tunnelId: 'gone', address: null }));
+        await t.link.openTunnel(25565);
         await t.playit.fetchImpl(`${PLAYIT_API}/tunnels/delete`, { method: 'POST', body: JSON.stringify({ tunnel_id: '1' }) });
-        const again = setup(t.playit, t.folder);
-        const prepared = await again.link.prepare(25565);
-        expect(prepared.tunnels[0].address).toBe('t2.joinmc.link');
+        expect((await t.link.openTunnel(25565))[0].address).toBe('t2.joinmc.link');
     });
 
-    it('stops a start when the playit.gg account cannot run the agent', async () => {
-        const t = setup(fakePlayit({ accountStatus: 'email-not-verified' }));
+    it('does not start an agent playit.gg will not run, and checks again on request', async () => {
+        const t = setup();
         await t.link.link();
-        await expect(t.link.prepare(25565)).rejects.toThrow(/not verified/);
+        t.playit.setAccountStatus('agent-over-limit');
+        await expect(t.link.prepare()).rejects.toMatchObject({ code: 'PLAYIT', detail: 'agent-over-limit' });
+        expect(t.link.getState().warning).toMatch(/more agents/);
+
+        t.playit.setAccountStatus('ready');                      // the user deleted an agent on playit.gg
+        await t.link.check();
+        expect(t.link.getState().warning).toBeNull();
+        await expect(t.link.prepare()).resolves.toMatchObject({ secret: SECRET });
+    });
+
+    it('forgets the link when the agent was deleted on playit.gg, so it can be linked again', async () => {
+        const t = setup();
+        await t.link.link();
+        t.playit.revoke();
+        await expect(t.link.prepare()).rejects.toThrow(/deleted on playit\.gg/);
+        expect(t.link.isLinked()).toBe(false);
+        expect(fs.existsSync(path.join(t.folder, 'link.json'))).toBe(false);
+        expect(t.link.getState()).toMatchObject({ linked: false, address: null, error: { message: expect.stringMatching(/Link playit\.gg again/) } });
+        expect(setup(t.playit, t.folder).link.isLinked()).toBe(false);
     });
 
     it('unlinking deletes the tunnel and forgets the key', async () => {
         const t = setup();
         await t.link.link();
+        await t.link.openTunnel(25565);
         await t.link.unlink();
         expect(t.playit.tunnels()).toEqual([]);
         expect(fs.existsSync(path.join(t.folder, 'link.json'))).toBe(false);
         expect(t.link.getState()).toMatchObject({ linked: false, address: null });
-        await expect(t.link.prepare(25565)).rejects.toThrow(/not linked/);
+        await expect(t.link.prepare()).rejects.toThrow(/not linked/);
     });
 });
 
 describe('PlayitRunner', () => {
+    const TUNNEL = { address: 'x.joinmc.link', type: 'minecraft-java', local: '127.0.0.1:25565' };
     const proc = () => ({ start: vi.fn(async () => [{ address: 'own.joinmc.link', type: 'minecraft-java', local: '127.0.0.1:25565' }]), run: vi.fn(async () => undefined), stop: vi.fn(async () => undefined) });
+    const linked = () => ({
+        isLinked: () => true,
+        prepare: vi.fn(async () => ({ executable: 'C:/p/playit.exe', secret: SECRET })),
+        openTunnel: vi.fn(async () => [TUNNEL]),
+    });
 
-    it('runs the linked agent with its key and returns the tunnel from playit.gg', async () => {
-        const link = { isLinked: () => true, prepare: vi.fn(async () => ({ executable: 'C:/p/playit.exe', secret: SECRET, tunnels: [{ address: 'x.joinmc.link', type: 'minecraft-java', local: '127.0.0.1:25565' }] })) };
+    it('runs the linked agent with its key, then makes the tunnel', async () => {
+        const link = linked();
         const p = proc();
         const runner = new PlayitRunner(link, p);
         expect(runner.enabled({ usePlayitgg: true, playitggPath: '' })).toBe(true);
         expect(runner.enabled({ usePlayitgg: false, playitggPath: '' })).toBe(false);
         const tunnels = await runner.start({ serverPath: '', settings: { playitggPath: '' }, timeoutMs: 1000 });
-        expect(link.prepare).toHaveBeenCalledWith(25565, undefined);
         expect(p.run).toHaveBeenCalledWith('C:/p/playit.exe', ['--secret', SECRET, '-s', 'start'], expect.any(Number), undefined);
+        expect(link.openTunnel).toHaveBeenCalledWith(25565, undefined);
+        expect(p.run.mock.invocationCallOrder[0]).toBeLessThan(link.openTunnel.mock.invocationCallOrder[0]);
         expect(p.start).not.toHaveBeenCalled();
-        expect(tunnels[0].address).toBe('x.joinmc.link');
+        expect(tunnels).toEqual([TUNNEL]);
+    });
+
+    it('stops the agent when the tunnel cannot be made', async () => {
+        const link = linked();
+        link.openTunnel.mockRejectedValueOnce(new Error('no tunnel'));
+        const p = proc();
+        await expect(new PlayitRunner(link, p).start({ serverPath: '', settings: { playitggPath: '' }, timeoutMs: 1000 })).rejects.toThrow('no tunnel');
+        expect(p.stop).toHaveBeenCalled();
     });
 
     it('without a link, starts the program chosen by hand', async () => {
-        const link = { isLinked: () => false, prepare: vi.fn() };
+        const link = { isLinked: () => false, prepare: vi.fn(), openTunnel: vi.fn() };
         const p = proc();
         const runner = new PlayitRunner(link, p);
         expect(runner.enabled({ usePlayitgg: true, playitggPath: '' })).toBe(false);

@@ -134,6 +134,8 @@ export interface Commands {
      *  browser and makes the Minecraft Java tunnel. Resolves when linked, or quietly when cancelled. */
     'playit:link': () => void;
     'playit:cancelLink': () => void;
+    /** Asks playit.gg again whether this PC's agent may run; the answer arrives as playit:state. */
+    'playit:check': () => void;
     /** Opens the approval page again, for a closed browser tab. */
     'playit:reopen': () => void;
     /** Forgets the link on this PC and deletes its tunnel. Refused while a session is busy. */

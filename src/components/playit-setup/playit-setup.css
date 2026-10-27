@@ -127,6 +127,23 @@
     }
 }
 
+.playit-setup-warning {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+    border-radius: 9px;
+    background: rgba(var(--warn-rgb), 0.1);
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: var(--warn);
+
+    > span svg {
+        margin-right: 4px;
+        vertical-align: -2px;
+    }
+}
+
 .playit-setup-own {
     display: flex;
     align-self: stretch;

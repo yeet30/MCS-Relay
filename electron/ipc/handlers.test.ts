@@ -27,7 +27,7 @@ const ALL_COMMANDS: Record<CommandName, true> = {
     'backups:list': true, 'backups:create': true, 'backups:upload': true, 'backups:download': true, 'backups:restore': true, 'backups:restoreAuto': true,
     'backups:deleteLocal': true, 'backups:deleteCloud': true, 'backups:openFolder': true,
     'installer:versions': true, 'installer:folder': true, 'installer:install': true,
-    'playit:state': true, 'playit:link': true, 'playit:cancelLink': true, 'playit:reopen': true, 'playit:unlink': true,
+    'playit:state': true, 'playit:link': true, 'playit:cancelLink': true, 'playit:check': true, 'playit:reopen': true, 'playit:unlink': true,
 };
 
 type Listener = (event: { senderFrame?: { url: string } | null }, ...args: unknown[]) => unknown;

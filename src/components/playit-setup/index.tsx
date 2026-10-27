@@ -1,6 +1,7 @@
 import './playit-setup.css';
 import { useEffect, useState } from 'react';
-import { CircleAlert, CircleCheck, ExternalLink, FileCog, FolderInput, Link2, Loader2, Unlink } from 'lucide-react';
+import { CircleAlert, CircleCheck, ExternalLink, FileCog, FolderInput, Link2, Loader2, RotateCcw, TriangleAlert, Unlink } from 'lucide-react';
+import { invoke } from '../../api';
 import { useConfirm } from '../../hooks/useConfirm';
 import { formatBytesPair } from '../../lib/format';
 import { usePlayitStore } from '../../stores/playitStore';
@@ -21,11 +22,24 @@ interface Props {
 export default function PlayitSetup({ ownPath, onPickOwn, onLinked, busy = false }: Props) {
     const state = usePlayitStore((s) => s.state);
     const [showOwn, setShowOwn] = useState(false);
+    const [checking, setChecking] = useState(false);
     const { confirm, popup } = useConfirm();
+    const linked = state?.linked ?? false;
 
     useEffect(() => {
         if (!usePlayitStore.getState().state) void usePlayitStore.getState().load();
     }, []);
+
+    // A linked PC: ask playit.gg whether its agent may run, so a problem shows here before the next start.
+    useEffect(() => {
+        if (linked) void usePlayitStore.getState().check();
+    }, [linked]);
+
+    async function checkAgain() {
+        setChecking(true);
+        await usePlayitStore.getState().check();
+        setChecking(false);
+    }
 
     async function link() {
         if (await usePlayitStore.getState().link()) onLinked?.();
@@ -87,6 +101,19 @@ export default function PlayitSetup({ ownPath, onPickOwn, onLinked, busy = false
             <div className='playit-setup linked'>
                 {popup}
                 <span className='playit-setup-line good'><CircleCheck size={14} /> Linked to your playit.gg account</span>
+                {state.warning && (
+                    <div className='playit-setup-warning'>
+                        <span><TriangleAlert size={13} /> {state.warning}</span>
+                        <div className='playit-setup-buttons'>
+                            <button className='text-button' onClick={() => void invoke('app:openExternal', 'https://playit.gg/account/agents')}>
+                                <ExternalLink size={12} /> Open playit.gg
+                            </button>
+                            <button className='text-button' disabled={checking} onClick={() => void checkAgain()}>
+                                {checking ? <Loader2 size={12} className='spinner' /> : <RotateCcw size={12} />} Check again
+                            </button>
+                        </div>
+                    </div>
+                )}
                 {state.address
                     ? (
                         <div className='playit-setup-address'>

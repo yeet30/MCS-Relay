@@ -140,8 +140,9 @@
     .progress-foot {
         display: flex;
         align-items: center;
+        flex-wrap: wrap;                /* many buttons (a failed playit.gg start) go to their own line */
         justify-content: space-between;
-        gap: 10px;
+        gap: 6px 10px;
         font-size: 0.78rem;
     }
 
@@ -153,6 +154,7 @@
         flex: none;
         display: flex;
         gap: 6px;
+        margin-left: auto;
     }
 
     &.compact {

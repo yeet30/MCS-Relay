@@ -4,7 +4,10 @@
 //   2. make a random code and open https://playit.gg/claim/<code> in the browser, where the user signs in (or makes an
 //      account) and approves; meanwhile ask /claim/setup every few seconds whether they did;
 //   3. trade the code for the agent's secret key (/claim/exchange), kept encrypted like the Google sign-in;
-//   4. make a Minecraft Java tunnel to this PC (/tunnels/create) and read its address.
+//   4. at the first start, once the agent itself is running (playit.gg refuses a tunnel for an agent it has not seen
+//      run: "AgentVersionTooOld"), make a Minecraft Java tunnel to this PC (/tunnels/create) and read its address.
+// A key playit.gg no longer accepts (the agent was deleted on playit.gg) makes the app forget the link, so the
+// "Link playit.gg" button comes back instead of every start failing.
 // The Google sign-in cannot be used for playit.gg: Google issues it to MCS-Relay only, so playit.gg's own page is the
 // one step outside the app. See docs/public-address/public-address.pdf, section 8.
 // No electron import: main.ts passes safeStorage, the browser and the notification in.
@@ -39,6 +42,9 @@ export interface AgentRelease {
 }
 
 const TUNNEL_NAME = 'MCS-Relay';
+/** playit.gg's answers that mean this PC's key is dead: the agent or the account was deleted. */
+const KEY_GONE = new Set(['InvalidAgentKey', 'NoLongerValid', 'AccountDoesNotExist', 'AgentNotFound']);
+const LINK_GONE = 'This PC\'s playit.gg agent was deleted on playit.gg, so MCS-Relay removed the link. Link playit.gg again in Settings > Scripts.';
 const LINK_FILE = 'link.json';
 
 interface StoredLink {
@@ -96,7 +102,7 @@ export class PlayitLink {
         this.agent = d.agent ?? AGENT;
         this.api = new PlayitApi(this.fetchImpl);
         this.stored = this.read();
-        this.state = { linked: this.stored !== null, address: this.stored?.address ?? null, linking: null, error: null };
+        this.state = { linked: this.stored !== null, address: this.stored?.address ?? null, linking: null, error: null, warning: null };
     }
 
     getState(): PlayitLinkState {
@@ -111,7 +117,7 @@ export class PlayitLink {
         return path.join(this.d.dir, `playit-${this.agent.version}.exe`);
     }
 
-    /** The whole link, from download to tunnel. Resolves when linked; the state tells the window how far it is. */
+    /** The whole link, from download to key. Resolves when linked; the state tells the window how far it is. */
     async link(): Promise<void> {
         if (this.linking) throw new AppError('BUSY', 'playit.gg is already being linked. Finish it in your browser, or cancel it.');
         const controller = new AbortController();
@@ -139,16 +145,8 @@ export class PlayitLink {
             await api.renameAgent(run.agent_id, this.d.agentName).catch((err) => console.warn('[playit] could not name the agent:', toAppError(err).detail));
             this.stored = { ...this.protect(secret), agentId: run.agent_id, tunnelId: null, address: null };
             await this.write();
-
-            // The tunnel now, so the address shows right away; port 25565 until a server with another port starts.
-            let address: string | null = null;
-            try {
-                address = (await this.ensureTunnel(api, run.agent_id, 25565, signal)).address;
-            } catch (err) {
-                console.warn('[playit] link: the tunnel will be made at the first start:', toAppError(err).message);
-            }
-            this.set({ linked: true, address, linking: null });
-            this.d.onLinked(address);
+            this.set({ linked: true, address: null, linking: null, warning: ACCOUNT_STATUS[run.account_status] ?? null });
+            this.d.onLinked(null);
         } catch (err) {
             const cancelled = signal.aborted;
             const info = toAppError(err);
@@ -185,23 +183,55 @@ export class PlayitLink {
         this.stored = null;
         await fs.rm(path.join(this.d.dir, LINK_FILE), { force: true });
         console.log('[playit] unlinked');
-        this.set({ linked: false, address: null, error: null });
+        this.set({ linked: false, address: null, error: null, warning: null });
     }
 
-    /** Everything a start needs: the agent program, its key, and the tunnel pointing at `port`. */
-    async prepare(port: number, signal?: AbortSignal): Promise<{ executable: string; secret: string; tunnels: PlayitTunnel[] }> {
+    /** Asks playit.gg again whether this PC's agent may run (after the user deleted an agent, say). */
+    async check(): Promise<void> {
+        const stored = this.stored;
+        const secret = stored && this.secret(stored);
+        if (!secret) return;
+        const run = await this.guard(() => this.api.withSecret(secret).runData());
+        this.set({ warning: ACCOUNT_STATUS[run.account_status] ?? null });
+    }
+
+    /** What starting the agent needs: the program and its key, once playit.gg said the agent may run. */
+    async prepare(): Promise<{ executable: string; secret: string }> {
         const stored = this.stored;
         if (!stored) throw new AppError('PLAYIT', 'playit.gg is not linked on this PC. Link it in Settings > Scripts.');
         const secret = this.secret(stored);
         if (!secret) throw new AppError('PLAYIT', 'This PC\'s playit.gg link could not be read. Link playit.gg again in Settings > Scripts.');
         const executable = await this.ensureAgent();
-        const api = this.api.withSecret(secret);
-        const run = await api.runData();
-        const blocked = ACCOUNT_STATUS[run.account_status];
+        const run = await this.guard(() => this.api.withSecret(secret).runData());
+        const blocked = ACCOUNT_STATUS[run.account_status] ?? null;
+        if (blocked !== this.state.warning) this.set({ warning: blocked });
         if (blocked) throw new AppError('PLAYIT', blocked, run.account_status);
-        const { address } = await this.ensureTunnel(api, stored.agentId, port, signal);
+        return { executable, secret };
+    }
+
+    /** With the agent running: its Minecraft Java tunnel, made if missing and pointed at `port`. */
+    async openTunnel(port: number, signal?: AbortSignal): Promise<PlayitTunnel[]> {
+        const stored = this.stored;
+        const secret = stored && this.secret(stored);
+        if (!stored || !secret) throw new AppError('PLAYIT', 'playit.gg is not linked on this PC. Link it in Settings > Scripts.');
+        const { address } = await this.guard(() => this.ensureTunnel(this.api.withSecret(secret), stored.agentId, port, signal));
         if (address !== this.state.address) this.set({ address });
-        return { executable, secret, tunnels: [{ address, type: 'minecraft-java', local: `127.0.0.1:${port}` }] };
+        return [{ address, type: 'minecraft-java', local: `127.0.0.1:${port}` }];
+    }
+
+    /** Runs a call with this PC's key; a key playit.gg no longer accepts makes the app forget the link. */
+    private async guard<T>(call: () => Promise<T>): Promise<T> {
+        try {
+            return await call();
+        } catch (err) {
+            if (!(err instanceof PlayitRefusal) || !KEY_GONE.has(err.reason)) throw err;
+            console.warn(`[playit] the key was refused (${err.reason}); forgetting the link`);
+            this.stored = null;
+            await fs.rm(path.join(this.d.dir, LINK_FILE), { force: true });
+            const info = { code: 'PLAYIT' as const, message: LINK_GONE, detail: err.reason };
+            this.set({ linked: false, address: null, warning: null, error: info });
+            throw new AppError('PLAYIT', LINK_GONE, err.reason);
+        }
     }
 
     /* ------------------------------------------------------------------ agent program */
@@ -397,5 +427,5 @@ const ACCOUNT_STATUS: Record<string, string> = {
     banned: 'playit.gg has banned this playit.gg account.',
     'account-delete-scheduled': 'This playit.gg account is about to be deleted. Link another account in Settings > Scripts.',
     'agent-disabled': 'This PC\'s playit.gg agent is switched off on playit.gg. Switch it on there, or link playit.gg again.',
-    'agent-over-limit': 'Your playit.gg account has more agents than it may use. Delete one at playit.gg, then start again.',
+    'agent-over-limit': 'Your playit.gg account has more agents than its plan allows, so playit.gg will not run this PC\'s. Delete one you no longer use at playit.gg (the one of playit.gg\'s own program, say), then try again.',
 };

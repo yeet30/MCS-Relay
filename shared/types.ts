@@ -288,8 +288,10 @@ export interface PlayitLinkState {
     /** Linking right now: downloading the agent (`done` of `total` bytes), waiting for the approval in the browser
      *  (`url` is the page), or finishing (making the tunnel). */
     linking: { step: 'download' | 'browser' | 'finishing'; done: number; total: number; url: string | null } | null;
-    /** Why the last attempt to link ended without a link. */
+    /** Why the last attempt to link ended without a link, or why the link was removed. */
     error: AppErrorInfo | null;
+    /** Linked, but playit.gg will not run this PC's agent yet (too many agents, email not verified, ...). */
+    warning: string | null;
 }
 
 /* ------------------------------------------------------------------ lock */

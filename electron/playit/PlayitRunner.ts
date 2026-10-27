@@ -19,7 +19,7 @@ export interface PlayitStartOptions {
 
 export class PlayitRunner {
     constructor(
-        private readonly link: Pick<PlayitLink, 'isLinked' | 'prepare'>,
+        private readonly link: Pick<PlayitLink, 'isLinked' | 'prepare' | 'openTunnel'>,
         private readonly process: Pick<PlayitProcess, 'start' | 'run' | 'stop'>,
     ) {}
 
@@ -30,9 +30,15 @@ export class PlayitRunner {
 
     async start(o: PlayitStartOptions): Promise<PlayitTunnel[]> {
         if (!this.link.isLinked()) return this.process.start(o.settings.playitggPath, o.timeoutMs, o.signal, o.onTunnels);
-        const { executable, secret, tunnels } = await this.link.prepare(serverPort(o.serverPath), o.signal);
+        const { executable, secret } = await this.link.prepare();
         await this.process.run(executable, ['--secret', secret, '-s', 'start'], AGENT_SETTLE_MS, o.signal);
-        return tunnels;
+        // The tunnel only once the agent runs: playit.gg refuses one for an agent it has not seen.
+        try {
+            return await this.link.openTunnel(serverPort(o.serverPath), o.signal);
+        } catch (err) {
+            await this.process.stop();
+            throw err;
+        }
     }
 
     stop(): Promise<void> {

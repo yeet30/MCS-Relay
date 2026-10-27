@@ -1,6 +1,6 @@
 import './progress-card.css';
 import { useEffect, useState } from 'react';
-import { Ban, Check, ChevronRight, CirclePause, CircleX, Clock, CloudUpload, Info, Loader2, Play, X } from 'lucide-react';
+import { Ban, Check, ChevronRight, CirclePause, CircleX, Clock, CloudUpload, ExternalLink, Info, Loader2, Play, RotateCcw, X } from 'lucide-react';
 import type {
     LaneView, RunKind, ServerId, SessionPhase, SessionProgress, StepMessage, TransferKind, TransferSnapshot,
 } from '../../../shared/types';
@@ -191,10 +191,20 @@ function AbandonButton({ progress, phase }: { progress: SessionProgress; phase: 
     );
 }
 
-/** After a run that left work waiting: continue or retry the upload (or cancel it for good), or dismiss a start
- *  that failed. In the card itself, so nothing is pushed down the page. */
+/** playit.gg errors the user fixes on playit.gg's site: where. */
+const PLAYIT_PAGES: Record<string, string> = {
+    'agent-over-limit': 'https://playit.gg/account/agents',
+    'agent-disabled': 'https://playit.gg/account/agents',
+    'email-not-verified': 'https://playit.gg/account',
+};
+/** playit.gg refused this PC's key, so the app removed the link (PlayitLink). */
+const LINK_GONE_REASONS = new Set(['InvalidAgentKey', 'NoLongerValid', 'AccountDoesNotExist', 'AgentNotFound']);
+
+/** After a run that left work waiting: continue or retry the upload (or cancel it for good), or dismiss or retry a
+ *  start that failed. In the card itself, so nothing is pushed down the page. */
 function WaitingActions({ kind, phase }: { kind: RunKind | null; phase: SessionPhase }) {
     const error = useSessionStore((s) => s.state.error);
+    const serverId = useSessionStore((s) => s.state.serverId);
     const [busy, setBusy] = useState(false);
     const [cancelOpen, setCancelOpen] = useState(false);
     if (phase !== 'failed' && phase !== 'upload-pending') return null;
@@ -208,6 +218,20 @@ function WaitingActions({ kind, phase }: { kind: RunKind | null; phase: SessionP
         setBusy(false);
     }
 
+    /** A failed start, started again (after fixing the cause elsewhere, such as on playit.gg). */
+    async function retryStart() {
+        if (!serverId) return;
+        setBusy(true);
+        await invoke('session:dismiss');
+        await continueRun('start', serverId);
+        setBusy(false);
+    }
+
+    const playitPage = error?.code === 'PLAYIT' && error.detail ? PLAYIT_PAGES[error.detail] : undefined;
+    // Not after the playit.gg link was removed: the start would go on without playit.gg until it is linked again.
+    const linkGone = error?.code === 'PLAYIT' && LINK_GONE_REASONS.has(error.detail ?? '');
+    const startFailed = phase === 'failed' && (kind === 'start' || (kind === null && error?.code === 'PLAYIT')) && serverId !== null && !linkGone;
+
     return (
         <>
             <CancelUploadDialog isOpen={cancelOpen} running={false} onClose={() => setCancelOpen(false)} />
@@ -216,8 +240,22 @@ function WaitingActions({ kind, phase }: { kind: RunKind | null; phase: SessionP
                     <Ban size={12} /> Cancel…
                 </button>
             )}
+            {playitPage && (
+                <button className='text-button' onClick={() => void invoke('app:openExternal', playitPage)}>
+                    <ExternalLink size={12} /> Open playit.gg
+                </button>
+            )}
             {phase === 'failed'
-                ? <button className='text-button' disabled={busy} onClick={() => void run('session:dismiss')}>Dismiss</button>
+                ? (
+                    <>
+                        <button className='text-button' disabled={busy} onClick={() => void run('session:dismiss')}>Dismiss</button>
+                        {startFailed && (
+                            <button className='text-button primary' disabled={busy} onClick={() => void retryStart()}>
+                                {busy ? <Loader2 size={12} className='spinner' /> : <RotateCcw size={12} />} Try again
+                            </button>
+                        )}
+                    </>
+                )
                 : (
                     <button className='text-button primary' disabled={busy} onClick={() => void run('session:retryUpload')}>
                         {busy ? <Loader2 size={12} className='spinner' /> : paused ? <Play size={12} /> : <CloudUpload size={12} />}

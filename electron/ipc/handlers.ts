@@ -36,7 +36,7 @@ export interface HandlerDeps {
     dialogs: Pick<Dialogs, 'chooseFolder' | 'chooseFile' | 'openPath'>;
     report: Pick<ReportService, 'send' | 'save'>;
     installer: Pick<ServerInstaller, 'versions' | 'folder' | 'install'>;
-    playit: Pick<PlayitLink, 'getState' | 'link' | 'cancelLink' | 'reopen' | 'unlink'>;
+    playit: Pick<PlayitLink, 'getState' | 'link' | 'cancelLink' | 'check' | 'reopen' | 'unlink'>;
     backups: Pick<BackupService, 'list' | 'create' | 'upload' | 'download' | 'restore' | 'restoreAuto' | 'deleteLocal' | 'deleteCloud' | 'localFolder' | 'isBusy'>;
     app: {
         quitResponse(confirmed: boolean): void;
@@ -265,6 +265,7 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
     handle('playit:state', () => d.playit.getState());
     handle('playit:link', () => d.playit.link());
     handle('playit:cancelLink', () => d.playit.cancelLink());
+    handle('playit:check', () => d.playit.check());
     handle('playit:reopen', () => d.playit.reopen());
     handle('playit:unlink', () => {
         if (d.session.isBusy()) throw new AppError('BUSY', 'playit.gg can be unlinked between sessions.');
