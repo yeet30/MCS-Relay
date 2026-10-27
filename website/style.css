@@ -257,6 +257,48 @@ ul.plain li {
     margin: 4px 0;
 }
 
+/* ---------------------------------------------------------------- features */
+
+/* A screenshot beside its text, alternating sides; text above the picture on a phone. */
+.feature-row {
+    display: grid;
+    grid-template-columns: 1fr 1.25fr;
+    align-items: center;
+    gap: 28px;
+    margin-bottom: 36px;
+}
+
+.feature-row.reverse .feature-text {
+    order: 2;
+}
+
+.feature-text h3 {
+    margin: 0 0 8px;
+    font-size: 1.25rem;
+}
+
+.feature-text p {
+    margin: 0 0 10px;
+    color: var(--muted);
+}
+
+/* Six cards: three per row on a wide screen, so no row is left half empty. */
+.feature-cards {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    margin-top: 8px;
+}
+
+@media (max-width: 720px) {
+    .feature-row {
+        grid-template-columns: 1fr;
+        gap: 14px;
+    }
+
+    .feature-row.reverse .feature-text {
+        order: 0;
+    }
+}
+
 /* ---------------------------------------------------------------- privacy policy */
 
 .policy {

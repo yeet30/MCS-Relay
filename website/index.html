@@ -17,6 +17,7 @@
             </a>
             <nav class="site-nav">
                 <a href="#how-it-works">How it works</a>
+                <a href="#features">Features</a>
                 <a href="#your-data">Your Google data</a>
                 <a href="privacy.html">Privacy policy</a>
                 <a href="https://github.com/yeet30/MCS-Relay">GitHub</a>
@@ -56,7 +57,7 @@
                     <div class="card">
                         <span class="step">1</span>
                         <h3>Create a server</h3>
-                        <p>MCS-Relay makes a server folder in your Google Drive. Invite your friends; Google Drive emails them a link to join.</p>
+                        <p>Name it, and MCS-Relay downloads the server or uses a server folder you already have. Invite your friends; Google Drive emails them a link to join.</p>
                     </div>
                     <div class="card">
                         <span class="step">2</span>
@@ -66,12 +67,97 @@
                     <div class="card">
                         <span class="step">3</span>
                         <h3>Play</h3>
-                        <p>Friends join with your address. With playit.gg they can join from anywhere without port forwarding.</p>
+                        <p>Friends join with the address MCS-Relay shows everyone. With playit.gg linked, they can join from anywhere without port forwarding.</p>
                     </div>
                     <div class="card">
                         <span class="step">4</span>
                         <h3>Press Stop</h3>
                         <p>The world is uploaded and the server is free again. Next time, any of you can host it.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="features">
+            <div class="wrap">
+                <h2>Features</h2>
+                <div class="feature-row">
+                    <div class="feature-text">
+                        <h3>A new server in a few steps</h3>
+                        <p>
+                            Name it, pick vanilla, Paper or Fabric and a version, and MCS-Relay downloads it from the official
+                            source (Mojang, PaperMC, FabricMC) and checks it. Or use a server folder you already have, Forge and
+                            NeoForge included.
+                        </p>
+                        <p>
+                            If your PC's Java is too old for the server, MCS-Relay downloads the right one for it (Eclipse
+                            Temurin, from Adoptium). Nothing to install by hand.
+                        </p>
+                    </div>
+                    <picture>
+                            <source srcset="feature-create-dark.png" media="(prefers-color-scheme: dark)">
+                            <img class="screenshot" src="feature-create.png" alt="Creating a server: start a new one or use your own folder, then pick vanilla, Paper or Fabric and a version." width="1200" height="900" loading="lazy">
+                        </picture>
+                </div>
+                <div class="feature-row reverse">
+                    <div class="feature-text">
+                        <h3>Friends join from anywhere</h3>
+                        <p>
+                            Link your free <a href="https://playit.gg">playit.gg</a> account once: you sign in on playit.gg's own
+                            page, and MCS-Relay does the rest. It downloads playit.gg, makes your Minecraft tunnel and starts it
+                            whenever you host.
+                        </p>
+                        <p>
+                            Everyone in the server sees the address to join with, whoever hosts. Friends on your own network can
+                            also join without it. Phone hotspots often block playit.gg, so host from a normal internet connection.
+                        </p>
+                    </div>
+                    <picture>
+                            <source srcset="feature-playit-dark.png" media="(prefers-color-scheme: dark)">
+                            <img class="screenshot" src="feature-playit.png" alt="Server settings, Hosting tab: playit.gg linked, with the address friends join with and a copy button." width="1200" height="900" loading="lazy">
+                        </picture>
+                </div>
+                <div class="feature-row">
+                    <div class="feature-text">
+                        <h3>Server settings in plain words</h3>
+                        <p>
+                            Change server.properties with switches and boxes: the message in the server list, how many players,
+                            game mode, difficulty, view distance and more, and every other line of the file too.
+                        </p>
+                        <p>
+                            Turn the whitelist on and add your friends by name. Memory, Java and automatic backups are in the
+                            same place.
+                        </p>
+                    </div>
+                    <picture>
+                            <source srcset="feature-settings-dark.png" media="(prefers-color-scheme: dark)">
+                            <img class="screenshot" src="feature-settings.png" alt="Server settings, server.properties tab: the server list message, max players, whitelist and online mode as plain settings." width="1200" height="900" loading="lazy">
+                        </picture>
+                </div>
+                <div class="cards feature-cards">
+                    <div class="card">
+                        <h3>One host at a time</h3>
+                        <p>A server is reserved while someone hosts it, so two people never run it at once and overwrite each other's world.</p>
+                    </div>
+                    <div class="card">
+                        <h3>Only changes are sent</h3>
+                        <p>After the first upload, a session moves just the files that changed. Uploads can be paused and continued, even after a crash.</p>
+                    </div>
+                    <div class="card">
+                        <h3>No guessing</h3>
+                        <p>If your copy and the cloud both changed, MCS-Relay shows you and you choose which to keep.</p>
+                    </div>
+                    <div class="card">
+                        <h3>World backups</h3>
+                        <p>Named backups on your PC or in the cloud for everyone, and an automatic one while you host. Restoring backs up the current world first.</p>
+                    </div>
+                    <div class="card">
+                        <h3>Run it your way</h3>
+                        <p>Invite and remove members, leave files out of the sync, sync without playing, and use the server console from the app.</p>
+                    </div>
+                    <div class="card">
+                        <h3>Lives in the tray</h3>
+                        <p>Notifications and a sound when a start or stop finishes, Light, Mint and Dark themes, and automatic updates.</p>
                     </div>
                 </div>
             </div>

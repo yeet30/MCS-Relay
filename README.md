@@ -60,11 +60,18 @@ Google Drive folder that you all share, and whoever wants to play hosts it on th
 - **The right Java**: when a server needs a newer Java than your PC has, MCS-Relay downloads it for that server
   (Eclipse Temurin, from Adoptium), also when hosting a friend's server shows that your Java is too old.
 - **World backups**: name a backup, keep it on your PC or put it in the cloud for everyone, and restore any of them;
-  the current world is backed up first. While you host, the server pauses saving for a moment.
+  the current world is backed up first. While you host, one automatic backup is kept up to date every 5 to 30
+  minutes, copying only what changed.
 - **Lives in the tray**: notifications and a sound when a start or stop finishes or fails, Light / Mint / Dark themes,
   and automatic updates.
 - **Problem reports**: Settings → Report a problem sends your description and the app's log to the developer
   through your own Google Drive, or saves them as a file.
+
+<p align="center">
+  <img src="website/feature-create.png" alt="Creating a server: start a new one or use your own folder, then pick vanilla, Paper or Fabric and a version" width="32%">
+  <img src="website/feature-playit.png" alt="Server settings, Hosting tab: playit.gg linked, with the address friends join with" width="32%">
+  <img src="website/feature-settings.png" alt="Server settings, server.properties tab: common settings as switches and boxes" width="32%">
+</p>
 
 ## Getting started
 
