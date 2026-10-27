@@ -48,12 +48,16 @@ Google Drive folder that you all share, and whoever wants to play hosts it on th
 - **Safe uploads**: an upload becomes the new version only when every file has arrived. You can pause it, continue it
   later (also after a crash or a closed laptop), or cancel it.
 - **Conflicts are shown, never guessed**: if your copy and the cloud both changed, you choose which one to keep.
-- **playit.gg built in**: every tunnel of your playit.gg agent (Minecraft Java, Bedrock, Simple Voice Chat, web
-  maps) is shown with what it is for, for you and for everyone in the group.
+- **playit.gg built in**: link your playit.gg account once, on playit.gg's own page in your browser; MCS-Relay
+  then downloads playit's agent, makes your Minecraft Java tunnel and starts it with the server, and everyone in the
+  group sees the address. A playit.gg program you set up yourself still works, with all of its tunnels (Bedrock,
+  Simple Voice Chat, web maps) shown with what they are for.
 - **Server management**: invite and remove members, choose which files are left out of the sync, sync without
   playing, and repair a server whose upload was interrupted.
 - **Download a server**: pick vanilla, Paper or Fabric and a version; the app downloads it from the official source
   (Mojang, PaperMC, FabricMC), checks it, and tells you which Java it needs.
+- **The right Java**: when a server needs a newer Java than your PC has, MCS-Relay downloads it for that server
+  (Eclipse Temurin, from Adoptium), also when hosting a friend's server shows that your Java is too old.
 - **World backups**: name a backup, keep it on your PC or put it in the cloud for everyone, and restore any of them;
   the current world is backed up first. While you host, the server pauses saving for a moment.
 - **Lives in the tray**: notifications and a sound when a start or stop finishes or fails, Light / Mint / Dark themes,
@@ -63,8 +67,8 @@ Google Drive folder that you all share, and whoever wants to play hosts it on th
 
 ## Getting started
 
-You need Windows 10 or 11, a Google account, and [Java](https://adoptium.net/) in the version your Minecraft server
-needs.
+You need Windows 10 or 11 and a Google account. MCS-Relay can download the Java your Minecraft server needs, or you
+can use your own [Java](https://adoptium.net/).
 
 1. Download `MCS-Relay-Setup-<version>.exe` from the [latest release](https://github.com/yeet30/MCS-Relay/releases/latest)
    and run it. Windows may say it "protected your PC", because the installer is not signed yet: choose
@@ -80,14 +84,17 @@ needs.
    **Join a server** in their own MCS-Relay.
 5. Press the power button.
 
-To let friends join from anywhere without port forwarding, install [playit.gg](https://playit.gg), set up a
-Minecraft Java tunnel once, and turn it on in Settings → Scripts.
+To let friends join from anywhere without port forwarding, press **Link playit.gg** in Settings → Scripts (or in the
+last step of creating a server) and sign in to [playit.gg](https://playit.gg), or create a free account, in your
+browser. MCS-Relay downloads playit.gg, makes your Minecraft tunnel and tells you when everything is set. Each Link
+adds an agent to your playit.gg account; delete the ones you no longer use on playit.gg.
 
 ## Your data
 
 MCS-Relay has no servers of its own. It talks to Google Drive straight from your PC, keeps your sign-in encrypted on
 it, and works only inside the "Minecraft Shared Servers" folder it creates and the servers you join (and a "MCS-Relay
-problem reports" folder, when you send a report). Nothing is sold, shared for advertising or collected for statistics. The [privacy policy](https://mcs-relay.com/privacy.html)
+problem reports" folder, when you send a report). If you link playit.gg, it also talks to playit.gg and keeps this
+PC's playit.gg key encrypted. Nothing is sold, shared for advertising or collected for statistics. The [privacy policy](https://mcs-relay.com/privacy.html)
 lists exactly what is used and stored, and how to remove it.
 
 If Google shows **"Google hasn't verified this app"** when you sign in, the app has not finished Google's review for
@@ -138,7 +145,7 @@ npm run dev
 
 | Folder | What is in it |
 |---|---|
-| `electron/` | The main process: Google sign-in, the Drive client, the server reservation (`lock/`), syncing and transfers, the Minecraft and playit.gg processes, the session that ties them together, and app updates. |
+| `electron/` | The main process: Google sign-in, the Drive client, the server reservation (`lock/`), syncing and transfers, the Minecraft and playit.gg processes and the playit.gg link (`playit/`), the server and Java downloads (`installer/`), the session that ties them together, and app updates. |
 | `src/` | The window: React components and zustand stores. |
 | `shared/` | Types and the IPC contract between the two. |
 | `website/` | The website, published to GitHub Pages. |

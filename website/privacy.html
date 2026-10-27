@@ -25,7 +25,7 @@
 
     <main class="policy wrap">
         <h1>Privacy policy</h1>
-        <p class="updated">Last updated: 24 October 2026</p>
+        <p class="updated">Last updated: 27 October 2026</p>
 
         <div class="panel">
             <p>
@@ -77,6 +77,8 @@
             <li>Your settings, the folder each server uses on your PC, and what the app knows about each server's files (names, sizes and checksums), so it only transfers what changed.</li>
             <li>A record of an upload that was interrupted, so it can be finished later.</li>
             <li>Copies of your own files, only when you choose to keep the cloud's version over yours.</li>
+            <li>If you link playit.gg: the key of this PC's playit.gg agent, encrypted with Windows' own data protection, your playit.gg address, and playit.gg's agent program (<code>playit</code> in the same folder).</li>
+            <li>Java the app downloaded for a server, if you let it (<code>java</code> in the same folder).</li>
             <li>A log of what the app did (<code>logs</code> in the same folder, at most about 8 MB): server names, folder paths, the names and email addresses of members, and errors. It never holds your password or your Google sign-in. It leaves your PC only inside a problem report you choose to send.</li>
         </ul>
         <p><strong>In each server folder on your PC</strong>: the world backups you make, in <code>mcs-relay-backups</code>. They are never synced.</p>
@@ -94,9 +96,9 @@
             <li><strong>The members of a server</strong> you are in, through Google Drive sharing: the server's files and its cloud backups, and your name and email address as a member and as the host or author of a version.</li>
             <li><strong>The developer</strong>, only for a problem report you send, as described above. It is used only to find and fix the problem.</li>
             <li><strong>Google</strong>, which provides Google Drive and Google sign-in, under <a href="https://policies.google.com/privacy">Google's privacy policy</a>.</li>
-            <li><strong>playit.gg</strong>, only if you turn it on in the app: MCS-Relay then starts the playit.gg program on your PC so friends can reach your server, under <a href="https://playit.gg/privacy-policy">playit.gg's privacy policy</a>.</li>
-            <li><strong>GitHub</strong>, where the app checks for new versions and downloads them. Like any download, this shows GitHub your IP address.</li>
-            <li><strong>Mojang, PaperMC and FabricMC</strong>, only when you download a server program in the app: it fetches the list of versions and the server from their official download services, which, like any download, see your IP address.</li>
+            <li><strong>playit.gg</strong>, only if you use it, under <a href="https://playit.gg/privacy-policy">playit.gg's privacy policy</a>. When you link it, you sign in to playit.gg (or create an account) on playit.gg's own website: MCS-Relay never sees your playit.gg password, and your Google account is not shared with playit.gg. MCS-Relay then uses playit.gg's service with this PC's agent key to make your Minecraft tunnel and read its address, and runs playit.gg's agent while you host, so players reach your server through playit.gg, which sees their connections. If you chose a playit.gg program yourself instead, MCS-Relay only starts it.</li>
+            <li><strong>GitHub</strong>, where the app checks for new versions and downloads them, and from where it downloads playit.gg's agent and Java when you use those. Like any download, this shows GitHub your IP address.</li>
+            <li><strong>Mojang, PaperMC, FabricMC and Adoptium</strong>, only when you download a server program or Java in the app: it fetches the list of versions and the download from their official services, which, like any download, see your IP address. Java is Eclipse Temurin from the Adoptium project.</li>
         </ul>
         <p>
             We do not sell your data, use it for advertising, or collect statistics about how you use the app. The app
@@ -118,13 +120,16 @@
             <li><strong>Take the app's access back</strong> in your <a href="https://myaccount.google.com/connections">Google Account</a> under third-party apps and services.</li>
             <li><strong>Delete a server</strong> you own in Settings &gt; Servers: its folder goes to your Drive trash, and Google empties the trash after 30 days. <strong>Leave a server</strong> you joined to remove your access to it.</li>
             <li><strong>Delete a backup</strong> in the app's Backups window, and the <code>mcs-relay-backups</code> folder in a server folder to remove them all from this PC.</li>
+            <li><strong>Unlink playit.gg</strong> in Settings &gt; Scripts: its key is removed from this PC and its tunnel deleted. The agent stays in your playit.gg account until you delete it there.</li>
             <li><strong>Delete a problem report</strong> from the "MCS-Relay problem reports" folder in your Drive: the developer loses access to it.</li>
             <li><strong>Uninstall MCS-Relay</strong> and delete the data folder above to remove everything it kept on your PC.</li>
         </ul>
 
         <h2>Security</h2>
         <p>
-            Sign-in tokens are encrypted on your PC, and every connection to Google uses HTTPS. The app's source code is
+            Sign-in tokens and the playit.gg key are encrypted on your PC, and every connection to Google and playit.gg uses
+            HTTPS. Everything the app downloads (server programs, playit.gg's agent, Java) is checked against the checksum
+            its official source publishes before it is used. The app's source code is
             public, so anyone can check what it does.
         </p>
 
