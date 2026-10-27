@@ -4,7 +4,7 @@
 // calls them with invoke() (src/api.ts). A renamed or mistyped channel is a compile error.
 import type {
     AppErrorInfo, AppSettings, BackupInfo, BackupList, BackupProgress, InstallableVersion, InstallProgress, InstallResult, JavaInstallResult,
-    ServerPropertiesInfo,
+    ServerPropertiesInfo, WhitelistPlayer,
     PlayitLinkState, ServerFolderInfo, ServerKind, ChangeBatch, ConflictChoice, LockView, LogoState, MemberRole, ServerId, ServerMember,
     ServerSettings, ServerSettingsPatch, ServerSummary, SessionProgress, SessionState, StepMessage, SyncReport, SyncRules,
     TransferSnapshot, UpdateState, UserInfo,
@@ -62,6 +62,11 @@ export interface Commands {
     'servers:properties': (serverId: ServerId) => ServerPropertiesInfo;
     /** Changes values in it (new keys are added); refused while this server is hosted from this PC. */
     'servers:setProperties': (serverId: ServerId, changes: Record<string, string>) => ServerPropertiesInfo;
+    /** The players in the server's whitelist.json on this PC. */
+    'servers:whitelist': (serverId: ServerId) => WhitelistPlayer[];
+    /** Adds a player by name (looked up at Mojang); a server hosted here reloads its whitelist at once. */
+    'servers:whitelistAdd': (serverId: ServerId, name: string) => WhitelistPlayer[];
+    'servers:whitelistRemove': (serverId: ServerId, uuid: string) => WhitelistPlayer[];
 
     'session:get': () => SessionState;
     'session:preflight': (serverId: ServerId) => SyncReport;

@@ -12,7 +12,7 @@ const ALL_COMMANDS: Record<CommandName, true> = {
     'servers:list': true, 'servers:create': true, 'servers:serversFolder': true, 'servers:pickFolder': true,
     'servers:checkFolder': true, 'servers:setUpFolder': true, 'servers:delete': true, 'servers:rename': true, 'servers:invite': true,
     'servers:removeMember': true, 'servers:leave': true, 'servers:join': true, 'servers:chooseLocalPath': true,
-    'servers:openFolder': true, 'servers:info': true, 'servers:select': true, 'servers:properties': true, 'servers:setProperties': true,
+    'servers:openFolder': true, 'servers:info': true, 'servers:select': true, 'servers:properties': true, 'servers:setProperties': true, 'servers:whitelist': true, 'servers:whitelistAdd': true, 'servers:whitelistRemove': true,
     'session:get': true, 'session:preflight': true, 'session:lastReport': true, 'session:start': true, 'session:stop': true,
     'session:resolve': true, 'session:retryUpload': true, 'session:dismiss': true, 'session:command': true,
     'session:changes': true, 'session:transfers': true, 'session:steps': true, 'session:console': true,
@@ -39,7 +39,7 @@ function setup() {
     const auto = () => new Proxy({}, { get: (target: Record<string, unknown>, key: string) => (target[key] ??= vi.fn(async () => undefined)) });
     const deps = {
         auth: auto(), servers: auto(), session: auto(), settings: auto(), sync: auto(), transfers: auto(),
-        changes: auto(), dialogs: auto(), report: auto(), backups: auto(), installer: auto(), java: auto(), properties: auto(), playit: auto(), app: auto(),
+        changes: auto(), dialogs: auto(), report: auto(), backups: auto(), installer: auto(), java: auto(), properties: auto(), whitelist: auto(), playit: auto(), app: auto(),
     } as unknown as HandlerDeps;
     (deps.session.isBusy as unknown as ReturnType<typeof vi.fn>) = vi.fn(() => false);
     (deps.backups.isBusy as unknown as ReturnType<typeof vi.fn>) = vi.fn(() => false);

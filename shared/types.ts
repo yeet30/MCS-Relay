@@ -176,6 +176,12 @@ export interface ServerPropertiesInfo {
     values: Record<string, string>;
 }
 
+/** A player in a server's whitelist.json. */
+export interface WhitelistPlayer {
+    uuid: string;
+    name: string;
+}
+
 /** Java downloaded for a server (Eclipse Temurin), now its Java on this PC. */
 export interface JavaInstallResult {
     javaPath: string;

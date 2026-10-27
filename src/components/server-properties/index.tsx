@@ -6,6 +6,7 @@ import { invoke } from '../../api';
 import { useConfirm } from '../../hooks/useConfirm';
 import { isSessionBusy } from '../../lib/sync';
 import { useNoticeStore } from '../../stores/noticeStore';
+import { usePropertiesStore } from '../../stores/propertiesStore';
 import { selectSelectedServer, useServersStore } from '../../stores/serversStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useCloseGuard } from '../modal/close-guard';
@@ -23,7 +24,7 @@ const SECTIONS: Array<{ title: string; fields: Field[] }> = [
         fields: [
             { key: 'motd', label: 'Message in the server list', kind: 'text', def: 'A Minecraft Server' },
             { key: 'max-players', label: 'Most players at once', kind: 'number', def: '20', min: 1, max: 1000 },
-            { key: 'white-list', label: 'Only players on the whitelist can join', kind: 'bool', def: 'false' },
+            { key: 'white-list', label: 'Only players on the whitelist can join', kind: 'bool', def: 'false', hint: 'Once saved, a Whitelist tab lists who may join.' },
             {
                 key: 'online-mode', label: 'Check that players own Minecraft', kind: 'bool', def: 'true',
                 hint: 'Off lets anyone join under any name. Leave it on unless you know why.',
@@ -90,8 +91,12 @@ export default function ServerPropertiesPanel() {
         setLoadError(null);
         if (!serverId) return;
         void invoke('servers:properties', serverId).then((res) => {
-            if (res.ok) setInfo(res.value);
-            else setLoadError(res.error.message);
+            if (!res.ok) {
+                setLoadError(res.error.message);
+                return;
+            }
+            setInfo(res.value);
+            usePropertiesStore.getState().set(serverId, res.value);
         });
     }, [serverId]);
 
@@ -127,6 +132,7 @@ export default function ServerPropertiesPanel() {
         }
         setInfo(res.value);
         setEdited({});
+        usePropertiesStore.getState().set(serverId, res.value);         // the Whitelist tab follows the switch
         useNoticeStore.getState().success('Saved. Minecraft uses them the next time the server starts, and your next session shares them.');
         return true;
     }

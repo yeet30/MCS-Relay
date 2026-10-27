@@ -56,6 +56,7 @@ Google Drive folder that you all share, and whoever wants to play hosts it on th
   playing, and repair a server whose upload was interrupted.
 - **Download a server**: pick vanilla, Paper or Fabric and a version; the app downloads it from the official source
   (Mojang, PaperMC, FabricMC), checks it, and tells you which Java it needs.
+- **Server settings**: edit `server.properties` with plain switches and boxes, and the whitelist by player name.
 - **The right Java**: when a server needs a newer Java than your PC has, MCS-Relay downloads it for that server
   (Eclipse Temurin, from Adoptium), also when hosting a friend's server shows that your Java is too old.
 - **World backups**: name a backup, keep it on your PC or put it in the cloud for everyone, and restore any of them;

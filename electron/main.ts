@@ -26,6 +26,7 @@ import { MinecraftProcess } from './processes/MinecraftProcess';
 import { PlayitLink } from './playit/PlayitLink';
 import { JavaInstaller } from './installer/JavaInstaller';
 import { ServerProperties } from './servers/ServerProperties';
+import { Whitelist } from './servers/Whitelist';
 import { PlayitRunner } from './playit/PlayitRunner';
 import { PlayitProcess } from './processes/PlayitProcess';
 import { ReportService } from './report/ReportService';
@@ -187,6 +188,7 @@ const java = new JavaInstaller({
 });
 
 const properties = new ServerProperties({ settings });
+const whitelist = new Whitelist({ settings, appVersion: app.getVersion() });
 
 const reports = new ReportService({
     log: appLog, drive, me, chooseSaveFile: dialogs.chooseSaveFile,
@@ -573,7 +575,7 @@ if (!app.requestSingleInstanceLock()) {
     void app.whenReady().then(async () => {
         appData.migrateLegacy();
         registerHandlers(createHandle(ipcMain, isTrustedUrl), {
-            auth, servers, session, settings, sync, transfers, changes, dialogs, report: reports, backups, installer, java, properties, playit: playitLink,
+            auth, servers, session, settings, sync, transfers, changes, dialogs, report: reports, backups, installer, java, properties, whitelist, playit: playitLink,
             app: {
                 quitResponse, openExternal: (url) => shell.openExternal(url), setLogoState: applyLogoState,
                 updateState: () => updates.get(), checkForUpdates: () => updates.check(), installUpdate,

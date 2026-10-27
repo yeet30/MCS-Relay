@@ -13,6 +13,7 @@ import type { ServerInstaller } from '../installer/ServerInstaller';
 import type { PlayitLink } from '../playit/PlayitLink';
 import { isValidServerId } from '../store/appData';
 import type { ServerProperties } from '../servers/ServerProperties';
+import type { Whitelist } from '../servers/Whitelist';
 import type { ServersService } from '../servers/ServersService';
 import type { SessionController } from '../session/SessionController';
 import type { ReportService } from '../report/ReportService';
@@ -40,6 +41,7 @@ export interface HandlerDeps {
     installer: Pick<ServerInstaller, 'versions' | 'folder' | 'install'>;
     java: Pick<JavaInstaller, 'install'>;
     properties: Pick<ServerProperties, 'read' | 'write'>;
+    whitelist: Pick<Whitelist, 'list' | 'add' | 'remove'>;
     playit: Pick<PlayitLink, 'getState' | 'link' | 'cancelLink' | 'check' | 'reopen' | 'unlink'>;
     backups: Pick<BackupService, 'list' | 'create' | 'upload' | 'download' | 'restore' | 'restoreAuto' | 'deleteLocal' | 'deleteCloud' | 'localFolder' | 'isBusy'>;
     app: {
@@ -273,6 +275,27 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
             throw new AppError('BUSY', 'server.properties can be changed between sessions: Minecraft reads it when the server starts.');
         }
         return d.properties.write(id(serverId), Object.fromEntries(entries) as Record<string, string>);
+    });
+    // While this PC hosts the server, it reads whitelist.json again right away.
+    const reloadWhitelist = (serverId: string) => {
+        const state = d.session.getState();
+        if (state.phase !== 'running' || state.serverId !== serverId || !state.javaRunning) return;
+        try {
+            d.session.command('whitelist reload');
+        } catch (err) {
+            console.warn('[whitelist] could not reload it on the running server:', err instanceof Error ? err.message : String(err));
+        }
+    };
+    handle('servers:whitelist', (serverId) => d.whitelist.list(id(serverId)));
+    handle('servers:whitelistAdd', async (serverId, name) => {
+        const players = await d.whitelist.add(id(serverId), text(name, 'player name', { max: 16 }));
+        reloadWhitelist(serverId as string);
+        return players;
+    });
+    handle('servers:whitelistRemove', async (serverId, uuid) => {
+        const players = await d.whitelist.remove(id(serverId), text(uuid, 'player', { max: 40 }));
+        reloadWhitelist(serverId as string);
+        return players;
     });
     handle('installer:installJava', (serverId, major) => {
         if (typeof major !== 'number' || !Number.isInteger(major) || major < 8 || major > 99) throw invalid('That Java version is not valid.');
