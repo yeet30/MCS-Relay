@@ -125,7 +125,7 @@ function setup(playit = fakePlayit(), dir?: string, agentProcess = fakeAgent()) 
         dir: folder, agentName: 'MCS-Relay (TEST-PC)', fetchImpl: playit.fetchImpl, safeStorage: fakeSafe, agent: AGENT,
         openExternal: async (url) => void opened.push(url),
         emit: (state) => void states.push(state),
-        onLinked, pollMs: 1, linkTimeoutMs: 5_000, tunnelWaitMs: 5_000, createRetryMs: 1, agentProcess,
+        onLinked, pollMs: 1, linkTimeoutMs: 5_000, tunnelWaitMs: 5_000, createRetryMs: 1, pageCatchUpMs: 1, agentProcess,
     });
     return { link, playit, folder, states, opened, onLinked, agentProcess };
 }

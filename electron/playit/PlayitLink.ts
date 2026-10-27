@@ -72,6 +72,8 @@ const AGENT_PIPE = '\\\\.\\pipe\\mcs-relay-playitd';
 export const agentArgs = (secret: string): string[] => ['--secret', secret, '--socket-path', AGENT_PIPE];
 /** The agent counts as started once it kept running this long. */
 export const AGENT_SETTLE_MS = 4_000;
+/** After linking, how long the agent stays connected for playit.gg's page to notice it. */
+const PAGE_CATCH_UP_MS = 8_000;
 
 export interface PlayitLinkDeps {
     /** <userData>/playit: the agent program and link.json. */
@@ -93,6 +95,7 @@ export interface PlayitLinkDeps {
     tunnelWaitMs?: number;
     createTries?: number;
     createRetryMs?: number;
+    pageCatchUpMs?: number;
 }
 
 const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
@@ -189,7 +192,11 @@ export class PlayitLink {
         try {
             console.log('[playit] link: running the agent once so playit.gg sees it connect');
             await agent.run(executable, agentArgs(secret), AGENT_SETTLE_MS, signal);
-            return (await this.ensureTunnel(this.api.withSecret(secret), agentId, 25565, signal)).address;
+            const { address } = await this.ensureTunnel(this.api.withSecret(secret), agentId, 25565, signal);
+            // playit.gg's page checks every few seconds whether the agent connected, and the API has no way to tell
+            // when it did: the agent stays connected a little longer, so the page says "done" before the app does.
+            await sleep(this.d.pageCatchUpMs ?? PAGE_CATCH_UP_MS, signal);
+            return address;
         } catch (err) {
             const info = toAppError(err);
             console.warn(`[playit] link: the first run did not finish (${info.message}); the next start tries again`);
