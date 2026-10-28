@@ -74,6 +74,7 @@ export class SettingsService {
         }
         if ('notifications' in patch) next.notifications = requireBoolean(patch.notifications, 'notifications');
         if ('notificationSound' in patch) next.notificationSound = requireBoolean(patch.notificationSound, 'notificationSound');
+        if ('minimizeToTray' in patch) next.minimizeToTray = requireBoolean(patch.minimizeToTray, 'minimizeToTray');
         if ('playitPrimary' in patch) {
             const address: unknown = patch.playitPrimary;
             if (address !== null && (typeof address !== 'string' || address === '' || address.length > 300)) throw invalid('That playit.gg tunnel is not valid.');

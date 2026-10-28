@@ -91,6 +91,7 @@ export interface AppSettings {
     autoBackupMinutes: number;          // the automatic backup while this PC hosts: every 5 to 30 minutes; 0 = off
     notifications: boolean;             // a desktop notification when a start or stop finishes in the background
     notificationSound: boolean;         // a short chime when a start or stop finishes
+    minimizeToTray: boolean;            // minimizing hides the window in the tray instead of the taskbar
     theme: ThemeName;                   // per PC, like the other display settings
     /** The playit.gg tunnel shown first while this PC hosts (its address); null: the Minecraft Java one. */
     playitPrimary: string | null;

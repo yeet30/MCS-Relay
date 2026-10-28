@@ -1,6 +1,6 @@
 import './preferences.css';
 import { useEffect } from 'react';
-import { Bell, Download, ExternalLink, Loader2, Play, RefreshCw, ScrollText, ShieldCheck, Volume2 } from 'lucide-react';
+import { Bell, Download, ExternalLink, Loader2, PanelBottomClose, Play, RefreshCw, ScrollText, ShieldCheck, Volume2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { TERMS_URL, THEMES } from '../../../shared/types';
 import type { AppSettings, ThemeName } from '../../../shared/types';
@@ -81,7 +81,7 @@ export default function Preferences() {
     }, []);
 
     if (!settings) return <p className='pref-help'>Loading…</p>;
-    const set = (patch: Partial<Pick<AppSettings, 'notifications' | 'notificationSound' | 'eulaAccepted' | 'theme'>>) => void useSettingsStore.getState().update(patch);
+    const set = (patch: Partial<Pick<AppSettings, 'notifications' | 'notificationSound' | 'minimizeToTray' | 'eulaAccepted' | 'theme'>>) => void useSettingsStore.getState().update(patch);
     const chooseTheme = (theme: ThemeName) => {
         applyTheme(theme);                                  // at once; the setting is saved meanwhile
         set({ theme });
@@ -111,6 +111,15 @@ export default function Preferences() {
                     );
                 })}
             </div>
+
+            <h4 className='pref-section'>Window</h4>
+            <Toggle
+                icon={<PanelBottomClose size={16} />}
+                title='Minimize to the tray'
+                text='Minimizing hides MCS-Relay in the tray next to the clock, instead of the taskbar. Open it again from the tray icon.'
+                checked={settings.minimizeToTray}
+                onChange={(minimizeToTray) => set({ minimizeToTray })}
+            />
 
             <h4 className='pref-section'>Notifications</h4>
             <Toggle

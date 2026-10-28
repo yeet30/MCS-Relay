@@ -187,6 +187,7 @@ describe('legacy import', () => {
             autoBackupMinutes: 10,
             notifications: true,
             notificationSound: true,
+            minimizeToTray: false,
             theme: 'light',
             playitPrimary: null,
         });

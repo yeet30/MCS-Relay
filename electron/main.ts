@@ -399,7 +399,10 @@ function createWindow(): void {
         webPreferences: { preload: path.join(__dirname, 'preload.mjs'), autoplayPolicy: 'no-user-gesture-required', backgroundThrottling: false },
     });
     win.removeMenu();                                 // no File / Edit / View bar: the app has its own menu
-    win.on('minimize', () => win?.hide());            // minimised to the tray
+    // Minimised to the taskbar, or to the tray when Preferences says so.
+    win.on('minimize', () => {
+        if (settings.get().minimizeToTray) win?.hide();
+    });
     win.on('close', (event) => {
         if (quitAllowed) return;
         event.preventDefault();
@@ -452,6 +455,7 @@ function applyLogoState(state: LogoState): void {
     if (state === logoState) return;
     logoState = state;
     applyWindowIcon();
+    refreshTaskbarButton();
     tray?.setImage(nativeImage.createFromPath(stateIcon(state, 'png')));
     tray?.setToolTip(LOGO_TOOLTIPS[state]);
     updateTrayMenu();
@@ -475,6 +479,15 @@ function applyWindowIcon(): void {
         relaunchCommand: `"${process.execPath}"`,
         relaunchDisplayName: 'MCS-Relay',
     });
+}
+
+/** Windows reads the taskbar icon (appIconPath above) only when the window's taskbar button is made, so a new state
+ *  showed only after the window was hidden and shown again. Taking the button off the taskbar and putting it back
+ *  makes Windows read it now. A window hidden in the tray gets its button back, with the right icon, when shown. */
+function refreshTaskbarButton(): void {
+    if (!win || process.platform !== 'win32' || !win.isVisible()) return;
+    win.setSkipTaskbar(true);
+    win.setSkipTaskbar(false);
 }
 
 const PHASE_LABELS: Partial<Record<SessionPhase, string>> = {
