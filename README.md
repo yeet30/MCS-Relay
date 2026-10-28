@@ -54,8 +54,12 @@ Google Drive folder that you all share, and whoever wants to play hosts it on th
   Simple Voice Chat, web maps) shown with what they are for.
 - **Server management**: invite and remove members, choose which files are left out of the sync, sync without
   playing, and repair a server whose upload was interrupted.
-- **Download a server**: pick vanilla, Paper or Fabric and a version; the app downloads it from the official source
-  (Mojang, PaperMC, FabricMC), checks it, and tells you which Java it needs.
+- **Download a server**: pick vanilla, Paper, Fabric, Forge or NeoForge and a version; the app downloads it from the
+  official source (Mojang, PaperMC, FabricMC, MinecraftForge, NeoForged), checks it, runs the Forge or NeoForge
+  installer for you, and tells you which Java it needs.
+- **Modpacks**: browse Modrinth's modpacks that run on a server and install one, with its mod loader and every mod the
+  server needs; or use a server pack zip downloaded from CurseForge. Members see which pack (and version) to install
+  in their launcher, with a link to it on Modrinth.
 - **Server settings**: edit `server.properties` with plain switches and boxes, and the whitelist by player name.
 - **The right Java**: when a server needs a newer Java than your PC has, MCS-Relay downloads it for that server
   (Eclipse Temurin, from Adoptium), also when hosting a friend's server shows that your Java is too old.
@@ -84,9 +88,9 @@ can use your own [Java](https://adoptium.net/).
 2. Sign in with Google. MCS-Relay asks for access to your Google Drive, because it has to read the world files your
    friends upload; it only works in its own server folders (see [Your data](#your-data)). Then read and agree to
    the [terms of use](#play-with-people-you-trust).
-3. **Create a server**: name it, then either let MCS-Relay download a new one (vanilla, Paper or Fabric) or point it
-   to a server folder you already have (Forge and NeoForge too: the folder their installer set up with "Install
-   server"). New server folders go to `MCS-Relay Servers` in your user folder, or wherever you choose. MCS-Relay
+3. **Create a server**: name it, then start it from a new server MCS-Relay downloads (vanilla, Paper, Fabric, Forge
+   or NeoForge), from a modpack (Modrinth's, or a CurseForge server pack zip), or from a server folder you already
+   have. New server folders go to `MCS-Relay Servers` in your user folder, or wherever you choose. MCS-Relay
    finds what starts the server by itself; it does not need a `run.bat`.
 4. **Invite your friends** from Settings → Servers. Google Drive emails them a link; they paste it into
    **Join a server** in their own MCS-Relay.
