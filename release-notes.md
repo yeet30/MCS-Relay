@@ -1,9 +1,12 @@
-## MCS-Relay 1.1.2
+## MCS-Relay 1.2.0
 
 ### New
-- **Minimizing goes to the taskbar** now. To hide MCS-Relay in the tray instead, as before, turn on **Minimize to the tray** in Preferences.
+- **Modpacks**: create a server from a modpack. Pick one from Modrinth's list of packs that run on a server (Fabric, Forge or NeoForge) or search it, choose its version, and MCS-Relay installs its mod loader, the mods a server needs and the pack's settings.
+- **CurseForge server packs**: a pack that is only on CurseForge works too. **Search CurseForge** opens the pack on CurseForge's site; download its **Server Files** there and use that zip. MCS-Relay unpacks it and installs the Forge or NeoForge it needs.
+- **Forge and NeoForge servers**: next to Vanilla, Paper and Fabric, MCS-Relay now downloads the official Forge and NeoForge installers and sets the server up for you.
+- **Your friends see the modpack**: the main page shows which pack (and version) the server runs, with a link to it on Modrinth, so everyone can install the same one in their launcher.
+- **A new server creation wizard**: start from a new server, a modpack or your own server folder. If a step fails, **Try again** continues from that step.
 
 ### Fixes
-- **The taskbar icon** changes the moment someone starts or stops hosting, instead of only after the window was hidden and shown again.
-- **The whitelist stays off**: Minecraft 26.x turns the whitelist on for a new server when server.properties does not mention it, so nobody could join. Servers downloaded in MCS-Relay now start with the whitelist off, and saving server.properties writes the settings exactly as the tab shows them.
-- **PvP and the Nether** are game rules in Minecraft 26.x, no longer server.properties settings, so their switches only show for servers whose server.properties still has them.
+- **Old Forge servers** (Minecraft before 1.17) get Java 8, the only Java they run on, even when your PC has a newer one.
+- **The CurseForge zip for players** (the one its big Download button gives) is recognised, and MCS-Relay tells you to get the pack's Server Files instead, rather than failing later with "No server .jar file was found".
