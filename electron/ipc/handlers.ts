@@ -41,7 +41,7 @@ export interface HandlerDeps {
     report: Pick<ReportService, 'send' | 'save'>;
     installer: Pick<ServerInstaller, 'versions' | 'folder' | 'install'>;
     java: Pick<JavaInstaller, 'install'>;
-    modpacks: Pick<ModpackService, 'search' | 'versions' | 'install' | 'importZip' | 'info'>;
+    modpacks: Pick<ModpackService, 'search' | 'versions' | 'install' | 'checkZip' | 'importZip' | 'info'>;
     properties: Pick<ServerProperties, 'read' | 'write'>;
     whitelist: Pick<Whitelist, 'list' | 'add' | 'remove'>;
     playit: Pick<PlayitLink, 'getState' | 'link' | 'cancelLink' | 'check' | 'reopen' | 'unlink'>;
@@ -314,7 +314,10 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
         if (d.session.isBusy() && d.session.getState().serverId === serverId) throw new AppError('BUSY', 'Stop the server first.');
         return d.modpacks.install(id(serverId), modrinthId(versionId, 'modpack version'));
     });
-    handle('modpacks:pickZip', () => d.dialogs.chooseFile('Choose the server pack zip', [{ name: 'Server pack', extensions: ['zip'] }]));
+    handle('modpacks:pickZip', async () => {
+        const file = await d.dialogs.chooseFile('Choose the server pack zip', [{ name: 'Server pack', extensions: ['zip'] }]);
+        return file ? d.modpacks.checkZip(file) : null;
+    });
     handle('modpacks:importZip', (serverId, zipPath) => {
         notDuringBackup();
         if (d.session.isBusy() && d.session.getState().serverId === serverId) throw new AppError('BUSY', 'Stop the server first.');

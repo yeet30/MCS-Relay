@@ -1,7 +1,7 @@
 import './modpack-browser.css';
 import { useEffect, useRef, useState } from 'react';
-import { ExternalLink, FileArchive, Loader2, Package, Search, X } from 'lucide-react';
-import type { ModpackHit, ModpackVersion } from '../../../shared/types';
+import { ExternalLink, FileArchive, Loader2, Package, Search, TriangleAlert, X } from 'lucide-react';
+import type { ModpackHit, ModpackVersion, ModpackZip } from '../../../shared/types';
 import { invoke } from '../../api';
 import { formatBytes } from '../../lib/format';
 import { kindName } from '../../lib/serverKinds';
@@ -41,6 +41,7 @@ export default function ModpackBrowser({ value, onChange }: { value: PackChoice 
     const [error, setError] = useState<string | null>(null);
     const [open, setOpen] = useState<string | null>(value?.kind === 'modrinth' ? value.hit.id : null);
     const [versions, setVersions] = useState<Record<string, ModpackVersion[] | 'error'>>({});
+    const [clientPack, setClientPack] = useState<ModpackZip['clientPack']>(null);
     const asked = useRef(0);
 
     async function load(q: string, offset: number) {
@@ -66,6 +67,7 @@ export default function ModpackBrowser({ value, onChange }: { value: PackChoice 
     // A pack's versions load when it is opened; its newest release (else its newest version) is chosen.
     async function choose(hit: ModpackHit) {
         setOpen(hit.id);
+        setClientPack(null);
         let list = versions[hit.id];
         if (!list || list === 'error') {
             const res = await invoke('modpacks:versions', hit.id);
@@ -76,11 +78,21 @@ export default function ModpackBrowser({ value, onChange }: { value: PackChoice 
         else onChange(null);
     }
 
+    // CurseForge's pack for players is not taken: the user is sent for its Server Files instead.
     async function pickZip() {
         const res = await invoke('modpacks:pickZip');
-        if (res.ok && res.value) {
-            setOpen(null);
-            onChange({ kind: 'zip', path: res.value });
+        if (!res.ok) {
+            setError(res.error.message);
+            return;
+        }
+        if (!res.value) return;
+        setOpen(null);
+        if (res.value.clientPack) {
+            setClientPack(res.value.clientPack);
+            onChange(null);
+        } else {
+            setClientPack(null);
+            onChange({ kind: 'zip', path: res.value.path });
         }
     }
 
@@ -159,9 +171,21 @@ export default function ModpackBrowser({ value, onChange }: { value: PackChoice 
                     </li>
                 )}
             </ul>
-            <div className={`modpack-zip ${value?.kind === 'zip' ? 'selected' : ''}`}>
-                <FileArchive size={15} />
-                {value?.kind === 'zip'
+            <div className={`modpack-zip ${value?.kind === 'zip' ? 'selected' : clientPack ? 'warning' : ''}`}>
+                {clientPack ? <TriangleAlert size={15} /> : <FileArchive size={15} />}
+                {clientPack && value?.kind !== 'zip'
+                    ? (
+                        <>
+                            <span className='modpack-zip-text' title={`${clientPack.name} only lists its ${clientPack.mods} mods.`}>
+                                That zip is <b>{clientPack.name}{clientPack.version ? ` ${clientPack.version}` : ''}</b> for players. Get its <b>Server Files</b> instead.
+                            </span>
+                            <button className='setup-link' onClick={() => searchCurseForge(clientPack.name)}>
+                                Find it on CurseForge <ExternalLink size={11} />
+                            </button>
+                            <button className='setup-link' onClick={() => void pickZip()}>Choose another</button>
+                        </>
+                    )
+                    : value?.kind === 'zip'
                     ? (
                         <>
                             <span className='modpack-zip-text' title={value.path}>Server pack: <b>{fileName(value.path)}</b></span>
@@ -171,7 +195,7 @@ export default function ModpackBrowser({ value, onChange }: { value: PackChoice 
                     )
                     : (
                         <>
-                            <span className='modpack-zip-text'>Not on Modrinth? Get its server pack from CurseForge.</span>
+                            <span className='modpack-zip-text'>Not on Modrinth? Get its Server Files from CurseForge.</span>
                             <button className='setup-link' onClick={() => searchCurseForge(query.trim())}>
                                 Search CurseForge <ExternalLink size={11} />
                             </button>

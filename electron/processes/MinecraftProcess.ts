@@ -48,6 +48,8 @@ const ANSI_RE = /\x1B(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1B]*(?:\x07|\x1B\\)|[@-Z\\
 /** The Java a server needs, from Java's own complaint that it is too old: "compiled by a more recent version of the
  *  Java Runtime (class file version 65.0)". Class file version 52 is Java 8, and every Java adds one. */
 export function javaNeededFromOutput(text: string): number | null {
+    // Forge for Minecraft before 1.17 started with a Java newer than 8.
+    if (/AppClassLoader cannot be cast to (?:class )?java\.net\.URLClassLoader/.test(text)) return 8;
     const m = /class file version (\d+)/.exec(text);
     if (!m) return null;
     const major = Number(m[1]) - 44;
@@ -384,6 +386,10 @@ export class MinecraftProcess {
             throw new AppError('JAVA', 'The Java program chosen for this server is not on this PC anymore. Choose it again in Settings > Server settings.', javaPath);
         }
         const argsFile = findArgsFile(serverPath, platform);
+        // CurseForge's pack for players (its mods only listed in manifest.json) instead of its server files.
+        if (!argsFile && existsSync(path.join(serverPath, 'manifest.json')) && !existsSync(path.join(serverPath, 'mods'))) {
+            throw new AppError('INVALID', 'This folder has a CurseForge modpack for players (only a list of its mods), not a server. Make the server again from the pack\'s Server Files zip, from its CurseForge page.');
+        }
         const launch = argsFile
             ? [`@${argsFile}`]
             : ['-jar', chooseServerJar(readdirSync(serverPath, { withFileTypes: true })
@@ -578,7 +584,7 @@ export class MinecraftProcess {
         if (needed !== null) {
             return new AppError(
                 'JAVA',
-                `This server needs Java ${needed}, newer than the Java it started with.`,
+                needed === 8 ? 'This server needs Java 8: Forge for Minecraft before 1.17 does not run on newer Java.' : `This server needs Java ${needed}, newer than the Java it started with.`,
                 `${NEEDS_JAVA_PREFIX}${needed}\nExit code ${code ?? 'none'}. Last output:\n${this.tailText()}`,
             );
         }

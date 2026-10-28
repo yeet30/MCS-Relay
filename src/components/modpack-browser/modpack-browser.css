@@ -186,6 +186,21 @@
     background: rgba(var(--accent-rgb), 0.08);
 }
 
+/* CurseForge's pack for players was chosen: it needs the Server Files instead. */
+.modpack-zip.warning {
+    border-style: solid;
+    border-color: var(--warn);
+
+    svg:first-child {
+        color: var(--warn);
+    }
+
+    .modpack-zip-text {
+        white-space: normal;
+        line-height: 1.4;
+    }
+}
+
 .modpack-zip-clear {
     flex: none;
     display: flex;

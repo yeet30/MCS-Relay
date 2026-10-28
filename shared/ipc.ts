@@ -4,7 +4,7 @@
 // calls them with invoke() (src/api.ts). A renamed or mistyped channel is a compile error.
 import type {
     AppErrorInfo, AppSettings, BackupInfo, BackupList, BackupProgress, InstallableVersion, InstallProgress, InstallResult, JavaInstallResult,
-    ServerPropertiesInfo, WhitelistPlayer, ModpackInfo, ModpackInstallResult, ModpackSearch, ModpackVersion,
+    ServerPropertiesInfo, WhitelistPlayer, ModpackInfo, ModpackInstallResult, ModpackSearch, ModpackVersion, ModpackZip,
     PlayitLinkState, ServerFolderInfo, ServerKind, ChangeBatch, ConflictChoice, LockView, LogoState, MemberRole, ServerId, ServerMember,
     ServerSettings, ServerSettingsPatch, ServerSummary, SessionProgress, SessionState, StepMessage, SyncReport, SyncRules,
     TransferSnapshot, UpdateState, UserInfo,
@@ -146,8 +146,8 @@ export interface Commands {
     'modpacks:versions': (projectId: string) => ModpackVersion[];
     /** Installs a Modrinth pack version, with its mod loader, into the server's new folder. */
     'modpacks:install': (serverId: ServerId, versionId: string) => ModpackInstallResult;
-    /** Opens the file picker for a server pack zip (CurseForge's, say); null when cancelled. */
-    'modpacks:pickZip': () => string | null;
+    /** Opens the file picker for a server pack zip (CurseForge's, say), and looks inside it; null when cancelled. */
+    'modpacks:pickZip': () => ModpackZip | null;
     'modpacks:importZip': (serverId: ServerId, zipPath: string) => ModpackInstallResult;
     /** The pack the server was made from, from its folder on this PC; null for none. */
     'modpacks:info': (serverId: ServerId) => ModpackInfo | null;

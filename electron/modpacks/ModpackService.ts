@@ -13,7 +13,11 @@
 // Every path is checked to stay inside the server folder, as the format asks (auto-mcs does the same:
 // github.com/macarooni-man/auto-mcs, source/core/server/foundry.py).
 // Packs from CurseForge come as a "server pack" zip the user downloaded from CurseForge's site: importZip unpacks one
-// (and runs a Forge or NeoForge installer it contains). CurseForge's own API needs a key that may not be shared.
+// and makes sure it has its mod loader: it runs the Forge or NeoForge installer the pack contains, or, when the pack
+// has none (some packs' start scripts download it on their first run), installs the loader the pack names in its
+// manifest.json, its variables.txt (ServerPackCreator's) or its start scripts. CurseForge's pack for players (the zip
+// its big Download button gives: manifest.json, a list of mod IDs to download, and no mods) is refused: a server
+// cannot run from it. CurseForge's own API needs a key that may not be shared.
 import { createHash } from 'node:crypto';
 import { createWriteStream, existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
@@ -22,9 +26,10 @@ import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import yauzl from 'yauzl';
-import type { InstallProgress, ModpackHit, ModpackInfo, ModpackInstallResult, ModpackSearch, ModpackVersion } from '../../shared/types';
+import type { InstallProgress, ModpackHit, ModpackInfo, ModpackInstallResult, ModpackSearch, ModpackVersion, ModpackZip } from '../../shared/types';
 import { AppError } from '../errors';
-import type { FetchFn, ServerInstaller } from '../installer/ServerInstaller';
+import { neoforgeMc } from '../installer/ServerInstaller';
+import type { FetchFn, Loader, ServerInstaller } from '../installer/ServerInstaller';
 import type { SettingsService } from '../settings/SettingsService';
 
 const API = 'https://api.modrinth.com/v2';
@@ -122,6 +127,80 @@ async function eachEntry(file: string, each: (name: string) => string | null | '
     } finally {
         zip.close();
     }
+}
+
+/** CurseForge's manifest.json: in a pack for players, and in some server packs. */
+interface CurseManifest {
+    manifestType?: string;
+    name?: string;
+    version?: string;
+    minecraft?: { version?: string; modLoaders?: Array<{ id?: string; primary?: boolean }> };
+    files?: unknown[];
+}
+
+/** A zip's entry names, and the folder all of them sit in ("" for none; it is left out when unpacking). */
+async function zipNames(zipPath: string): Promise<{ names: string[]; top: string }> {
+    const names: string[] = [];
+    await eachEntry(zipPath, (name) => {
+        names.push(name.replace(/\\/g, '/'));
+        return null;
+    });
+    const firsts = new Set(names.map((n) => n.split('/')[0]));
+    const top = firsts.size === 1 && names.every((n) => n.includes('/')) ? `${[...firsts][0]}/` : '';
+    return { names, top };
+}
+
+/** One small text file in a zip; null when it is not there. */
+async function readEntry(zipPath: string, name: string): Promise<string | null> {
+    let text: string | null = null;
+    await eachEntry(zipPath, (n) => (n.replace(/\\/g, '/') === name ? 'read' : null), (_n, data) => {
+        text = data.toString('utf8');
+    });
+    return text;
+}
+
+function parseManifest(text: string | null): CurseManifest | null {
+    if (!text) return null;
+    try {
+        const m = JSON.parse(text.replace(/^\uFEFF/, '')) as CurseManifest;
+        return m && typeof m === 'object' ? m : null;
+    } catch {
+        return null;
+    }
+}
+
+/** The mod loader a server pack names, for one that does not include its installer: from its manifest.json
+ *  ("forge-47.2.0" for Minecraft 1.20.1), its variables.txt (ServerPackCreator's MINECRAFT_VERSION, MODLOADER,
+ *  MODLOADER_VERSION) or its start scripts (an installer's file name, or NEOFORGE_VERSION=21.1.77). */
+export function packLoader(files: { manifest?: string | null; variables?: string | null; scripts?: string[] }): { loader: Loader; minecraft: string; version: string } | null {
+    const manifest = parseManifest(files.manifest ?? null);
+    const mc = manifest?.minecraft?.version;
+    const loaders = manifest?.minecraft?.modLoaders ?? [];
+    const id = (loaders.find((l) => l.primary) ?? loaders[0])?.id;
+    const fromId = id ? /^(forge|neoforge|fabric)-(.+)$/i.exec(id) : null;
+    if (fromId) {
+        const loader = fromId[1].toLowerCase() as Loader;
+        const minecraft = mc ?? (loader === 'neoforge' ? neoforgeMc(fromId[2]) : null);
+        if (minecraft) return { loader, minecraft, version: fromId[2] };
+    }
+
+    if (files.variables) {
+        const value = (key: string) => new RegExp(`^\\s*${key}\\s*=\\s*"?([^"\\r\\n]+?)"?\\s*$`, 'mi').exec(files.variables ?? '')?.[1];
+        const loader = value('MODLOADER')?.toLowerCase();
+        const minecraft = value('MINECRAFT_VERSION');
+        const version = value('MODLOADER_VERSION');
+        if ((loader === 'forge' || loader === 'neoforge' || loader === 'fabric') && minecraft && version) return { loader, minecraft, version };
+    }
+
+    for (const script of files.scripts ?? []) {
+        const forge = /(?<!neo)forge-(\d+(?:\.\d+)+)-(\d+(?:\.\d+)+)-installer\.jar/i.exec(script);
+        if (forge) return { loader: 'forge', minecraft: forge[1], version: forge[2] };
+        // NeoForge numbers have three parts ("21.1.77"), four from Minecraft 26 on ("26.3.0.12").
+        const neo = /neoforge-(\d+(?:\.\d+){2,3}(?:-beta)?)-installer\.jar/i.exec(script) ?? /NEOFORGE_VERSION\s*=\s*"?(\d+(?:\.\d+){2,3}(?:-beta)?)/i.exec(script);
+        const neoMc = neo ? neoforgeMc(neo[1]) : null;
+        if (neo && neoMc) return { loader: 'neoforge', minecraft: neoMc, version: neo[1] };
+    }
+    return null;
 }
 
 /** A pack goes into the new server's folder, empty until then: that lets a failed install be undone by emptying it. */
@@ -246,22 +325,42 @@ export class ModpackService {
         }
     }
 
+    /** Looks inside a zip chosen to make a server from: is it CurseForge's pack for players rather than a server pack? */
+    async checkZip(zipPath: string): Promise<ModpackZip> {
+        if (!/\.zip$/i.test(zipPath) || !existsSync(zipPath)) throw new AppError('INVALID', 'Choose a .zip file.');
+        const { names, top } = await zipNames(zipPath);
+        // A pack for players has its manifest.json at the top and no mods folder there: its mods are only listed (a
+        // few may come in its overrides folder).
+        if (!names.includes(`${top}manifest.json`) || names.some((n) => n.startsWith(`${top}mods/`) || /^[^/]+\.jar$/i.test(n.slice(top.length)))) {
+            return { path: zipPath, clientPack: null };
+        }
+        const manifest = parseManifest(await readEntry(zipPath, `${top}manifest.json`));
+        if (manifest?.manifestType !== 'minecraftModpack') return { path: zipPath, clientPack: null };
+        return {
+            path: zipPath,
+            clientPack: {
+                name: manifest.name || path.basename(zipPath).replace(/\.zip$/i, ''),
+                version: manifest.version || null,
+                mods: Array.isArray(manifest.files) ? manifest.files.length : 0,
+            },
+        };
+    }
+
     /** Unpacks a server pack zip (CurseForge's, say) into the server's new folder; a zip whose files all sit in one
-     *  folder is unpacked without it. A Forge or NeoForge installer in it is run. */
+     *  folder is unpacked without it. The pack's mod loader is installed: its own Forge or NeoForge installer is run,
+     *  or the loader it names is downloaded. */
     async importZip(serverId: string, zipPath: string): Promise<ModpackInstallResult> {
         const folder = this.folder(serverId);
-        if (!/\.zip$/i.test(zipPath) || !existsSync(zipPath)) throw new AppError('INVALID', 'Choose a .zip file.');
         if (this.running) throw new AppError('BUSY', 'A modpack is already being installed.');
+        const checked = await this.checkZip(zipPath);
+        if (checked.clientPack) {
+            const { name, mods } = checked.clientPack;
+            throw new AppError('INVALID', `This zip is ${name} for players: it only lists its ${mods} mods, so a server cannot run from it. On the pack's CurseForge page, download its Server Files and use that zip.`);
+        }
         await emptyFolder(folder);
         this.running = serverId;
         try {
-            const names: string[] = [];
-            await eachEntry(zipPath, (name) => {
-                names.push(name);
-                return null;
-            });
-            const firsts = new Set(names.map((n) => n.replace(/\\/g, '/').split('/')[0]));
-            const top = firsts.size === 1 && names.every((n) => n.replace(/\\/g, '/').includes('/')) ? `${[...firsts][0]}/` : '';
+            const { top } = await zipNames(zipPath);
             let count = 0;
             this.d.emit({ serverId, done: 0, total: 0 });
             await eachEntry(zipPath, (name) => {
@@ -271,11 +370,7 @@ export class ModpackService {
                 return path.join(folder, ...rel.split('/'));
             });
             console.log(`[modpack] ${serverId}: unpacked ${count} files from ${path.basename(zipPath)}`);
-            const entries = await fs.readdir(folder);
-            const installerJar = entries.find((n) => /^(forge|neoforge)-.+-installer\.jar$/i.test(n));
-            const hasLibraries = entries.includes('libraries');
-            let javaNeeded: number | null = null;
-            if (installerJar && !hasLibraries) javaNeeded = await this.d.installer.runInstallerFile(serverId, installerJar);
+            const javaNeeded = await this.loaderFor(serverId, folder);
             const info: ModpackInfo = { source: 'zip', title: path.basename(zipPath).replace(/\.zip$/i, '') };
             await fs.writeFile(path.join(folder, MODPACK_FILE), `${JSON.stringify(info, null, 2)}\n`);
             return { info, javaNeeded };
@@ -286,6 +381,26 @@ export class ModpackService {
             this.running = null;
             this.d.emit(null);
         }
+    }
+
+    /** Makes sure an unpacked server pack can start: a server program, or the Forge or NeoForge libraries, or else
+     *  the loader installed from its installer or from what the pack names. The Java it needs, when known. */
+    private async loaderFor(serverId: string, folder: string): Promise<number | null> {
+        const entries = await fs.readdir(folder, { withFileTypes: true });
+        const files = entries.filter((e) => e.isFile()).map((e) => e.name);
+        if (entries.some((e) => e.isDirectory() && e.name === 'libraries')) return null;
+        const installerJar = files.find((n) => /^(forge|neoforge)-.+-installer\.jar$/i.test(n));
+        if (installerJar) return this.d.installer.runInstallerFile(serverId, installerJar);
+        if (files.some((n) => /\.jar$/i.test(n))) return null;
+
+        const read = (name: string) => fs.readFile(path.join(folder, name), 'utf8').catch(() => null);
+        const scripts = await Promise.all(files.filter((n) => /\.(bat|cmd|sh|ps1)$/i.test(n)).map(read));
+        const named = packLoader({ manifest: await read('manifest.json'), variables: await read('variables.txt'), scripts: scripts.filter((t): t is string => t !== null) });
+        if (!named) {
+            throw new AppError('INVALID', 'This server pack has no Minecraft server or mod loader in it, and does not say which one it needs. Check that it is the pack\'s Server Files zip.');
+        }
+        console.log(`[modpack] ${serverId}: the pack has no loader installer; installing ${named.loader} ${named.version} for ${named.minecraft}`);
+        return (await this.d.installer.install(serverId, named.loader, named.minecraft, named.version)).javaNeeded;
     }
 
     /** The pack a server was made from (its mcs-relay-modpack.json, which every member gets with the server's files). */

@@ -215,6 +215,13 @@ export interface ModpackInfo {
     url?: string;                       // the pack's version page on Modrinth
 }
 
+/** A zip chosen to make a server from. `clientPack`: it is a CurseForge pack for players (manifest.json, a list of mods
+ *  to download, and no mods), which a server cannot run from. */
+export interface ModpackZip {
+    path: string;
+    clientPack: { name: string; version: string | null; mods: number } | null;
+}
+
 export interface ModpackInstallResult {
     info: ModpackInfo;
     javaNeeded: number | null;

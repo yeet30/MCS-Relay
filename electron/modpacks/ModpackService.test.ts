@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import yazl from 'yazl';
-import { MODPACK_FILE, ModpackService, packPath } from './ModpackService';
+import { MODPACK_FILE, ModpackService, packLoader, packPath } from './ModpackService';
 
 const MOD = Buffer.from('pretend this is a mod');
 const CLIENT_MOD = Buffer.from('a client-only mod');
@@ -193,6 +193,71 @@ describe('ModpackService', () => {
         } finally {
             fs.rmSync(zipPath, { force: true });
         }
+    });
+
+    describe('server pack zips', () => {
+        let zipPath: string;
+        beforeEach(() => {
+            zipPath = path.join(os.tmpdir(), `mcs-zip-${process.pid}-${Math.random().toString(36).slice(2)}.zip`);
+        });
+        afterEach(() => {
+            fs.rmSync(zipPath, { force: true });
+        });
+        const manifest = (loader: string, mc: string, files = 3) => JSON.stringify({
+            manifestType: 'minecraftModpack', name: 'SkyFactory 4', version: '4.2.4',
+            minecraft: { version: mc, modLoaders: [{ id: loader, primary: true }] },
+            files: Array.from({ length: files }, (_, i) => ({ projectID: i, fileID: i, required: true })),
+        });
+
+        test('CurseForge\'s pack for players is recognised, and not unpacked', async () => {
+            fs.writeFileSync(zipPath, await zipOf({ 'manifest.json': manifest('forge-14.23.5.2860', '1.12.2', 202), 'modlist.html': '<ul>', 'overrides/config/a.cfg': 'x', 'overrides/mods/bundled.jar': 'x' }));
+            const { service, install } = setup(mrpack);
+            expect(await service.checkZip(zipPath)).toEqual({ path: zipPath, clientPack: { name: 'SkyFactory 4', version: '4.2.4', mods: 202 } });
+            await expect(service.importZip('srv', zipPath)).rejects.toMatchObject({ code: 'INVALID', message: expect.stringContaining('Server Files') });
+            expect(install).not.toHaveBeenCalled();
+            expect(fs.readdirSync(folder)).toEqual([]);
+        });
+
+        test('a server pack with mods is not taken for the pack for players', async () => {
+            fs.writeFileSync(zipPath, await zipOf({ 'manifest.json': manifest('forge-47.2.0', '1.20.1'), 'mods/a.jar': 'a' }));
+            expect((await setup(mrpack).service.checkZip(zipPath)).clientPack).toBeNull();
+        });
+
+        test('a server pack without its loader installer gets the loader its manifest names', async () => {
+            fs.writeFileSync(zipPath, await zipOf({ 'Pack/manifest.json': manifest('forge-14.23.5.2860', '1.12.2'), 'Pack/mods/a.jar': 'a', 'Pack/ServerStart.bat': 'java -jar forge.jar' }));
+            const { service, install, runInstallerFile } = setup(mrpack);
+            const result = await service.importZip('srv', zipPath);
+            expect(install).toHaveBeenCalledWith('srv', 'forge', '1.12.2', '14.23.5.2860');
+            expect(runInstallerFile).not.toHaveBeenCalled();
+            expect(result.javaNeeded).toBe(21);
+        });
+
+        test('or the one its variables.txt or start script names', async () => {
+            fs.writeFileSync(zipPath, await zipOf({ 'variables.txt': 'MINECRAFT_VERSION=1.21.1\nMODLOADER=NeoForge\nMODLOADER_VERSION=21.1.77\n', 'config/a.toml': 'x' }));
+            const first = setup(mrpack);
+            await first.service.importZip('srv', zipPath);
+            expect(first.install).toHaveBeenCalledWith('srv', 'neoforge', '1.21.1', '21.1.77');
+
+            fs.rmSync(folder, { recursive: true, force: true });
+            fs.mkdirSync(folder);
+            fs.writeFileSync(zipPath, await zipOf({ 'startserver.sh': 'curl -O https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.259/neoforge-21.1.259-installer.jar', 'config/a.toml': 'x' }));
+            const second = setup(mrpack);
+            await second.service.importZip('srv', zipPath);
+            expect(second.install).toHaveBeenCalledWith('srv', 'neoforge', '1.21.1', '21.1.259');
+        });
+
+        test('a pack with no server and no loader named is refused, and the folder emptied', async () => {
+            fs.writeFileSync(zipPath, await zipOf({ 'config/a.toml': 'x', 'README.txt': 'hi' }));
+            await expect(setup(mrpack).service.importZip('srv', zipPath)).rejects.toMatchObject({ code: 'INVALID', message: expect.stringContaining('Server Files') });
+            expect(fs.readdirSync(folder)).toEqual([]);
+        });
+    });
+
+    test('packLoader reads Forge and NeoForge from start scripts without mixing them up', () => {
+        expect(packLoader({ scripts: ['java -jar forge-1.20.1-47.2.0-installer.jar --installServer'] })).toEqual({ loader: 'forge', minecraft: '1.20.1', version: '47.2.0' });
+        expect(packLoader({ scripts: ['set NEOFORGE_VERSION=21.1.77'] })).toEqual({ loader: 'neoforge', minecraft: '1.21.1', version: '21.1.77' });
+        expect(packLoader({ scripts: ['neoforge-26.3.0.12-installer.jar'] })).toEqual({ loader: 'neoforge', minecraft: '26.3', version: '26.3.0.12' });
+        expect(packLoader({ manifest: 'not json', scripts: ['echo hi'] })).toBeNull();
     });
 
     test('a pack note links only to Modrinth', async () => {

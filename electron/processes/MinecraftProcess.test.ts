@@ -131,6 +131,13 @@ describe('buildLaunchArgs', () => {
         const err = catchError(() => MinecraftProcess.resolveLaunch(dir, FLAGS, 'win32', path.join(dir, 'missing', 'java.exe'))) as AppError;
         expect(err.code).toBe('JAVA');
     });
+
+    it('explains a folder holding CurseForge\'s pack for players instead of a server', async () => {
+        await writeFile(path.join(dir, 'manifest.json'), '{"manifestType":"minecraftModpack"}');
+        await mkdir(path.join(dir, 'overrides'));
+        const err = catchError(() => MinecraftProcess.resolveLaunch(dir, FLAGS, 'win32')) as AppError;
+        expect(err.message).toContain('for players');
+    });
 });
 
 describe('chooseServerJar', () => {
@@ -264,6 +271,19 @@ describe('MinecraftProcess.start', () => {
         const err = await expectAppError(started, 'JAVA');
         expect(err.message).toBe('This server needs Java 25, newer than the Java it started with.');
         expect(err.detail?.split('\n')[0]).toBe('needs-java:25');
+    });
+
+    it('says old Forge needs Java 8 when it started on a newer Java', async () => {
+        const h = harness();
+        const started = h.mc.start({ serverPath: dir, javaFlags: FLAGS, readyTimeoutMs: 5000 });
+        await until(() => h.spawn.calls.length === 1);
+        const child = h.spawn.calls[0].child;
+        child.print('java.lang.ClassCastException: class jdk.internal.loader.ClassLoaders$AppClassLoader cannot be cast to class java.net.URLClassLoader\n', 'stderr');
+        await new Promise((r) => setTimeout(r, 20));
+        child.exit(1);
+        const err = await expectAppError(started, 'JAVA');
+        expect(err.message).toContain('needs Java 8');
+        expect(err.detail?.split('\n')[0]).toBe('needs-java:8');
     });
 
     it('rejects with the last 20 output lines when the server exits before "Done ("', async () => {
