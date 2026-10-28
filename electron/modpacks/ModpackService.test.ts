@@ -165,8 +165,16 @@ describe('ModpackService', () => {
     test('a file that does not match its checksum stops the install', async () => {
         const pack = await zipOf({ 'modrinth.index.json': index({ files: [{ path: 'mods/good.jar', hashes: { sha512: hash(CLIENT_MOD, 'sha512') }, env: { server: 'required' }, downloads: ['https://cdn.modrinth.com/data/a/good.jar'] }] }) });
         await expect(setup(pack).service.install('srv', 'ver1')).rejects.toMatchObject({ code: 'CHECKSUM' });
-        expect(fs.existsSync(path.join(folder, 'mods', 'good.jar'))).toBe(false);
-        expect(fs.existsSync(path.join(folder, 'mods', 'good.jar.part'))).toBe(false);
+        // The folder is emptied again, so the install can be tried again.
+        expect(fs.readdirSync(folder)).toEqual([]);
+    });
+
+    test('only a new, empty folder gets a pack, and its files are left alone', async () => {
+        fs.writeFileSync(path.join(folder, 'world.dat'), 'mine');
+        const { service, install } = setup(mrpack);
+        await expect(service.install('srv', 'ver1')).rejects.toMatchObject({ code: 'INVALID' });
+        expect(install).not.toHaveBeenCalled();
+        expect(fs.readdirSync(folder)).toEqual(['world.dat']);
     });
 
     test('imports a server pack zip without its top folder, and runs the Forge installer in it', async () => {

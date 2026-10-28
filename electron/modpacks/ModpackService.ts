@@ -124,6 +124,19 @@ async function eachEntry(file: string, each: (name: string) => string | null | '
     }
 }
 
+/** A pack goes into the new server's folder, empty until then: that lets a failed install be undone by emptying it. */
+async function emptyFolder(folder: string): Promise<void> {
+    if ((await fs.readdir(folder).catch(() => [])).length > 0) {
+        throw new AppError('INVALID', 'A modpack can only be installed into a new, empty server folder.');
+    }
+}
+
+async function clearFolder(folder: string): Promise<void> {
+    for (const name of await fs.readdir(folder).catch(() => [] as string[])) {
+        await fs.rm(path.join(folder, name), { recursive: true, force: true }).catch(() => undefined);
+    }
+}
+
 export class ModpackService {
     private readonly fetchImpl: FetchFn;
     private running: string | null = null;
@@ -169,6 +182,7 @@ export class ModpackService {
     async install(serverId: string, versionId: string): Promise<ModpackInstallResult> {
         const folder = this.folder(serverId);
         if (this.running) throw new AppError('BUSY', 'A modpack is already being installed.');
+        await emptyFolder(folder);
         this.running = serverId;
         const packFile = path.join(folder, '.mcs-relay-modpack.mrpack');
         try {
@@ -220,6 +234,10 @@ export class ModpackService {
             await fs.writeFile(path.join(folder, MODPACK_FILE), `${JSON.stringify(info, null, 2)}\n`);
             console.log(`[modpack] ${serverId}: ${project.title} ${version.version_number} installed (${files.length} files, ${loader} for ${mc})`);
             return { info, javaNeeded: installed.javaNeeded };
+        } catch (err) {
+            // Half a pack is no use: the folder is emptied again, so trying again starts clean.
+            await clearFolder(folder);
+            throw err;
         } finally {
             await fs.rm(packFile, { force: true });
             await fs.rm(`${packFile}.part`, { force: true });
@@ -234,6 +252,7 @@ export class ModpackService {
         const folder = this.folder(serverId);
         if (!/\.zip$/i.test(zipPath) || !existsSync(zipPath)) throw new AppError('INVALID', 'Choose a .zip file.');
         if (this.running) throw new AppError('BUSY', 'A modpack is already being installed.');
+        await emptyFolder(folder);
         this.running = serverId;
         try {
             const names: string[] = [];
@@ -260,6 +279,9 @@ export class ModpackService {
             const info: ModpackInfo = { source: 'zip', title: path.basename(zipPath).replace(/\.zip$/i, '') };
             await fs.writeFile(path.join(folder, MODPACK_FILE), `${JSON.stringify(info, null, 2)}\n`);
             return { info, javaNeeded };
+        } catch (err) {
+            await clearFolder(folder);
+            throw err;
         } finally {
             this.running = null;
             this.d.emit(null);
