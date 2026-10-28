@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp, Terminal } from 'lucide-react';
 import SelectServer from '../select-server';
 import ServerConsole from '../server-console';
 import PlayitggLink from '../playitgg-link';
+import ModpackLink from '../modpack-link';
 import AppCockpit from '../app-cockpit';
 import ProgressCard from '../progress-card';
 import SyncStatusCard from '../sync-status-card';
@@ -84,6 +85,7 @@ export default function GreetingSection() {
                 <div className='starter-section'>
                     <AppCockpit />
                     <SelectServer />
+                    <ModpackLink />
                     <PlayitggLink />
                     <SessionArea />
                 </div>

@@ -1,0 +1,67 @@
+.modpack-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-left: 12px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background-color: var(--panel);
+    color: var(--muted);
+    overflow: hidden;
+
+    svg {
+        flex: none;
+    }
+
+    .modpack-link-text {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        padding: 9px 0;
+        white-space: nowrap;
+    }
+
+    .modpack-link-kind {
+        font-size: 0.72rem;
+        font-weight: 600;
+    }
+
+    b {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: var(--text-2);
+        font-size: 0.88rem;
+    }
+
+    small {
+        font-size: 0.74rem;
+    }
+
+    .modpack-link-hint {
+        padding-right: 12px;
+        white-space: nowrap;
+    }
+
+    button {
+        flex: none;
+        align-self: stretch;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        margin: 0;
+        padding: 0 12px;
+        border: none;
+        border-left: 1px solid var(--line);
+        background-color: var(--panel-2);
+        color: var(--accent);
+        font-size: 0.8rem;
+        cursor: pointer;
+    }
+
+    button:hover {
+        filter: brightness(1.1);
+    }
+}

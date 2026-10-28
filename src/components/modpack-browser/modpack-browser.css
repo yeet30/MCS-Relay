@@ -1,0 +1,203 @@
+.modpack-browser {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 0.85rem;
+
+    .spinner {
+        animation: spin 1s linear infinite;
+    }
+
+    /* The search box shared with the version list grows there; here the list below it does. */
+    .setup-search {
+        flex: none;
+    }
+}
+
+.modpack-list {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 2px;
+    overflow-y: auto;
+    list-style: none;
+}
+
+.modpack-card {
+    border-radius: 11px;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+}
+
+.modpack-card.selected {
+    border-color: rgba(var(--accent-rgb), 0.7);
+    background: rgba(var(--accent-rgb), 0.08);
+}
+
+.modpack-main {
+    width: 100%;
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    padding: 9px 11px;
+    border: none;
+    background: none;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+
+    img,
+    .modpack-icon {
+        flex: none;
+        width: 44px;
+        height: 44px;
+        border-radius: 9px;
+        object-fit: cover;
+    }
+
+    .modpack-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--panel);
+        color: var(--muted);
+    }
+}
+
+.modpack-text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    b {
+        font-size: 0.88rem;
+    }
+
+    small {
+        font-size: 0.74rem;
+        color: var(--muted);
+    }
+
+    .modpack-desc {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        line-height: 1.4;
+    }
+}
+
+.modpack-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 3px;
+
+    span {
+        padding: 1px 7px;
+        border-radius: 999px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        font-size: 0.68rem;
+        color: var(--text-2);
+    }
+}
+
+/* The opened pack: which of its versions, and its page. */
+.modpack-version {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    padding: 0 11px 10px 66px;
+    font-size: 0.8rem;
+    color: var(--muted);
+
+    label {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    select {
+        flex: 1;
+        min-width: 0;
+        padding: 5px 8px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--text);
+        font-size: 0.78rem;
+    }
+
+    .setup-link {
+        margin-left: 0;
+    }
+}
+
+.modpack-more {
+    display: flex;
+    justify-content: center;
+    padding: 4px 0;
+}
+
+/* A server pack zip instead (CurseForge's). */
+.modpack-zip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 11px;
+    border-radius: 10px;
+    border: 1px dashed var(--line);
+    color: var(--muted);
+    font-size: 0.8rem;
+
+    svg {
+        flex: none;
+    }
+
+    .modpack-zip-text {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    b {
+        color: var(--text);
+    }
+
+    .setup-link {
+        flex: none;
+    }
+}
+
+.modpack-zip.selected {
+    border-style: solid;
+    border-color: rgba(var(--accent-rgb), 0.7);
+    background: rgba(var(--accent-rgb), 0.08);
+}
+
+.modpack-zip-clear {
+    flex: none;
+    display: flex;
+    margin-left: auto;
+    padding: 3px;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.modpack-zip-clear:hover {
+    color: var(--text);
+}
