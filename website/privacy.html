@@ -25,13 +25,15 @@
 
     <main class="policy wrap">
         <h1>Privacy policy</h1>
-        <p class="updated">Last updated: 27 October 2026</p>
+        <p class="updated">Last updated: 28 October 2026</p>
 
         <div class="panel">
             <p>
                 <strong>In short:</strong> MCS-Relay has no servers of its own. Everything the app does happens between
                 your PC and Google (and playit.gg, if you turn it on). What it stores is on your PC and in the Google Drive
-                folders of the servers you use. The developer sees your data only in a problem report you choose to send.
+                folders of the servers you use. Your Google data is used only to run the app's features, is never sold,
+                never used for advertising and never used to train AI. The developer sees your data only in a problem
+                report you choose to send.
             </p>
         </div>
 
@@ -42,33 +44,47 @@
             "We" below means the people who make the app.
         </p>
 
-        <h2>What the app uses from your Google account</h2>
-        <p>When you sign in, you allow MCS-Relay to use:</p>
+        <h2 id="data-access">Google user data the app accesses</h2>
+        <p>When you sign in, you allow MCS-Relay to access:</p>
         <div class="table-scroll">
             <table>
                 <thead>
-                    <tr><th>Permission</th><th>What MCS-Relay does with it</th></tr>
+                    <tr><th>Permission</th><th>The data MCS-Relay accesses with it</th></tr>
                 </thead>
                 <tbody>
                     <tr>
                         <td>Your name, email address and profile picture</td>
-                        <td>Shows who is signed in, and tells the other members of a server who is hosting it and who saved each version of the world.</td>
+                        <td>Your Google account's name, email address and profile picture.</td>
                     </tr>
                     <tr>
                         <td>See, edit, create and delete your Google Drive files</td>
                         <td>
-                            Creates the "Minecraft Shared Servers" folder and the server folders in it; uploads and downloads
-                            the files of a server's world; reads the files other members uploaded; shares a server folder
-                            with the people you invite and removes members you remove; puts deleted servers in your Drive
-                            trash; keeps world backups you put in the cloud; and, only when you send a problem report, saves
-                            it in a "MCS-Relay problem reports" folder and shares it with the developer. MCS-Relay only works
-                            with server folders it created or that you joined, and with that reports folder. It does not
-                            open, list or change any other files in your Drive.
+                            Only these files and folders: the "Minecraft Shared Servers" folder MCS-Relay makes in your Drive
+                            and the server folders in it; the server folders you joined; and, if you send a problem report, the
+                            "MCS-Relay problem reports" folder. In them, it accesses the files (the server's world and settings,
+                            and the app's own files in <code>.launcher</code>), their names, sizes, checksums and revisions, and who
+                            the folder is shared with. It does not open, list or change any other files in your Drive.
                         </td>
                     </tr>
                 </tbody>
             </table>
         </div>
+        <p>
+            MCS-Relay does not make aggregated or anonymized data from your Google user data, and does not collect
+            statistics about how you use the app. The app contains no analytics or tracking.
+        </p>
+
+        <h2 id="data-use">How the app uses Google user data</h2>
+        <p>Google user data is used only for these features, which you see and use in the app:</p>
+        <ul class="plain">
+            <li><strong>Your name, email address and picture</strong>: show who is signed in, and tell the other members of a server who is hosting it, who is playing and who saved each version of the world.</li>
+            <li><strong>Your server folders in Drive</strong>: create a server, download its newest world before you host, upload what changed when you stop, keep track of which version each PC has, reserve the server while someone hosts so two people never run it at once, keep the world backups members put in the cloud, invite and remove members (by sharing the folder in Drive), and move a deleted server to your Drive trash.</li>
+            <li><strong>A problem report</strong>, only when you send one: save it in your Drive and share it with the developer.</li>
+        </ul>
+        <p>
+            It is not used for anything else: not for advertising, not to build a profile of you, not for lending or credit
+            decisions, and not to develop, improve or train artificial intelligence or machine learning models.
+        </p>
 
         <h2>What is stored, and where</h2>
         <p><strong>On your PC</strong>, in the app's data folder (<code>%APPDATA%\mcs-relay</code>):</p>
@@ -81,56 +97,63 @@
             <li>Java the app downloaded for a server, if you let it (<code>java</code> in the same folder).</li>
             <li>A log of what the app did (<code>logs</code> in the same folder, at most about 8 MB): server names, folder paths, the names and email addresses of members, and errors. It never holds your password or your Google sign-in. It leaves your PC only inside a problem report you choose to send.</li>
         </ul>
-        <p><strong>In each server folder on your PC</strong>: the world backups you make, in <code>mcs-relay-backups</code>. They are never synced.</p>
+        <p><strong>In each server folder on your PC</strong>: the server's files, and the world backups you make, in <code>mcs-relay-backups</code>. Backups are never synced.</p>
         <p><strong>In Google Drive</strong>, inside each server folder (stored by Google in the Drive of whoever owns each file):</p>
         <ul class="plain">
             <li>The server's files: the world, its settings and anything else in the server folder that is not on its ignore list.</li>
             <li>A small <code>.launcher</code> folder with the app's own files: who is hosting right now (name and email), the players online, the server's playit.gg addresses, the list of the world's files, and the name and email of the member who saved each version.</li>
             <li>The world backups members put in the cloud, in <code>.launcher/backups</code>. They count against the Drive storage of whoever uploaded them.</li>
         </ul>
-        <p><strong>In a problem report</strong>, only when you send one: what you wrote, a few lines about the app and your PC (versions, Windows version, what the app was doing) and, if you leave it ticked, the end of the log above. It is saved as a text file in a "MCS-Relay problem reports" folder in your Drive and shared, read only, with the developer, who gets an email about it with your name and email address. Delete the file to take it back. You can also save a report as a file instead and send it however you like.</p>
+        <p><strong>In a problem report</strong>, only when you send one: what you wrote, a few lines about the app and your PC (versions, Windows version, what the app was doing) and, if you leave it ticked, the end of the log above. It is saved as a text file in a "MCS-Relay problem reports" folder in your Drive and shared, read only, with the developer, who gets an email about it with your name and email address. You can also save a report as a file instead and send it however you like.</p>
         <p>Apart from a problem report you send, we have no copy of any of this. There is no MCS-Relay account and no MCS-Relay server.</p>
 
-        <h2>Who can see it</h2>
+        <h2 id="data-transfer">Who Google user data is shared with</h2>
+        <p>Google user data is shared only with these parties, and only for the features above:</p>
         <ul class="plain">
-            <li><strong>The members of a server</strong> you are in, through Google Drive sharing: the server's files and its cloud backups, and your name and email address as a member and as the host or author of a version.</li>
-            <li><strong>The developer</strong>, only for a problem report you send, as described above. It is used only to find and fix the problem.</li>
+            <li><strong>The members of a server</strong> you are in, through Google Drive sharing that you set up by inviting them or joining: the server's files and its cloud backups, and your name and email address as a member and as the host or author of a version.</li>
+            <li><strong>The developer</strong>, only for a problem report you choose to send: what is in it, and your name and email address. It is used only to find and fix the problem.</li>
             <li><strong>Google</strong>, which provides Google Drive and Google sign-in, under <a href="https://policies.google.com/privacy">Google's privacy policy</a>.</li>
+        </ul>
+        <p>
+            Google user data is never sold, never shared with advertisers, data brokers or information resellers, and never
+            transferred to AI or machine learning services.
+        </p>
+        <p>The app also talks to these services. None of them receives any Google user data:</p>
+        <ul class="plain">
             <li><strong>playit.gg</strong>, only if you use it, under <a href="https://playit.gg/privacy-policy">playit.gg's privacy policy</a>. When you link it, you sign in to playit.gg (or create an account) on playit.gg's own website: MCS-Relay never sees your playit.gg password, and your Google account is not shared with playit.gg. MCS-Relay then uses playit.gg's service with this PC's agent key to make your Minecraft tunnel and read its address, and runs playit.gg's agent while you host, so players reach your server through playit.gg, which sees their connections. If you chose a playit.gg program yourself instead, MCS-Relay only starts it.</li>
             <li><strong>GitHub</strong>, where the app checks for new versions and downloads them, and from where it downloads playit.gg's agent and Java when you use those. Like any download, this shows GitHub your IP address.</li>
             <li><strong>Mojang, PaperMC, FabricMC and Adoptium</strong>, only when you download a server program or Java in the app: it fetches the list of versions and the download from their official services, which, like any download, see your IP address. Java is Eclipse Temurin from the Adoptium project. When you add a player to a server's whitelist, their Minecraft name is looked up at Mojang to find their account, as Minecraft itself does.</li>
         </ul>
-        <p>
-            We do not sell your data, use it for advertising, or collect statistics about how you use the app. The app
-            contains no analytics or tracking.
-        </p>
 
-        <h2>Google API Services User Data Policy</h2>
+        <h2 id="data-protection">How Google user data is protected</h2>
+        <ul class="plain">
+            <li><strong>No servers in between</strong>: the app talks to Google straight from your PC, so your Google user data is never stored on or sent through any server of ours.</li>
+            <li><strong>Encrypted sign-in</strong>: your Google sign-in tokens (and the playit.gg key) are encrypted on your PC with Windows' own data protection, so only your Windows account can read them. Signing out removes them.</li>
+            <li><strong>Encrypted connections</strong>: every connection to Google, playit.gg and the download services uses HTTPS.</li>
+            <li><strong>Only its own folders</strong>: the app works only in the server folders and the reports folder listed above, and server folders are shared only with the people their owner invites.</li>
+            <li><strong>Nothing secret in the log</strong>: the app's log leaves sign-in tokens and keys out.</li>
+            <li><strong>Checked downloads</strong>: everything the app downloads (server programs, playit.gg's agent, Java) is checked against the checksum its official source publishes before it is used.</li>
+            <li><strong>Open source</strong>: the app's source code is public, so anyone can check what it does.</li>
+        </ul>
+
+        <h2 id="data-retention">How long data is kept, and how to delete it</h2>
+        <ul class="plain">
+            <li><strong>Sign-in</strong>: kept on your PC until you sign out or take the app's access back. <strong>Sign out</strong> in the app's menu removes it from this PC; <strong>taking the access back</strong> in your <a href="https://myaccount.google.com/connections">Google Account</a> (third-party apps and services) stops the app from using your account anywhere.</li>
+            <li><strong>Server files and cloud backups in Drive</strong>: kept in the Drives of their owners for as long as the server exists, under your control as any Drive file is. <strong>Delete a server</strong> you own in Settings &gt; Servers: its folder goes to your Drive trash, and Google empties the trash after 30 days. <strong>Leave a server</strong> you joined to remove your access to it. <strong>Delete a cloud backup</strong> in the app's Backups window.</li>
+            <li><strong>Data on your PC</strong> (settings, file lists, backups, the log): kept until you delete it. The log keeps at most about 8 MB and removes its oldest part as it grows. <strong>Delete a backup</strong> in the app's Backups window, or the <code>mcs-relay-backups</code> folder in a server folder to remove them all. <strong>Uninstall MCS-Relay</strong> and delete the data folder above to remove everything the app kept on your PC.</li>
+            <li><strong>Problem reports</strong>: kept in your Drive until you delete the file, which also takes the developer's access away. The developer keeps what a report contains only as long as it takes to find and fix the problem.</li>
+            <li><strong>playit.gg</strong>: <strong>Unlink playit.gg</strong> in Settings &gt; Server settings: its key is removed from this PC and its tunnel deleted. The agent stays in your playit.gg account until you delete it there.</li>
+        </ul>
+
+        <h2 id="limited-use">Google API Services User Data Policy</h2>
         <p>
             MCS-Relay's use and transfer to any other app of information received from Google APIs will adhere to the
             <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
             including the Limited Use requirements. Data from your Google account is used only to provide the features
             described above, is never transferred except as those features need (sharing a server with its members, and a
-            problem report you choose to send to the developer), and is never used for advertising.
-        </p>
-
-        <h2>Removing your data</h2>
-        <ul class="plain">
-            <li><strong>Sign out</strong> in the app's menu: your sign-in is removed from this PC.</li>
-            <li><strong>Take the app's access back</strong> in your <a href="https://myaccount.google.com/connections">Google Account</a> under third-party apps and services.</li>
-            <li><strong>Delete a server</strong> you own in Settings &gt; Servers: its folder goes to your Drive trash, and Google empties the trash after 30 days. <strong>Leave a server</strong> you joined to remove your access to it.</li>
-            <li><strong>Delete a backup</strong> in the app's Backups window, and the <code>mcs-relay-backups</code> folder in a server folder to remove them all from this PC.</li>
-            <li><strong>Unlink playit.gg</strong> in Settings &gt; Server settings: its key is removed from this PC and its tunnel deleted. The agent stays in your playit.gg account until you delete it there.</li>
-            <li><strong>Delete a problem report</strong> from the "MCS-Relay problem reports" folder in your Drive: the developer loses access to it.</li>
-            <li><strong>Uninstall MCS-Relay</strong> and delete the data folder above to remove everything it kept on your PC.</li>
-        </ul>
-
-        <h2>Security</h2>
-        <p>
-            Sign-in tokens and the playit.gg key are encrypted on your PC, and every connection to Google and playit.gg uses
-            HTTPS. Everything the app downloads (server programs, playit.gg's agent, Java) is checked against the checksum
-            its official source publishes before it is used. The app's source code is
-            public, so anyone can check what it does.
+            problem report you choose to send to the developer), and is never used for advertising. MCS-Relay does not use
+            Google user data, raw or derived, to develop, improve or train artificial intelligence or machine learning
+            models, and does not transfer it to AI or machine learning services.
         </p>
 
         <h2>Children</h2>
