@@ -127,7 +127,8 @@ const minecraft = new MinecraftProcess({
 const playitProcess = new PlayitProcess();
 const playitLink = new PlayitLink({
     dir: path.join(userData, 'playit'),
-    agentName: `MCS-Relay (${os.hostname()})`,
+    // playit.gg allows at most 20 characters.
+    agentName: `MCS-Relay ${os.hostname()}`.slice(0, 20).trim(),
     openExternal: (url) => shell.openExternal(url),
     safeStorage,
     emit: (state) => events.emit('playit:state', state),

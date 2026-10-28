@@ -393,7 +393,7 @@ export class PlayitLink {
             // Also repairs a tunnel made before MCS-Relay set the agent config (it had no local_port).
             if (tunnelLocalPort(tunnel) !== port) {
                 console.log(`[playit] pointing the tunnel at port ${port} (was ${tunnelLocalPort(tunnel) ?? 'not set'})`);
-                await api.configureTunnel(tunnel.id, port);
+                await api.configureTunnel(tunnel.id, agentId, port);
             }
             if (!tunnel.user_enabled) await api.enableTunnel(tunnel.id);
             if (!tunnelAddress(tunnel)) tunnel = await this.waitForAddress(api, tunnel.id, signal);

@@ -3,9 +3,10 @@
 // open-source agent (github.com/playit-cloud/playit-agent, packages/api_client/src/api.rs). auto-mcs, another
 // Minecraft server manager, makes the same tunnel calls (github.com/macarooni-man/auto-mcs, source/core/tools/playit.py).
 // Every call is a POST with a JSON body; the answer is {status: "success"|"fail"|"error", data}.
-// Tunnels use the "v1" calls: playit's 1.0 agent sends a tunnel's connections to the local_ip and local_port of the
-// tunnel's agent config, which only those calls set (a tunnel made with the older /tunnels/create has none, and the
-// agent then drops its connections).
+// playit's 1.0 agent sends a tunnel's connections to the local_ip and local_port of the tunnel's agent config.
+// Tunnels are made with /tunnels/create, which fills that config in (playit.gg answers the v1 create with "failed to
+// parse body" for the request its own client describes), changed with /v1/tunnels/config (or /tunnels/update when
+// playit.gg refuses that), and read with /v1/tunnels/list, which shows the agent config.
 import { AppError } from '../errors';
 
 export const PLAYIT_API = 'https://api.playit.gg';
@@ -118,23 +119,30 @@ export class PlayitApi {
 
     /** A Minecraft Java tunnel to this PC's port; its id. */
     async createTunnel(agentId: string, name: string, localPort: number): Promise<string> {
-        const created = await this.call<{ id: string }>('/v1/tunnels/create', {
-            ports: { type: 'tunnel-type', details: 'minecraft-java' },
-            origin: { type: 'agent', data: { agent_id: agentId, config: localConfig(localPort) } },
+        const created = await this.call<{ id: string }>('/tunnels/create', {
+            name,
+            tunnel_type: 'minecraft-java',
+            port_type: 'tcp',
+            port_count: 1,
+            origin: { type: 'agent', data: { agent_id: agentId, local_ip: '127.0.0.1', local_port: localPort } },
             enabled: true,
             alloc: null,
-            name,
             firewall_id: null,
+            proxy_protocol: null,
         });
         return created.id;
     }
 
     /** Points the tunnel at another port on this PC. */
-    async configureTunnel(tunnelId: string, localPort: number): Promise<void> {
+    async configureTunnel(tunnelId: string, agentId: string, localPort: number): Promise<void> {
         try {
             await this.call('/v1/tunnels/config', { tunnel_id: tunnelId, new_agent_id: null, new_config: localConfig(localPort) });
         } catch (err) {
-            if (!(err instanceof PlayitRefusal) || err.reason !== 'NothingToUpdate') throw err;
+            if (!(err instanceof PlayitRefusal)) throw err;
+            if (err.reason === 'NothingToUpdate') return;
+            // The older call, as for creating; it also sets the agent config.
+            console.warn(`[playit] /v1/tunnels/config refused (${err.reason}); using /tunnels/update`);
+            await this.call('/tunnels/update', { tunnel_id: tunnelId, local_ip: '127.0.0.1', local_port: localPort, agent_id: agentId, enabled: true });
         }
     }
 

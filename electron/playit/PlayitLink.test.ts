@@ -24,7 +24,7 @@ const ok = (data: unknown) => new Response(JSON.stringify({ status: 'success', d
 const fail = (data: unknown) => new Response(JSON.stringify({ status: 'fail', data }));
 
 /** playit.gg in memory: the claim flow, the agent's run data and its tunnels. */
-function fakePlayit(o: { approveAfter?: number; reject?: boolean; accountStatus?: string; agentBytes?: Buffer; unseenFor?: number } = {}) {
+function fakePlayit(o: { approveAfter?: number; reject?: boolean; accountStatus?: string; agentBytes?: Buffer; unseenFor?: number; refuseV1Config?: boolean } = {}) {
     let unseen = o.unseenFor ?? 0;
     let accountStatus = o.accountStatus ?? 'ready';
     let revoked = false;
@@ -59,23 +59,36 @@ function fakePlayit(o: { approveAfter?: number; reject?: boolean; accountStatus?
                     ? { ...t, offline_reasons: null, connect_addresses: [{ type: 'addr4', value: { address: '147.185.221.1:41000' } }, { type: 'auto', value: { address: `t${t.id}.joinmc.link` } }] }
                     : t));
                 return ok({ tunnels });
-            case '/v1/tunnels/create': {
+            // What the real playit.gg answers for the v1 create its own client describes.
+            case '/v1/tunnels/create':
+                return new Response(JSON.stringify({ status: 'error', data: { type: 'validation', message: 'failed to parse body' } }));
+            case '/tunnels/create': {
                 // An agent playit.gg has not registered yet.
                 if (unseen > 0) {
                     unseen -= 1;
                     return fail('AgentVersionTooOld');
                 }
                 created += 1;
-                const origin = body.origin as { type: string; data: { agent_id: string; config: { fields: Array<{ name: string; value: string }> } } };
-                const ports = body.ports as { type: string; details: string };
+                // The older create fills in the agent config the 1.0 agent reads.
+                const origin = body.origin as { type: string; data: { agent_id: string; local_ip: string; local_port: number } };
                 tunnels.push({
-                    id: String(created), name: body.name as string, tunnel_type: ports.details, user_enabled: true,
+                    id: String(created), name: body.name as string, tunnel_type: body.tunnel_type as string, user_enabled: true,
                     offline_reasons: ['PublicAllocationPending'], connect_addresses: [],
-                    origin: { type: 'agent', details: { agent_id: origin.data.agent_id, config_data: origin.data.config } },
+                    origin: { type: 'agent', details: { agent_id: origin.data.agent_id, config_data: { fields: [
+                        { name: 'local_ip', value: origin.data.local_ip }, { name: 'local_port', value: String(origin.data.local_port) },
+                    ] } } },
                 });
                 return ok({ id: String(created) });
             }
+            case '/tunnels/update':
+                tunnels = tunnels.map((t) => (t.id === body.tunnel_id
+                    ? { ...t, origin: { type: 'agent', details: { agent_id: 'agent-1', config_data: { fields: [
+                        { name: 'local_ip', value: '127.0.0.1' }, { name: 'local_port', value: String(body.local_port) },
+                    ] } } } }
+                    : t));
+                return ok(null);
             case '/v1/tunnels/config': {
+                if (o.refuseV1Config) return new Response(JSON.stringify({ status: 'error', data: { type: 'validation', message: 'failed to parse body' } }));
                 const config = body.new_config as { fields: Array<{ name: string; value: string }> };
                 tunnels = tunnels.map((t) => (t.id === body.tunnel_id
                     ? { ...t, origin: { type: 'agent', details: { agent_id: 'agent-1', config_data: config } } }
@@ -154,7 +167,7 @@ describe('PlayitLink.link', () => {
         // playit.gg's page waits for the approved agent to connect, and makes no tunnel for an agent it has not seen
         // run: the agent runs first, the tunnel comes after, then the agent stops until a server is hosted.
         expect(t.agentProcess.run).toHaveBeenCalledWith(path.join(t.folder, 'playit-0.16.2.exe'), agentArgs(SECRET), expect.any(Number), expect.anything());
-        const created = t.playit.calls.findIndex((c) => c.route === '/v1/tunnels/create');
+        const created = t.playit.calls.findIndex((c) => c.route === '/tunnels/create');
         expect(created).toBeGreaterThan(-1);
         expect(t.agentProcess.run.mock.invocationCallOrder[0]).toBeLessThan(t.agentProcess.stop.mock.invocationCallOrder[0]);
         expect(t.agentProcess.isRunning()).toBe(false);
@@ -177,7 +190,7 @@ describe('PlayitLink.link', () => {
         await t.link.link();
         expect(t.link.getState()).toMatchObject({ linked: true, address: null, error: null });
         expect(agent.stop).toHaveBeenCalled();
-        expect(t.playit.routes()).not.toContain('/v1/tunnels/create');
+        expect(t.playit.routes()).not.toContain('/tunnels/create');
     });
 
     it('does not run a second agent while one is running for a hosted server', async () => {
@@ -250,7 +263,7 @@ describe('PlayitLink after linking', () => {
         const t = setup(fakePlayit({ unseenFor: 2 }));
         await t.link.link();
         expect(t.link.getState().address).toBe('t1.joinmc.link');
-        expect(t.playit.routes().filter((r) => r === '/v1/tunnels/create')).toHaveLength(3);
+        expect(t.playit.routes().filter((r) => r === '/tunnels/create')).toHaveLength(3);
     });
 
     it('repairs a tunnel made without an agent config, so playit\'s agent knows where to send players', async () => {
@@ -261,6 +274,14 @@ describe('PlayitLink after linking', () => {
         await t.link.openTunnel(25565);
         expect(t.playit.routes()).toContain('/v1/tunnels/config');
         expect(tunnelLocalPort(t.playit.tunnels()[0])).toBe(25565);
+    });
+
+    it('points the tunnel elsewhere with the older call when playit.gg refuses the v1 one', async () => {
+        const t = setup(fakePlayit({ refuseV1Config: true }));
+        await t.link.link();
+        await t.link.openTunnel(25570);
+        expect(t.playit.routes()).toContain('/tunnels/update');
+        expect(tunnelLocalPort(t.playit.tunnels()[0])).toBe(25570);
     });
 
     it('makes a new tunnel when its tunnel was deleted on playit.gg', async () => {
@@ -336,6 +357,14 @@ describe('PlayitRunner', () => {
         const p = proc();
         await expect(new PlayitRunner(link, p).start({ serverPath: '', settings: { playitggPath: '' }, timeoutMs: 1000 })).rejects.toThrow('no tunnel');
         expect(p.stop).toHaveBeenCalled();
+    });
+
+    it('without a link, refuses MCS-Relay\'s own downloaded agent as a program chosen by hand', async () => {
+        const p = proc();
+        const runner = new PlayitRunner({ isLinked: () => false, prepare: vi.fn(), openTunnel: vi.fn() }, p);
+        const own = 'C:\\Users\\Sedat\\AppData\\Roaming\\mcs-relay\\playit\\playit-1.0.10.exe';
+        await expect(runner.start({ serverPath: '', settings: { playitggPath: own }, timeoutMs: 1000 })).rejects.toThrow(/Link playit\.gg/);
+        expect(p.start).not.toHaveBeenCalled();
     });
 
     it('without a link, starts the program chosen by hand', async () => {
