@@ -418,6 +418,7 @@ function createWindow(): void {
         console.warn(`[main] Windows is ending the session (phase ${session.getState().phase})`);
         quitAllowed = true;
     });
+    if (process.platform === 'win32') win.setAppDetails({ appId: WINDOW_APP_ID });
     applyWindowIcon();
     // Links never open inside the app; https links open in the browser.
     win.webContents.setWindowOpenHandler(({ url }) => {
@@ -455,39 +456,20 @@ function applyLogoState(state: LogoState): void {
     if (state === logoState) return;
     logoState = state;
     applyWindowIcon();
-    refreshTaskbarButton();
     tray?.setImage(nativeImage.createFromPath(stateIcon(state, 'png')));
     tray?.setToolTip(LOGO_TOOLTIPS[state]);
     updateTrayMenu();
 }
 
 /** The installed app runs under the app id of its Start menu shortcut (notifications need that), and Windows draws a
- *  taskbar button with that id using the shortcut's icon, whatever icon the window sets. So the window gets an id
- *  of its own, with the state icon as its taskbar icon (a real file: the shell cannot read inside app.asar), and a
- *  relaunch command, so pinning it still starts MCS-Relay. */
+ *  taskbar button with that id using the shortcut's icon, whatever icon the window sets. So the window gets an id of
+ *  its own, and no relaunch icon: Windows then draws the button with the window's icon, and redraws it the moment the
+ *  icon changes (a relaunch icon was read only when the button was made, so a new state showed only after the
+ *  window had been hidden and shown again). */
 const WINDOW_APP_ID = 'com.yeet.mcsrelay.window';
 
 function applyWindowIcon(): void {
-    if (!win) return;
-    win.setIcon(nativeImage.createFromPath(stateIcon(logoState, 'ico')));
-    if (process.platform !== 'win32') return;
-    const folder = app.isPackaged ? path.join(process.resourcesPath, 'public', 'state') : path.join(process.env.APP_ROOT ?? '', 'public', 'state');
-    win.setAppDetails({
-        appId: WINDOW_APP_ID,
-        appIconPath: path.join(folder, `${logoState}.ico`),
-        appIconIndex: 0,
-        relaunchCommand: `"${process.execPath}"`,
-        relaunchDisplayName: 'MCS-Relay',
-    });
-}
-
-/** Windows reads the taskbar icon (appIconPath above) only when the window's taskbar button is made, so a new state
- *  showed only after the window was hidden and shown again. Taking the button off the taskbar and putting it back
- *  makes Windows read it now. A window hidden in the tray gets its button back, with the right icon, when shown. */
-function refreshTaskbarButton(): void {
-    if (!win || process.platform !== 'win32' || !win.isVisible()) return;
-    win.setSkipTaskbar(true);
-    win.setSkipTaskbar(false);
+    win?.setIcon(nativeImage.createFromPath(stateIcon(logoState, 'ico')));
 }
 
 const PHASE_LABELS: Partial<Record<SessionPhase, string>> = {
