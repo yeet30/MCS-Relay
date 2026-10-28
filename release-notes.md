@@ -1,9 +1,9 @@
-## MCS-Relay 1.1.1
+## MCS-Relay 1.1.2
+
+### New
+- **Minimizing goes to the taskbar** now. To hide MCS-Relay in the tray instead, as before, turn on **Minimize to the tray** in Preferences.
 
 ### Fixes
-- **playit.gg**: starting a server with playit.gg linked no longer fails with "playit.gg refused this (failed to parse body)". If it did for you, just start again after updating; there is no need to link playit.gg again.
-- The playit.gg agent now gets its name ("MCS-Relay" and your PC's name) on playit.gg.
-- Choosing MCS-Relay's own copy of playit.gg as "your own playit.gg program" now tells you to link playit.gg instead of waiting a minute and failing.
-
-### Good to know
-- On some Windows 11 PCs a "Location is turned off" notice can appear when MCS-Relay starts. MCS-Relay never asks for your location: Windows counts some network checks of the browser engine inside the app (also used by Edge and Chrome) as location use. You can close the notice.
+- **The taskbar icon** changes the moment someone starts or stops hosting, instead of only after the window was hidden and shown again.
+- **The whitelist stays off**: Minecraft 26.x turns the whitelist on for a new server when server.properties does not mention it, so nobody could join. Servers downloaded in MCS-Relay now start with the whitelist off, and saving server.properties writes the settings exactly as the tab shows them.
+- **PvP and the Nether** are game rules in Minecraft 26.x, no longer server.properties settings, so their switches only show for servers whose server.properties still has them.
