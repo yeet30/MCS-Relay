@@ -23,6 +23,14 @@ function shortCount(n: number): string {
 const loaderName = (loader: string) => (loader === 'fabric' || loader === 'forge' || loader === 'neoforge' ? kindName(loader) : loader);
 const fileName = (file: string) => file.split(/[\\/]/).pop() ?? file;
 
+/** CurseForge's own modpack search, in the browser (its API needs a key MCS-Relay does not have yet): the user
+ *  downloads the pack's server pack there and uses its zip here. */
+function searchCurseForge(query: string) {
+    const params = new URLSearchParams({ page: '1', pageSize: '20', sortBy: 'relevancy', class: 'modpacks' });
+    if (query) params.set('search', query);
+    void invoke('app:openExternal', `https://www.curseforge.com/minecraft/search?${params}`);
+}
+
 /** Modrinth's modpacks that run on a server (most downloaded first, or matching the search), and a way to use a
  *  server pack zip instead (CurseForge's: its own API needs a key MCS-Relay may not share). */
 export default function ModpackBrowser({ value, onChange }: { value: PackChoice | null; onChange: (choice: PackChoice | null) => void }) {
@@ -85,7 +93,14 @@ export default function ModpackBrowser({ value, onChange }: { value: PackChoice 
             </span>
             <ul className='modpack-list' aria-label='Modpacks'>
                 {error && <li className='setup-note'>{error}</li>}
-                {!error && !loading && hits.length === 0 && <li className='setup-note'>No modpack matches.</li>}
+                {!error && !loading && hits.length === 0 && (
+                    <li className='setup-note'>
+                        No Modrinth modpack matches.
+                        <button className='setup-link' onClick={() => searchCurseForge(query.trim())}>
+                            Search CurseForge <ExternalLink size={11} />
+                        </button>
+                    </li>
+                )}
                 {hits.map((hit) => {
                     const selected = value?.kind === 'modrinth' && value.hit.id === hit.id;
                     const list = versions[hit.id];
@@ -156,7 +171,10 @@ export default function ModpackBrowser({ value, onChange }: { value: PackChoice 
                     )
                     : (
                         <>
-                            <span className='modpack-zip-text'>Downloaded a server pack from CurseForge?</span>
+                            <span className='modpack-zip-text'>Not on Modrinth? Get its server pack from CurseForge.</span>
+                            <button className='setup-link' onClick={() => searchCurseForge(query.trim())}>
+                                Search CurseForge <ExternalLink size={11} />
+                            </button>
                             <button className='setup-link' onClick={() => void pickZip()}>Use its zip</button>
                         </>
                     )}
