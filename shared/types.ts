@@ -153,7 +153,7 @@ export interface BackupList {
 }
 
 /** The server programs MCS-Relay can download (see electron/installer/ServerInstaller.ts). */
-export type ServerKind = 'vanilla' | 'paper' | 'fabric';
+export type ServerKind = 'vanilla' | 'paper' | 'fabric' | 'forge' | 'neoforge';
 
 export interface InstallableVersion {
     id: string;                         // "1.21.4"
@@ -168,6 +168,56 @@ export interface ServerFolderInfo {
 export interface InstallResult {
     file: string;                       // the jar now in the folder
     javaNeeded: number | null;          // the Java this Minecraft version needs
+}
+
+/* ------------------------------------------------------------------ modpacks */
+
+/** A modpack in Modrinth's search. */
+export interface ModpackHit {
+    id: string;
+    slug: string;
+    title: string;
+    description: string;
+    iconUrl: string | null;
+    downloads: number;
+    author: string;
+    loaders: string[];                  // "fabric", "forge", "neoforge"
+    gameVersions: string[];             // oldest first
+}
+
+export interface ModpackSearch {
+    hits: ModpackHit[];
+    total: number;
+}
+
+/** One version of a modpack MCS-Relay can install. */
+export interface ModpackVersion {
+    id: string;
+    name: string;
+    versionNumber: string;
+    gameVersions: string[];
+    loaders: string[];
+    type: 'release' | 'beta' | 'alpha';
+    published: string;
+    size: number;                       // bytes of the pack file (its mods come on top)
+}
+
+/** The pack a server was made from, in its folder's mcs-relay-modpack.json: members install the same one to play. */
+export interface ModpackInfo {
+    source: 'modrinth' | 'zip';
+    title: string;
+    projectId?: string;
+    slug?: string;
+    versionId?: string;
+    versionNumber?: string;
+    minecraft?: string;
+    loader?: string;
+    url?: string;                       // the pack's version page on Modrinth
+}
+
+export interface ModpackInstallResult {
+    info: ModpackInfo;
+    javaNeeded: number | null;
 }
 
 /** A server's server.properties on this PC: whether it exists yet (Minecraft makes it on the first start), and its

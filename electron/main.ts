@@ -26,6 +26,7 @@ import { MinecraftProcess } from './processes/MinecraftProcess';
 import { PlayitLink } from './playit/PlayitLink';
 import { JavaInstaller } from './installer/JavaInstaller';
 import { ServerProperties } from './servers/ServerProperties';
+import { ModpackService } from './modpacks/ModpackService';
 import { Whitelist } from './servers/Whitelist';
 import { PlayitRunner } from './playit/PlayitRunner';
 import { PlayitProcess } from './processes/PlayitProcess';
@@ -176,7 +177,9 @@ setInterval(() => {
     void backups.autoBackup(state.serverId).catch((err: unknown) => console.warn('[backups] the automatic backup failed:', err));
 }, 30_000);
 
-const installer = new ServerInstaller({
+const installer: ServerInstaller = new ServerInstaller({
+    // Forge and NeoForge installers need a Java new enough before the server exists: downloaded like any server's Java.
+    provideJava: async (serverId, major) => (await java.install(serverId, major)).javaPath,
     settings, appVersion: app.getVersion(),
     isBusy: (serverId) => session.isBusy() && session.getState().serverId === serverId,
     emit: (progress) => events.emit('installer:progress', progress),
@@ -189,6 +192,11 @@ const java = new JavaInstaller({
 });
 
 const properties = new ServerProperties({ settings });
+// Modpacks from Modrinth, and server pack zips; progress shows like a server download's.
+const modpacks = new ModpackService({
+    settings, installer, appVersion: app.getVersion(),
+    emit: (progress) => events.emit('installer:progress', progress),
+});
 const whitelist = new Whitelist({ settings, appVersion: app.getVersion() });
 
 const reports = new ReportService({
@@ -571,7 +579,7 @@ if (!app.requestSingleInstanceLock()) {
     void app.whenReady().then(async () => {
         appData.migrateLegacy();
         registerHandlers(createHandle(ipcMain, isTrustedUrl), {
-            auth, servers, session, settings, sync, transfers, changes, dialogs, report: reports, backups, installer, java, properties, whitelist, playit: playitLink,
+            auth, servers, session, settings, sync, transfers, changes, dialogs, report: reports, backups, installer, java, modpacks, properties, whitelist, playit: playitLink,
             app: {
                 quitResponse, openExternal: (url) => shell.openExternal(url), setLogoState: applyLogoState,
                 updateState: () => updates.get(), checkForUpdates: () => updates.check(), installUpdate,

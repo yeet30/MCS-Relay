@@ -3,8 +3,13 @@
 //   Paper:   PaperMC's download service (fill.papermc.io), the newest stable build, checked with its sha256;
 //   Fabric:  Fabric's meta service, the ready-made server launcher for the newest stable loader (it fetches the
 //            vanilla server itself on its first start).
+//   Forge / NeoForge: their official installers from maven.minecraftforge.net / maven.neoforged.net (Forge's
+//            recommended build, else its latest; NeoForge's newest release, else its newest beta), checked with their
+//            sha1, then run with "--installServer" by the Java the version needs (downloaded first when this PC has
+//            none new enough). The installer fetches Minecraft and the libraries itself; the app then starts the server
+//            through the args file it writes (MinecraftProcess finds it).
 // Nothing is hosted or passed on by MCS-Relay: each PC downloads from those services directly.
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
@@ -20,12 +25,25 @@ import type { SettingsService } from '../settings/SettingsService';
 const MOJANG_MANIFEST = 'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json';
 const PAPER = 'https://fill.papermc.io/v3/projects/paper';
 const FABRIC = 'https://meta.fabricmc.net/v2';
+const FORGE_PROMOS = 'https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json';
+const FORGE_MAVEN = 'https://maven.minecraftforge.net/net/minecraftforge/forge';
+const NEOFORGE_LIST = 'https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge';
+const NEOFORGE_MAVEN = 'https://maven.neoforged.net/releases/net/neoforged/neoforge';
+/** Forge installers before this put the version in odd places; 1.12.2 is the oldest one modpacks still use. */
+const OLDEST_FORGE = '1.12';
+/** How long a Forge or NeoForge installer may take (it downloads Minecraft and its libraries). */
+const INSTALLER_TIMEOUT_MS = 15 * 60_000;
 /** The oldest version Mojang offers a server download for: 1.0 to 1.2.4 have none. */
 const FIRST_WITH_SERVER = '1.2.5';
 const PROGRESS_MS = 250;
 
 export type FetchFn = (url: string, init?: { headers?: Record<string, string>; signal?: AbortSignal }) => Promise<Response>;
 export type ExecFn = (file: string, args: string[]) => Promise<{ stdout: string; stderr: string }>;
+/** Runs a program in a folder to the end: its exit code and the end of its output. */
+export type RunFn = (file: string, args: string[], cwd: string, timeoutMs: number) => Promise<{ code: number | null; output: string }>;
+
+/** The mod loaders a server can be installed with (a modpack names one of them). */
+export type Loader = 'fabric' | 'forge' | 'neoforge';
 
 export interface InstallerDeps {
     settings: Pick<SettingsService, 'getServer'>;
@@ -35,6 +53,10 @@ export interface InstallerDeps {
     appVersion: string;
     fetchImpl?: FetchFn;
     execImpl?: ExecFn;
+    runImpl?: RunFn;
+    /** A Java of at least `major` for the server (downloaded when needed); its java.exe. Forge and NeoForge
+     *  installers need one before the server can even be set up. */
+    provideJava?: (serverId: string, major: number) => Promise<string>;
 }
 
 interface Download {
@@ -47,6 +69,49 @@ interface Download {
 const defaultExec: ExecFn = (file, args) => new Promise((resolve, reject) => {
     execFile(file, args, { windowsHide: true, timeout: 20_000, encoding: 'utf8' }, (err, stdout, stderr) => (err ? reject(err) : resolve({ stdout, stderr })));
 });
+
+const defaultRun: RunFn = (file, args, cwd, timeoutMs) => new Promise((resolve, reject) => {
+    const child = spawn(file, args, { cwd, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    const keep = (chunk: Buffer) => {
+        output = (output + chunk.toString()).slice(-8000);
+    };
+    child.stdout.on('data', keep);
+    child.stderr.on('data', keep);
+    const timer = setTimeout(() => child.kill(), timeoutMs);
+    child.on('error', (err) => {
+        clearTimeout(timer);
+        reject(err);
+    });
+    child.on('close', (code) => {
+        clearTimeout(timer);
+        resolve({ code, output });
+    });
+});
+
+/** Compares Minecraft versions by their numbers: "1.21.10" after "1.21.9", "26.1" after "1.21.11". */
+export function compareMc(a: string, b: string): number {
+    const pa = a.split('.').map(Number);
+    const pb = b.split('.').map(Number);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+        if (d !== 0) return d;
+    }
+    return 0;
+}
+
+/** The Minecraft version a NeoForge version is for: "21.1.77" -> "1.21.1", "21.0.5" -> "1.21", "26.3.0.99" -> "26.3",
+ *  "26.1.1.4" -> "26.1.1"; null for test builds of other games ("0.25w14craftmine.3-beta"). */
+export function neoforgeMc(version: string): string | null {
+    const parts = version.split(/[-+]/)[0].split('.');
+    if (!parts.every((p) => /^\d+$/.test(p))) return null;
+    const [major, minor, patch] = parts.map(Number);
+    if (major >= 26) return patch ? `${major}.${minor}.${patch}` : `${major}.${minor}`;
+    if (major >= 20) return minor ? `1.${major}.${minor}` : `1.${major}`;
+    return null;
+}
+
+const isTestBuild = (version: string): boolean => /-(beta|alpha)|\+snapshot/i.test(version);
 
 /** The major version in `java -version` output: "21.0.5" -> 21, "1.8.0_421" -> 8. */
 export function javaMajor(output: string): number | null {
@@ -73,6 +138,7 @@ async function whitelistOffUnlessSet(folder: string): Promise<void> {
 export class ServerInstaller {
     private readonly fetchImpl: FetchFn;
     private readonly execImpl: ExecFn;
+    private readonly runImpl: RunFn;
     private readonly cache = new Map<ServerKind, InstallableVersion[]>();
     private running: string | null = null;
     private lastProgress = 0;
@@ -80,6 +146,7 @@ export class ServerInstaller {
     constructor(private readonly d: InstallerDeps) {
         this.fetchImpl = d.fetchImpl ?? ((url, init) => fetch(url, init));
         this.execImpl = d.execImpl ?? defaultExec;
+        this.runImpl = d.runImpl ?? defaultRun;
     }
 
     /** The versions a kind of server can be downloaded in, newest first. */
@@ -97,9 +164,22 @@ export class ServerInstaller {
         } else if (kind === 'paper') {
             const project = await this.json<{ versions: Record<string, string[]> }>(PAPER);
             list = Object.values(project.versions).flat().map((id) => ({ id, stable: !/-(rc|pre)/i.test(id) }));
-        } else {
+        } else if (kind === 'fabric') {
             const games = await this.json<Array<{ version: string; stable: boolean }>>(`${FABRIC}/versions/game`);
             list = games.map((g) => ({ id: g.version, stable: g.stable }));
+        } else if (kind === 'forge') {
+            const promos = (await this.json<{ promos: Record<string, string> }>(FORGE_PROMOS)).promos;
+            const games = [...new Set(Object.keys(promos).map((k) => k.replace(/-(recommended|latest)$/, '')))]
+                .filter((mc) => /^\d+(\.\d+)+$/.test(mc) && compareMc(mc, OLDEST_FORGE) >= 0);
+            list = games.sort((a, b) => compareMc(b, a)).map((id) => ({ id, stable: true }));
+        } else {
+            const releases = (await this.json<{ versions: string[] }>(NEOFORGE_LIST)).versions;
+            const byMc = new Map<string, boolean>();
+            for (const v of releases) {
+                const mc = neoforgeMc(v);
+                if (mc) byMc.set(mc, (byMc.get(mc) ?? false) || !isTestBuild(v));
+            }
+            list = [...byMc].sort(([a], [b]) => compareMc(b, a)).map(([id, stable]) => ({ id, stable }));
         }
         this.cache.set(kind, list);
         return list;
@@ -112,10 +192,11 @@ export class ServerInstaller {
         return { hasServer, javaFound: await this.javaFound(settings.javaPath ?? 'java') };
     }
 
-    /** Downloads the server program into the server's (empty of jars) folder on this PC. A new server gets
+    /** Downloads the server program into the server's (empty of jars) folder on this PC; `loaderVersion` asks for
+     *  one Fabric, Forge or NeoForge version instead of the newest (a modpack names its own). A new server gets
      *  "white-list=false" before its first start: Minecraft 26.x turns the whitelist on by default, and with nobody on
      *  it nobody could join. */
-    async install(serverId: string, kind: ServerKind, version: string): Promise<InstallResult> {
+    async install(serverId: string, kind: ServerKind, version: string, loaderVersion?: string): Promise<InstallResult> {
         if (this.running) throw new AppError('BUSY', 'A server is already being downloaded.');
         const folder = this.d.settings.getServer(serverId).localPath;
         if (!folder) throw new AppError('NO_LOCAL_PATH', 'Choose a folder on this PC for this server first.');
@@ -126,11 +207,13 @@ export class ServerInstaller {
         }
         this.running = serverId;
         try {
-            const download = await this.resolve(kind, version);
+            const download = await this.resolve(kind, version, loaderVersion);
             await this.download(serverId, download, folder);
             console.log(`[installer] ${kind} ${version} downloaded into ${serverId} as ${download.file}`);
+            const javaNeeded = await this.javaNeeded(version);
+            if (kind === 'forge' || kind === 'neoforge') await this.runInstaller(serverId, folder, download.file, javaNeeded);
             await whitelistOffUnlessSet(folder);
-            return { file: download.file, javaNeeded: await this.javaNeeded(version) };
+            return { file: download.file, javaNeeded };
         } finally {
             this.running = null;
             this.d.emit(null);
@@ -139,7 +222,46 @@ export class ServerInstaller {
 
     /* -------------------------------------------------------------- internals */
 
-    private async resolve(kind: ServerKind, version: string): Promise<Download> {
+    /** Runs a Forge or NeoForge installer already in the server's folder (from a server pack zip); the Java the
+     *  Minecraft version in its name needs, when Mojang knows it. */
+    async runInstallerFile(serverId: string, file: string): Promise<number | null> {
+        const folder = this.d.settings.getServer(serverId).localPath;
+        if (!folder) throw new AppError('NO_LOCAL_PATH', 'Choose a folder on this PC for this server first.');
+        const forge = /^forge-(\d+(?:\.\d+)+)-/i.exec(file);
+        const neo = /^neoforge-([^-]+(?:-beta)?)-installer\.jar$/i.exec(file);
+        const mc = forge ? forge[1] : neo ? neoforgeMc(neo[1]) : null;
+        const javaNeeded = mc ? await this.javaNeeded(mc) : null;
+        await this.runInstaller(serverId, folder, safeName(file), javaNeeded);
+        return javaNeeded;
+    }
+
+    /** Runs a Forge or NeoForge installer in the folder with a Java new enough, then removes it. */
+    private async runInstaller(serverId: string, folder: string, installer: string, javaNeeded: number | null): Promise<void> {
+        let java = this.d.settings.getServer(serverId).javaPath ?? 'java';
+        const found = await this.javaFound(java);
+        if (javaNeeded !== null && (found === null || found < javaNeeded)) {
+            if (!this.d.provideJava) throw new AppError('JAVA', `Installing this server needs Java ${javaNeeded}.`);
+            console.log(`[installer] ${serverId}: Java ${found ?? 'none'} found, getting Java ${javaNeeded} for the installer`);
+            java = await this.d.provideJava(serverId, javaNeeded);
+        } else if (found === null) {
+            throw new AppError('JAVA', 'Java was not found, and installing this server needs it.');
+        }
+        this.progress(serverId, 0, 0, true);
+        console.log(`[installer] ${serverId}: running ${installer} --installServer`);
+        let result: { code: number | null; output: string };
+        try {
+            result = await this.runImpl(java, ['-jar', installer, '--installServer', folder], folder, INSTALLER_TIMEOUT_MS);
+        } catch (err) {
+            throw new AppError('JAVA', 'The installer could not be started.', err instanceof Error ? err.message : String(err));
+        }
+        if (result.code !== 0) {
+            throw new AppError('JAVA', `The installer stopped with an error (exit code ${result.code ?? 'none'}). Try again; if it fails again, its log is in the server folder.`, result.output.slice(-2000));
+        }
+        await fs.rm(path.join(folder, installer), { force: true });
+        console.log(`[installer] ${serverId}: ${installer} finished`);
+    }
+
+    private async resolve(kind: ServerKind, version: string, loaderVersion?: string): Promise<Download> {
         if (kind === 'vanilla') {
             const entry = await this.mojangVersion(version);
             if (!entry) throw new AppError('NOT_FOUND', `Mojang has no Minecraft ${version}.`);
@@ -157,8 +279,23 @@ export class ServerInstaller {
             const sha256 = jar.checksums?.sha256;
             return { url: jar.url, file: safeName(jar.name), size: jar.size, hash: sha256 ? { algorithm: 'sha256', value: sha256 } : null };
         }
+        if (kind === 'forge') {
+            const promos = (await this.json<{ promos: Record<string, string> }>(FORGE_PROMOS)).promos;
+            const build = loaderVersion ?? promos[`${version}-recommended`] ?? promos[`${version}-latest`];
+            if (!build) throw new AppError('NOT_FOUND', `Forge has no build for Minecraft ${version}.`);
+            return this.mavenInstaller(`${FORGE_MAVEN}/${version}-${build}/forge-${version}-${build}-installer.jar`);
+        }
+        if (kind === 'neoforge') {
+            let build = loaderVersion;
+            if (!build) {
+                const matching = (await this.json<{ versions: string[] }>(NEOFORGE_LIST)).versions.filter((v) => neoforgeMc(v) === version);
+                build = [...matching].reverse().find((v) => !isTestBuild(v)) ?? matching.at(-1);
+            }
+            if (!build) throw new AppError('NOT_FOUND', `NeoForge has no build for Minecraft ${version}.`);
+            return this.mavenInstaller(`${NEOFORGE_MAVEN}/${build}/neoforge-${build}-installer.jar`);
+        }
         const loaders = await this.json<Array<{ loader: { version: string; stable: boolean } }>>(`${FABRIC}/versions/loader/${encodeURIComponent(version)}`);
-        const loader = (loaders.find((l) => l.loader.stable) ?? loaders[0])?.loader.version;
+        const loader = loaderVersion ?? (loaders.find((l) => l.loader.stable) ?? loaders[0])?.loader.version;
         if (!loader) throw new AppError('NOT_FOUND', `Fabric does not support Minecraft ${version} yet.`);
         const installers = await this.json<Array<{ version: string; stable: boolean }>>(`${FABRIC}/versions/installer`);
         const installer = (installers.find((i) => i.stable) ?? installers[0])?.version;
@@ -169,6 +306,13 @@ export class ServerInstaller {
             size: null,
             hash: null,
         };
+    }
+
+    /** An installer jar on a Maven repository, checked with the .sha1 file published beside it. */
+    private async mavenInstaller(url: string): Promise<Download> {
+        const sha1 = (await (await this.request(`${url}.sha1`)).text()).trim().slice(0, 40);
+        if (!/^[0-9a-f]{40}$/i.test(sha1)) throw new AppError('NETWORK', 'The download service sent no checksum for the installer.', url);
+        return { url, file: safeName(path.basename(new URL(url).pathname)), size: null, hash: { algorithm: 'sha1', value: sha1 } };
     }
 
     private async download(serverId: string, d: Download, folder: string): Promise<void> {

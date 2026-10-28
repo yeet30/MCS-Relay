@@ -9,6 +9,7 @@ import { AppError } from '../errors';
 import type { GoogleAuth } from '../auth/GoogleAuth';
 import type { BackupService } from '../backups/BackupService';
 import type { JavaInstaller } from '../installer/JavaInstaller';
+import type { ModpackService } from '../modpacks/ModpackService';
 import type { ServerInstaller } from '../installer/ServerInstaller';
 import type { PlayitLink } from '../playit/PlayitLink';
 import { isValidServerId } from '../store/appData';
@@ -40,6 +41,7 @@ export interface HandlerDeps {
     report: Pick<ReportService, 'send' | 'save'>;
     installer: Pick<ServerInstaller, 'versions' | 'folder' | 'install'>;
     java: Pick<JavaInstaller, 'install'>;
+    modpacks: Pick<ModpackService, 'search' | 'versions' | 'install' | 'importZip' | 'info'>;
     properties: Pick<ServerProperties, 'read' | 'write'>;
     whitelist: Pick<Whitelist, 'list' | 'add' | 'remove'>;
     playit: Pick<PlayitLink, 'getState' | 'link' | 'cancelLink' | 'check' | 'reopen' | 'unlink'>;
@@ -258,7 +260,7 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
     handle('backups:restoreAuto', (serverId) => d.backups.restoreAuto(id(serverId)));
     handle('backups:deleteLocal', (serverId, fileName) => d.backups.deleteLocal(id(serverId), backupFile(fileName)));
     handle('backups:deleteCloud', (serverId, cloudId) => d.backups.deleteCloud(id(serverId), backupFile(cloudId)));
-    const KINDS = ['vanilla', 'paper', 'fabric'] as const;
+    const KINDS = ['vanilla', 'paper', 'fabric', 'forge', 'neoforge'] as const;
     handle('installer:versions', (kind) => d.installer.versions(oneOf(kind, KINDS, 'server type')));
     handle('installer:folder', (serverId) => d.installer.folder(id(serverId)));
     handle('installer:install', (serverId, kind, version) => {
@@ -297,6 +299,30 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
         reloadWhitelist(serverId as string);
         return players;
     });
+    const modrinthId = (value: unknown, what: string) => {
+        const s = text(value, what, { max: 64 });
+        if (!/^[\w-]+$/.test(s)) throw invalid(`That ${what} is not valid.`);
+        return s;
+    };
+    handle('modpacks:search', (query, offset) => {
+        if (typeof offset !== 'number' || !Number.isInteger(offset) || offset < 0 || offset > 10_000) throw invalid('That page is not valid.');
+        return d.modpacks.search(text(query, 'search', { allowEmpty: true, max: 100 }), offset);
+    });
+    handle('modpacks:versions', (projectId) => d.modpacks.versions(modrinthId(projectId, 'modpack')));
+    handle('modpacks:install', (serverId, versionId) => {
+        notDuringBackup();
+        if (d.session.isBusy() && d.session.getState().serverId === serverId) throw new AppError('BUSY', 'Stop the server first.');
+        return d.modpacks.install(id(serverId), modrinthId(versionId, 'modpack version'));
+    });
+    handle('modpacks:pickZip', () => d.dialogs.chooseFile('Choose the server pack zip', [{ name: 'Server pack', extensions: ['zip'] }]));
+    handle('modpacks:importZip', (serverId, zipPath) => {
+        notDuringBackup();
+        if (d.session.isBusy() && d.session.getState().serverId === serverId) throw new AppError('BUSY', 'Stop the server first.');
+        const file = text(zipPath, 'zip file', { max: 1000 });
+        if (!path.isAbsolute(file)) throw invalid('Choose the zip file with the file picker.');
+        return d.modpacks.importZip(id(serverId), file);
+    });
+    handle('modpacks:info', (serverId) => d.modpacks.info(id(serverId)));
     handle('installer:installJava', (serverId, major) => {
         if (typeof major !== 'number' || !Number.isInteger(major) || major < 8 || major > 99) throw invalid('That Java version is not valid.');
         if (d.session.isBusy() && d.session.getState().serverId === serverId) throw new AppError('BUSY', 'Java can be changed between sessions.');

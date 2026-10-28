@@ -4,7 +4,7 @@
 // calls them with invoke() (src/api.ts). A renamed or mistyped channel is a compile error.
 import type {
     AppErrorInfo, AppSettings, BackupInfo, BackupList, BackupProgress, InstallableVersion, InstallProgress, InstallResult, JavaInstallResult,
-    ServerPropertiesInfo, WhitelistPlayer,
+    ServerPropertiesInfo, WhitelistPlayer, ModpackInfo, ModpackInstallResult, ModpackSearch, ModpackVersion,
     PlayitLinkState, ServerFolderInfo, ServerKind, ChangeBatch, ConflictChoice, LockView, LogoState, MemberRole, ServerId, ServerMember,
     ServerSettings, ServerSettingsPatch, ServerSummary, SessionProgress, SessionState, StepMessage, SyncReport, SyncRules,
     TransferSnapshot, UpdateState, UserInfo,
@@ -141,6 +141,17 @@ export interface Commands {
     /** Downloads Java `major` (Eclipse Temurin, from Adoptium) and makes it the server's Java on this PC. */
     'installer:installJava': (serverId: ServerId, major: number) => JavaInstallResult;
 
+    /** Modrinth's modpacks that run on a server with Fabric, Forge or NeoForge; 20 at a time from `offset`. */
+    'modpacks:search': (query: string, offset: number) => ModpackSearch;
+    'modpacks:versions': (projectId: string) => ModpackVersion[];
+    /** Installs a Modrinth pack version, with its mod loader, into the server's new folder. */
+    'modpacks:install': (serverId: ServerId, versionId: string) => ModpackInstallResult;
+    /** Opens the file picker for a server pack zip (CurseForge's, say); null when cancelled. */
+    'modpacks:pickZip': () => string | null;
+    'modpacks:importZip': (serverId: ServerId, zipPath: string) => ModpackInstallResult;
+    /** The pack the server was made from, from its folder on this PC; null for none. */
+    'modpacks:info': (serverId: ServerId) => ModpackInfo | null;
+
     'playit:state': () => PlayitLinkState;
     /** Links this PC to the user's playit.gg account: downloads the agent, opens playit.gg's approval page in the
      *  browser and makes the Minecraft Java tunnel. Resolves when linked, or quietly when cancelled. */
@@ -194,4 +205,4 @@ export interface BridgeApi {
     on: (channel: string, listener: (payload: unknown) => void) => () => void;
 }
 
-export const COMMAND_PREFIXES = ['auth:', 'servers:', 'session:', 'settings:', 'rules:', 'app:', 'report:', 'backups:', 'installer:', 'playit:'] as const;
+export const COMMAND_PREFIXES = ['auth:', 'servers:', 'session:', 'settings:', 'rules:', 'app:', 'report:', 'backups:', 'installer:', 'playit:', 'modpacks:'] as const;

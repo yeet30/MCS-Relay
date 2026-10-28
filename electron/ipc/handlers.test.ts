@@ -27,6 +27,7 @@ const ALL_COMMANDS: Record<CommandName, true> = {
     'backups:list': true, 'backups:create': true, 'backups:upload': true, 'backups:download': true, 'backups:restore': true, 'backups:restoreAuto': true,
     'backups:deleteLocal': true, 'backups:deleteCloud': true, 'backups:openFolder': true,
     'installer:versions': true, 'installer:folder': true, 'installer:install': true, 'installer:installJava': true,
+    'modpacks:search': true, 'modpacks:versions': true, 'modpacks:install': true, 'modpacks:pickZip': true, 'modpacks:importZip': true, 'modpacks:info': true,
     'playit:state': true, 'playit:link': true, 'playit:cancelLink': true, 'playit:check': true, 'playit:reopen': true, 'playit:unlink': true,
 };
 
@@ -39,7 +40,7 @@ function setup() {
     const auto = () => new Proxy({}, { get: (target: Record<string, unknown>, key: string) => (target[key] ??= vi.fn(async () => undefined)) });
     const deps = {
         auth: auto(), servers: auto(), session: auto(), settings: auto(), sync: auto(), transfers: auto(),
-        changes: auto(), dialogs: auto(), report: auto(), backups: auto(), installer: auto(), java: auto(), properties: auto(), whitelist: auto(), playit: auto(), app: auto(),
+        changes: auto(), dialogs: auto(), report: auto(), backups: auto(), installer: auto(), java: auto(), modpacks: auto(), properties: auto(), whitelist: auto(), playit: auto(), app: auto(),
     } as unknown as HandlerDeps;
     (deps.session.isBusy as unknown as ReturnType<typeof vi.fn>) = vi.fn(() => false);
     (deps.backups.isBusy as unknown as ReturnType<typeof vi.fn>) = vi.fn(() => false);

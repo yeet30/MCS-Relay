@@ -5,7 +5,8 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { InstallProgress } from '../../shared/types';
 import { AppError } from '../errors';
-import { javaMajor, ServerInstaller } from './ServerInstaller';
+import { compareMc, javaMajor, neoforgeMc, ServerInstaller } from './ServerInstaller';
+import type { RunFn } from './ServerInstaller';
 
 const JAR = Buffer.from('pretend this is a server jar');
 const sha1 = createHash('sha1').update(JAR).digest('hex');
@@ -31,8 +32,22 @@ const ROUTES: Record<string, unknown> = {
     'https://meta.fabricmc.net/v2/versions/game': [{ version: '1.21.5-pre1', stable: false }, { version: '1.21.4', stable: true }],
     'https://meta.fabricmc.net/v2/versions/loader/1.21.4': [{ loader: { version: '0.20.2', stable: false } }, { loader: { version: '0.20.1', stable: true } }],
     'https://meta.fabricmc.net/v2/versions/installer': [{ version: '1.1.2', stable: true }],
+    'https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json': {
+        promos: { '1.7.10-latest': '10.13.4.1614', '1.12.2-recommended': '14.23.5.2859', '1.21.4-latest': '54.1.0', '1.21.4-recommended': '54.0.9' },
+    },
+    'https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge': {
+        versions: ['0.25w14craftmine.3-beta', '21.1.76', '21.1.77', '21.4.0-beta', '21.4.1-beta'],
+    },
 };
-const FILES = new Set(['https://dl/server.jar', 'https://dl/paper.jar', 'https://meta.fabricmc.net/v2/versions/loader/1.21.4/0.20.1/1.1.2/server/jar']);
+const TEXT: Record<string, string> = {
+    'https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.4-54.0.9/forge-1.21.4-54.0.9-installer.jar.sha1': sha1,
+    'https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.77/neoforge-21.1.77-installer.jar.sha1': sha1,
+};
+const FILES = new Set([
+    'https://dl/server.jar', 'https://dl/paper.jar', 'https://meta.fabricmc.net/v2/versions/loader/1.21.4/0.20.1/1.1.2/server/jar',
+    'https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.4-54.0.9/forge-1.21.4-54.0.9-installer.jar',
+    'https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.77/neoforge-21.1.77-installer.jar',
+]);
 
 let folder: string;
 beforeEach(() => {
@@ -42,11 +57,12 @@ afterEach(() => {
     fs.rmSync(folder, { recursive: true, force: true });
 });
 
-function setup(opts: { body?: Buffer; busy?: boolean; java?: string | null } = {}) {
+function setup(opts: { body?: Buffer; busy?: boolean; java?: string | null; run?: RunFn; provideJava?: (id: string, major: number) => Promise<string> } = {}) {
     const fetchImpl = vi.fn(async (url: string, init?: { headers?: Record<string, string> }) => {
         expect(init?.headers?.['User-Agent']).toMatch(/^MCS-Relay\/1\.0\.4 \(https:\/\/mcs-relay\.com\)$/);
         if (FILES.has(url)) return new Response(new Uint8Array(opts.body ?? JAR), { status: 200, headers: { 'content-length': String((opts.body ?? JAR).length) } });
         if (url in ROUTES) return new Response(JSON.stringify(ROUTES[url]), { status: 200 });
+        if (url in TEXT) return new Response(TEXT[url], { status: 200 });
         return new Response('not found', { status: 404 });
     });
     const progress: Array<InstallProgress | null> = [];
@@ -60,6 +76,8 @@ function setup(opts: { body?: Buffer; busy?: boolean; java?: string | null } = {
             if (opts.java === null) throw Object.assign(new Error('not found'), { code: 'ENOENT' });
             return { stdout: '', stderr: opts.java ?? 'openjdk version "17.0.9" 2023-10-17\nOpenJDK Runtime Environment' };
         },
+        runImpl: opts.run,
+        provideJava: opts.provideJava,
     });
     return { installer, fetchImpl, progress };
 }
@@ -128,6 +146,57 @@ describe('ServerInstaller', () => {
         expect(await setup().installer.folder('srv')).toEqual({ hasServer: false, javaFound: 17 });
         fs.writeFileSync(path.join(folder, 'server.jar'), 'x');
         expect(await setup({ java: null }).installer.folder('srv')).toEqual({ hasServer: true, javaFound: null });
+    });
+
+    test('lists Forge from 1.12 on and NeoForge by the Minecraft version its numbers stand for', async () => {
+        const { installer } = setup();
+        expect(await installer.versions('forge')).toEqual([{ id: '1.21.4', stable: true }, { id: '1.12.2', stable: true }]);
+        expect(await installer.versions('neoforge')).toEqual([{ id: '1.21.4', stable: false }, { id: '1.21.1', stable: true }]);
+    });
+
+    test('Forge: the recommended installer, checked, run with --installServer, then removed', async () => {
+        const runs: Array<{ file: string; args: string[] }> = [];
+        const run: RunFn = async (file, args, cwd) => {
+            runs.push({ file, args });
+            fs.writeFileSync(path.join(cwd, 'run.bat'), 'java @libraries/args.txt');
+            return { code: 0, output: 'The server installed successfully' };
+        };
+        // Minecraft 1.21.4 needs Java 21; this PC has 17, so the installer gets a downloaded one.
+        const provideJava = vi.fn(async () => 'C:/java21/bin/java.exe');
+        const { installer } = setup({ run, provideJava });
+        const result = await installer.install('srv', 'forge', '1.21.4');
+        expect(result).toEqual({ file: 'forge-1.21.4-54.0.9-installer.jar', javaNeeded: 21 });
+        expect(provideJava).toHaveBeenCalledWith('srv', 21);
+        expect(runs).toEqual([{ file: 'C:/java21/bin/java.exe', args: ['-jar', 'forge-1.21.4-54.0.9-installer.jar', '--installServer', folder] }]);
+        expect(fs.existsSync(path.join(folder, 'forge-1.21.4-54.0.9-installer.jar'))).toBe(false);
+        expect(fs.existsSync(path.join(folder, 'run.bat'))).toBe(true);
+    });
+
+    test('NeoForge: the newest release for the version, or the one a modpack names', async () => {
+        const runs: string[][] = [];
+        const run: RunFn = async (_file, args) => {
+            runs.push(args);
+            return { code: 0, output: '' };
+        };
+        await setup({ run, java: 'openjdk version "21.0.5"' }).installer.install('srv', 'neoforge', '1.21.1');
+        expect(runs[0][1]).toBe('neoforge-21.1.77-installer.jar');
+        await expect(setup({ run }).installer.install('srv', 'neoforge', '1.21.1', '21.1.76')).rejects.toMatchObject({ code: 'NETWORK' });
+    });
+
+    test('an installer that fails says so, with the end of its output', async () => {
+        const run: RunFn = async () => ({ code: 1, output: 'Failed to download library' });
+        const err = await setup({ run, java: 'openjdk version "21.0.5"' }).installer.install('srv', 'forge', '1.21.4').catch((e: unknown) => e);
+        expect(err).toMatchObject({ code: 'JAVA', detail: 'Failed to download library' });
+    });
+
+    test('Minecraft versions compare by number, and NeoForge versions map to them', () => {
+        expect(['1.21.10', '26.1', '1.21.9', '1.12.2'].sort(compareMc)).toEqual(['1.12.2', '1.21.9', '1.21.10', '26.1']);
+        expect(neoforgeMc('21.1.77')).toBe('1.21.1');
+        expect(neoforgeMc('21.0.5-beta')).toBe('1.21');
+        expect(neoforgeMc('21.10.3')).toBe('1.21.10');
+        expect(neoforgeMc('26.3.0.99')).toBe('26.3');
+        expect(neoforgeMc('26.1.1.4-beta')).toBe('26.1.1');
+        expect(neoforgeMc('0.25w14craftmine.3-beta')).toBeNull();
     });
 
     test('reads Java versions old and new', () => {
