@@ -17,6 +17,7 @@ const ROUTES: Record<string, unknown> = {
         versions: [
             { id: '1.21.5-pre1', type: 'snapshot', releaseTime: '2025-03-01T00:00:00Z', url: 'https://m/pre.json' },
             { id: '1.21.4', type: 'release', releaseTime: '2024-12-03T00:00:00Z', url: 'https://m/1.21.4.json' },
+            { id: '1.12.2', type: 'release', releaseTime: '2017-09-18T08:39:46Z', url: 'https://m/1.12.2.json' },
             { id: '1.2.5', type: 'release', releaseTime: '2012-03-29T22:00:00Z', url: 'https://m/1.2.5.json' },
             { id: '1.2.4', type: 'release', releaseTime: '2012-03-21T22:00:00Z', url: 'https://m/1.2.4.json' },
             { id: 'b1.7.3', type: 'old_beta', releaseTime: '2011-07-08T00:00:00Z', url: 'https://m/b.json' },
@@ -24,6 +25,7 @@ const ROUTES: Record<string, unknown> = {
         ],
     },
     'https://m/1.21.4.json': { downloads: { server: { url: 'https://dl/server.jar', sha1, size: JAR.length } }, javaVersion: { majorVersion: 21 } },
+    'https://m/1.12.2.json': { javaVersion: { majorVersion: 8 } },
     'https://fill.papermc.io/v3/projects/paper': { versions: { '1.21': ['1.21.4', '1.21.4-rc1'], '1.20': ['1.20.6'] } },
     'https://fill.papermc.io/v3/projects/paper/versions/1.21.4/builds': [
         { channel: 'BETA', downloads: { 'server:default': { name: 'paper-1.21.4-233.jar', url: 'https://dl/beta.jar', size: 1, checksums: { sha256: 'x' } } } },
@@ -85,7 +87,7 @@ function setup(opts: { body?: Buffer; busy?: boolean; java?: string | null; run?
 describe('ServerInstaller', () => {
     test('lists versions newest first, with the unstable ones marked, and only those that have a server', async () => {
         const { installer } = setup();
-        expect(await installer.versions('vanilla')).toEqual([{ id: '1.21.5-pre1', stable: false }, { id: '1.21.4', stable: true }, { id: '1.2.5', stable: true }]);
+        expect(await installer.versions('vanilla')).toEqual([{ id: '1.21.5-pre1', stable: false }, { id: '1.21.4', stable: true }, { id: '1.12.2', stable: true }, { id: '1.2.5', stable: true }]);
         expect(await installer.versions('paper')).toEqual([{ id: '1.21.4', stable: true }, { id: '1.21.4-rc1', stable: false }, { id: '1.20.6', stable: true }]);
         expect((await installer.versions('fabric')).map((v) => v.stable)).toEqual([false, true]);
     });
@@ -181,6 +183,26 @@ describe('ServerInstaller', () => {
         await setup({ run, java: 'openjdk version "21.0.5"' }).installer.install('srv', 'neoforge', '1.21.1');
         expect(runs[0][1]).toBe('neoforge-21.1.77-installer.jar');
         await expect(setup({ run }).installer.install('srv', 'neoforge', '1.21.1', '21.1.76')).rejects.toMatchObject({ code: 'NETWORK' });
+    });
+
+    test('old Forge gets Java 8 even when this PC has a newer Java, since it runs on nothing newer', async () => {
+        const runs: string[] = [];
+        const run: RunFn = async (file) => {
+            runs.push(file);
+            return { code: 0, output: '' };
+        };
+        fs.writeFileSync(path.join(folder, 'forge-1.12.2-14.23.5.2860-installer.jar'), 'installer');
+        const provideJava = vi.fn(async () => 'C:/java8/bin/java.exe');
+        // This PC has Java 17: new enough by number, but Forge 1.12.2 breaks on it.
+        expect(await setup({ run, provideJava }).installer.runInstallerFile('srv', 'forge-1.12.2-14.23.5.2860-installer.jar')).toBe(8);
+        expect(provideJava).toHaveBeenCalledWith('srv', 8);
+        expect(runs).toEqual(['C:/java8/bin/java.exe']);
+
+        // A NeoForge or newer Forge installer is happy with a newer Java.
+        const newer = vi.fn(async () => 'x');
+        fs.writeFileSync(path.join(folder, 'neoforge-21.1.77-installer.jar'), 'installer');
+        await setup({ run, provideJava: newer, java: 'openjdk version "21.0.5"' }).installer.runInstallerFile('srv', 'neoforge-21.1.77-installer.jar');
+        expect(newer).not.toHaveBeenCalled();
     });
 
     test('an installer that fails says so, with the end of its output', async () => {

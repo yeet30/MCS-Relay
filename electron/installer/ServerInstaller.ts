@@ -7,7 +7,8 @@
 //            recommended build, else its latest; NeoForge's newest release, else its newest beta), checked with their
 //            sha1, then run with "--installServer" by the Java the version needs (downloaded first when this PC has
 //            none new enough). The installer fetches Minecraft and the libraries itself; the app then starts the server
-//            through the args file it writes (MinecraftProcess finds it).
+//            through the args file it writes (MinecraftProcess finds it). Forge for Minecraft before 1.17 runs only on
+//            Java 8 (not newer), so such a server gets Java 8 even when this PC has a newer one.
 // Nothing is hosted or passed on by MCS-Relay: each PC downloads from those services directly.
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -33,6 +34,8 @@ const NEOFORGE_MAVEN = 'https://maven.neoforged.net/releases/net/neoforged/neofo
 const OLDEST_FORGE = '1.12';
 /** How long a Forge or NeoForge installer may take (it downloads Minecraft and its libraries). */
 const INSTALLER_TIMEOUT_MS = 15 * 60_000;
+/** Minecraft before 1.17 needs Java 8, and its Forge (LaunchWrapper) breaks on anything newer. */
+const OLD_FORGE_JAVA = 8;
 /** The oldest version Mojang offers a server download for: 1.0 to 1.2.4 have none. */
 const FIRST_WITH_SERVER = '1.2.5';
 const PROGRESS_MS = 250;
@@ -211,7 +214,7 @@ export class ServerInstaller {
             await this.download(serverId, download, folder);
             console.log(`[installer] ${kind} ${version} downloaded into ${serverId} as ${download.file}`);
             const javaNeeded = await this.javaNeeded(version);
-            if (kind === 'forge' || kind === 'neoforge') await this.runInstaller(serverId, folder, download.file, javaNeeded);
+            if (kind === 'forge' || kind === 'neoforge') await this.runInstaller(serverId, folder, download.file, javaNeeded, kind === 'forge' && javaNeeded === OLD_FORGE_JAVA);
             await whitelistOffUnlessSet(folder);
             return { file: download.file, javaNeeded };
         } finally {
@@ -231,15 +234,16 @@ export class ServerInstaller {
         const neo = /^neoforge-([^-]+(?:-beta)?)-installer\.jar$/i.exec(file);
         const mc = forge ? forge[1] : neo ? neoforgeMc(neo[1]) : null;
         const javaNeeded = mc ? await this.javaNeeded(mc) : null;
-        await this.runInstaller(serverId, folder, safeName(file), javaNeeded);
+        await this.runInstaller(serverId, folder, safeName(file), javaNeeded, Boolean(forge) && javaNeeded === OLD_FORGE_JAVA);
         return javaNeeded;
     }
 
-    /** Runs a Forge or NeoForge installer in the folder with a Java new enough, then removes it. */
-    private async runInstaller(serverId: string, folder: string, installer: string, javaNeeded: number | null): Promise<void> {
+    /** Runs a Forge or NeoForge installer in the folder with a Java new enough (`exact`: that very version, which
+     *  also becomes the server's Java), then removes it. */
+    private async runInstaller(serverId: string, folder: string, installer: string, javaNeeded: number | null, exact = false): Promise<void> {
         let java = this.d.settings.getServer(serverId).javaPath ?? 'java';
         const found = await this.javaFound(java);
-        if (javaNeeded !== null && (found === null || found < javaNeeded)) {
+        if (javaNeeded !== null && (found === null || found < javaNeeded || (exact && found !== javaNeeded))) {
             if (!this.d.provideJava) throw new AppError('JAVA', `Installing this server needs Java ${javaNeeded}.`);
             console.log(`[installer] ${serverId}: Java ${found ?? 'none'} found, getting Java ${javaNeeded} for the installer`);
             java = await this.d.provideJava(serverId, javaNeeded);
