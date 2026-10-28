@@ -80,6 +80,17 @@ describe('ServerInstaller', () => {
         expect(progress.at(-1)).toBeNull();
     });
 
+    test('a new server starts with the whitelist off; a whitelist setting already there stays', async () => {
+        // Minecraft 26.x turns the whitelist on when server.properties does not mention it.
+        await setup().installer.install('srv', 'vanilla', '1.21.4');
+        expect(fs.readFileSync(path.join(folder, 'server.properties'), 'latin1')).toBe('white-list=false\n');
+
+        fs.rmSync(path.join(folder, 'server.jar'));
+        fs.writeFileSync(path.join(folder, 'server.properties'), 'motd=Hi\nwhite-list=true\n');
+        await setup().installer.install('srv', 'vanilla', '1.21.4');
+        expect(fs.readFileSync(path.join(folder, 'server.properties'), 'latin1')).toBe('motd=Hi\nwhite-list=true\n');
+    });
+
     test('Paper takes the newest stable build and keeps its name', async () => {
         const { installer } = setup();
         expect((await installer.install('srv', 'paper', '1.21.4')).file).toBe('paper-1.21.4-232.jar');

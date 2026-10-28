@@ -14,6 +14,7 @@ import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import type { InstallableVersion, InstallProgress, InstallResult, ServerFolderInfo, ServerKind } from '../../shared/types';
 import { AppError } from '../errors';
+import { applyChanges, parseProperties, PROPERTIES_FILE } from '../servers/ServerProperties';
 import type { SettingsService } from '../settings/SettingsService';
 
 const MOJANG_MANIFEST = 'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json';
@@ -61,6 +62,14 @@ async function serverJars(folder: string): Promise<string[]> {
     return entries.filter((e) => e.isFile() && /\.jar$/i.test(e.name) && !/installer/i.test(e.name)).map((e) => e.name);
 }
 
+/** "white-list=false" in the folder's server.properties, unless it already says something about the whitelist. */
+async function whitelistOffUnlessSet(folder: string): Promise<void> {
+    const file = path.join(folder, PROPERTIES_FILE);
+    const before = await fs.readFile(file, 'latin1').catch(() => '');
+    if ('white-list' in parseProperties(before)) return;
+    await fs.writeFile(file, applyChanges(before, { 'white-list': 'false' }), 'latin1');
+}
+
 export class ServerInstaller {
     private readonly fetchImpl: FetchFn;
     private readonly execImpl: ExecFn;
@@ -103,7 +112,9 @@ export class ServerInstaller {
         return { hasServer, javaFound: await this.javaFound(settings.javaPath ?? 'java') };
     }
 
-    /** Downloads the server program into the server's (empty of jars) folder on this PC. */
+    /** Downloads the server program into the server's (empty of jars) folder on this PC. A new server gets
+     *  "white-list=false" before its first start: Minecraft 26.x turns the whitelist on by default, and with nobody on
+     *  it nobody could join. */
     async install(serverId: string, kind: ServerKind, version: string): Promise<InstallResult> {
         if (this.running) throw new AppError('BUSY', 'A server is already being downloaded.');
         const folder = this.d.settings.getServer(serverId).localPath;
@@ -118,6 +129,7 @@ export class ServerInstaller {
             const download = await this.resolve(kind, version);
             await this.download(serverId, download, folder);
             console.log(`[installer] ${kind} ${version} downloaded into ${serverId} as ${download.file}`);
+            await whitelistOffUnlessSet(folder);
             return { file: download.file, javaNeeded: await this.javaNeeded(version) };
         } finally {
             this.running = null;

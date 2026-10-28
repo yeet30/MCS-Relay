@@ -11,13 +11,18 @@ import { selectSelectedServer, useServersStore } from '../../stores/serversStore
 import { useSessionStore } from '../../stores/sessionStore';
 import { useCloseGuard } from '../modal/close-guard';
 
-type Field =
-    | { key: string; label: string; hint?: string; kind: 'text'; def: string }
-    | { key: string; label: string; hint?: string; kind: 'number'; def: string; min: number; max: number }
-    | { key: string; label: string; hint?: string; kind: 'bool'; def: 'true' | 'false' }
-    | { key: string; label: string; hint?: string; kind: 'select'; def: string; options: Array<[string, string]> };
+/** `legacy`: Minecraft 26.x dropped it from server.properties (it became a game rule), so it is shown only when the
+ *  server's file has it, as older versions' files do. */
+type Field = { key: string; label: string; hint?: string; legacy?: boolean } & (
+    | { kind: 'text'; def: string }
+    | { kind: 'number'; def: string; min: number; max: number }
+    | { kind: 'bool'; def: 'true' | 'false' }
+    | { kind: 'select'; def: string; options: Array<[string, string]> }
+);
 
-/** The settings people change most, with Minecraft's defaults for a file that does not have them yet. */
+/** The settings people change most, with what MCS-Relay sets for a file that does not have them yet: Minecraft's
+ *  defaults, except the whitelist, which MCS-Relay leaves off (Minecraft 26.x turns it on for a new server, so nobody
+ *  could join until added to it). */
 const SECTIONS: Array<{ title: string; fields: Field[] }> = [
     {
         title: 'Players',
@@ -29,7 +34,7 @@ const SECTIONS: Array<{ title: string; fields: Field[] }> = [
                 key: 'online-mode', label: 'Check that players own Minecraft', kind: 'bool', def: 'true',
                 hint: 'Off lets anyone join under any name. Leave it on unless you know why.',
             },
-            { key: 'pvp', label: 'Players can hurt each other', kind: 'bool', def: 'true' },
+            { key: 'pvp', label: 'Players can hurt each other', kind: 'bool', def: 'true', legacy: true },
         ],
     },
     {
@@ -53,7 +58,7 @@ const SECTIONS: Array<{ title: string; fields: Field[] }> = [
         fields: [
             { key: 'view-distance', label: 'View distance (chunks)', kind: 'number', def: '10', min: 2, max: 32, hint: 'Higher looks further and needs more memory and upload speed.' },
             { key: 'simulation-distance', label: 'Simulation distance (chunks)', kind: 'number', def: '10', min: 3, max: 32 },
-            { key: 'allow-nether', label: 'The Nether', kind: 'bool', def: 'true' },
+            { key: 'allow-nether', label: 'The Nether', kind: 'bool', def: 'true', legacy: true },
             { key: 'level-seed', label: 'Seed', kind: 'text', def: '', hint: 'Used only when a new world is made.' },
         ],
     },
@@ -123,8 +128,12 @@ export default function ServerPropertiesPanel() {
                 return false;
             }
         }
+        // Settings the file does not have yet are written as shown, so Minecraft does not fill in other defaults.
+        const shown = Object.fromEntries(SECTIONS.flatMap((s) => s.fields)
+            .filter((f) => !f.legacy && f.kind !== 'text' && info && !(f.key in info.values))
+            .map((f) => [f.key, value(f)]));
         setSaving(true);
-        const res = await invoke('servers:setProperties', serverId, changes);
+        const res = await invoke('servers:setProperties', serverId, { ...shown, ...changes });
         setSaving(false);
         if (!res.ok) {
             useNoticeStore.getState().error(res.error);
@@ -168,7 +177,7 @@ export default function ServerPropertiesPanel() {
                 {SECTIONS.map((section) => (
                     <section key={section.title} className='props-section'>
                         <h4>{section.title}</h4>
-                        {section.fields.map((field) => (
+                        {section.fields.filter((field) => !field.legacy || field.key in info.values).map((field) => (
                             <div key={field.key} className={`props-row ${field.kind}`}>
                                 <label htmlFor={`prop-${field.key}`}>
                                     {field.label}
