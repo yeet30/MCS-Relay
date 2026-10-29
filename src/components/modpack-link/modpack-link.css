@@ -1,67 +1,91 @@
+/* A small round button at the left end of the server picker's pill; its card opens below it. */
 .modpack-link {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding-left: 12px;
-    border-radius: 10px;
-    border: 1px solid var(--line);
-    background-color: var(--panel);
-    color: var(--muted);
-    overflow: hidden;
+    position: absolute;
+    top: 50%;
+    left: 4px;
+    z-index: 2;
+    transform: translateY(-50%);
 
-    svg {
-        flex: none;
-    }
-
-    .modpack-link-text {
-        flex: 1;
-        min-width: 0;
-        display: flex;
-        align-items: baseline;
-        gap: 8px;
-        padding: 9px 0;
-        white-space: nowrap;
-    }
-
-    .modpack-link-kind {
-        font-size: 0.72rem;
-        font-weight: 600;
-    }
-
-    b {
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        color: var(--text-2);
-        font-size: 0.88rem;
-    }
-
-    small {
-        font-size: 0.74rem;
-    }
-
-    .modpack-link-hint {
-        padding-right: 12px;
-        white-space: nowrap;
-    }
-
-    button {
-        flex: none;
-        align-self: stretch;
+    .modpack-badge {
+        width: 1.55rem;
+        height: 1.55rem;
+        padding: 0;
         display: flex;
         align-items: center;
-        gap: 5px;
-        margin: 0;
-        padding: 0 12px;
-        border: none;
-        border-left: 1px solid var(--line);
-        background-color: var(--panel-2);
-        color: var(--accent);
-        font-size: 0.8rem;
-        cursor: pointer;
+        justify-content: center;
+        border-radius: 50%;
+        border: 1px solid var(--line-strong);
+        background-color: var(--panel);
+        color: var(--text-2);
     }
 
-    button:hover {
-        filter: brightness(1.1);
+    .modpack-badge:hover,
+    .modpack-badge.open {
+        border-color: var(--accent);
+        color: var(--text);
+    }
+
+    .modpack-pop {
+        position: absolute;
+        top: calc(100% + 9px);
+        left: -4px;
+        z-index: 30;
+        width: 230px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 3px;
+        padding: 10px 12px 12px;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        box-shadow: var(--shadow);
+        text-align: left;
+        animation: modpack-pop-in 0.15s ease;
+
+        b {
+            font-size: 0.92rem;
+            color: var(--text);
+            overflow-wrap: anywhere;
+        }
+
+        small {
+            font-size: 0.78rem;
+            color: var(--muted);
+        }
+
+        p {
+            margin: 4px 0 0;
+            font-size: 0.8rem;
+            color: var(--text-2);
+        }
+
+        .text-button {
+            margin-top: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+    }
+
+    .modpack-pop-kind {
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+    }
+}
+
+/* The server name moves right to make room for the button. */
+.server-picker:has(.modpack-link) .select-button {
+    padding-left: 1.9rem;
+}
+
+@keyframes modpack-pop-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
     }
 }

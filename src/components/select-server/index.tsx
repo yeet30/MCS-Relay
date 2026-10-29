@@ -6,6 +6,7 @@ import { hostingMessage, isSessionBusy } from '../../lib/sync';
 import { useAuthStore } from '../../stores/authStore';
 import { selectSelectedServer, useServersStore } from '../../stores/serversStore';
 import { lockFor, useSessionStore } from '../../stores/sessionStore';
+import ModpackLink from '../modpack-link';
 
 type Group = ServerSummary['kind'];
 
@@ -64,6 +65,8 @@ export default function SelectServer() {
                 </div>
             )}
             <span className='server-picker'>
+                {/* Inside the pill, on its left: the line keeps its width, so its sentence does not wrap. */}
+                <ModpackLink />
                 <button
                     className={`select-button ${isListOpen ? 'open' : ''}`}
                     onClick={() => setIsListOpen(!isListOpen)}
