@@ -4,7 +4,6 @@ import { ChevronDown, ChevronUp, Terminal } from 'lucide-react';
 import SelectServer from '../select-server';
 import ServerConsole from '../server-console';
 import PlayitggLink from '../playitgg-link';
-import ModpackLink from '../modpack-link';
 import AppCockpit from '../app-cockpit';
 import ProgressCard from '../progress-card';
 import SyncStatusCard from '../sync-status-card';
@@ -36,6 +35,44 @@ function SessionArea() {
             <ProgressCard compact />
         </>
     );
+}
+
+const CONSOLE_SCROLL_MS = 450;
+
+/** Scrolls the page down to the console, and the console to its newest line. The console's place is read again on
+ *  every frame: while a server runs, the cards above it grow and shrink, and a scroll aimed at where the console was
+ *  when it started would stop short or overshoot. Turning the wheel, touching or pressing a key stops it. */
+function scrollToConsole() {
+    const section = document.getElementById('console-section');
+    if (!section) return;
+    const output = document.getElementById('console-output');
+    const toNewest = () => {
+        if (output) output.scrollTop = output.scrollHeight;
+    };
+    toNewest();
+    let stopped = false;
+    const stop = () => {
+        stopped = true;
+    };
+    const events = ['wheel', 'touchstart', 'keydown'] as const;
+    events.forEach((e) => window.addEventListener(e, stop, { passive: true, once: true }));
+    const done = () => events.forEach((e) => window.removeEventListener(e, stop));
+    const from = window.scrollY;
+    const startedAt = performance.now();
+    const step = (now: number) => {
+        if (stopped) return done();
+        const bottom = document.documentElement.scrollHeight - window.innerHeight;
+        const target = Math.min(bottom, section.getBoundingClientRect().top + window.scrollY);
+        const t = Math.min(1, (now - startedAt) / CONSOLE_SCROLL_MS);
+        window.scrollTo(0, from + (target - from) * (1 - (1 - t) ** 3));
+        if (t < 1) {
+            requestAnimationFrame(step);
+            return undefined;
+        }
+        toNewest();
+        return done();
+    };
+    requestAnimationFrame(step);
 }
 
 export default function GreetingSection() {
@@ -84,8 +121,9 @@ export default function GreetingSection() {
                 <h2 className='greeting-title'>Welcome, {user.name}!</h2>
                 <div className='starter-section'>
                     <AppCockpit />
+                    {/* The address line finishes the picker's sentence ("… is currently hosted by Alex at:"), so it
+                        always comes right below it. */}
                     <SelectServer />
-                    <ModpackLink />
                     <PlayitggLink />
                     <SessionArea />
                 </div>
@@ -96,7 +134,7 @@ export default function GreetingSection() {
                 <button
                     className='scroller-button console-jump'
                     title='Go to the server console'
-                    onClick={() => document.getElementById('console-section')?.scrollIntoView({ behavior: 'smooth' })}
+                    onClick={scrollToConsole}
                 >
                     <Terminal size={16} />
                     <ChevronDown size={18} />
