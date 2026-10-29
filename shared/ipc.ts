@@ -4,7 +4,7 @@
 // calls them with invoke() (src/api.ts). A renamed or mistyped channel is a compile error.
 import type {
     AppErrorInfo, AppSettings, BackupInfo, BackupList, BackupProgress, InstallableVersion, InstallProgress, InstallResult, JavaInstallResult,
-    ServerPropertiesInfo, WhitelistPlayer, ModpackInfo, ModpackInstallResult, ModpackSearch, ModpackVersion, ModpackZip,
+    ServerPropertiesInfo, WhitelistPlayer, ModpackInfo, ModpackInstallResult, ModpackSearch, ModpackVersion, ModpackZip, HostedSession,
     PlayitLinkState, ServerFolderInfo, ServerKind, ChangeBatch, ConflictChoice, LockView, LogoState, MemberRole, ServerId, ServerMember,
     ServerSettings, ServerSettingsPatch, ServerSummary, SessionProgress, SessionState, StepMessage, SyncReport, SyncRules,
     TransferSnapshot, UpdateState, UserInfo,
@@ -57,6 +57,8 @@ export interface Commands {
     'servers:chooseLocalPath': (serverId: ServerId) => string | null;
     'servers:openFolder': (serverId: ServerId) => void;
     'servers:info': (serverId: ServerId) => ServerInfo;
+    /** Who hosted the server, when and for how long, newest first. */
+    'servers:history': (serverId: ServerId) => HostedSession[];
     'servers:select': (serverId: ServerId | null) => void;
     /** The server's server.properties on this PC. */
     'servers:properties': (serverId: ServerId) => ServerPropertiesInfo;

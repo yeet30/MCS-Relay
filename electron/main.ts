@@ -20,6 +20,7 @@ import { AppError } from './errors';
 import { createDialogs } from './ipc/dialogs';
 import { createEventSink, createHandle } from './ipc/handle';
 import { registerHandlers } from './ipc/handlers';
+import { HostHistory } from './history/HostHistory';
 import { LockService } from './lock/LockService';
 import { AppLog } from './log/AppLog';
 import { MinecraftProcess } from './processes/MinecraftProcess';
@@ -94,8 +95,13 @@ const launcher = new LauncherFiles(drive);
 const me = () => auth.me();
 
 // The callbacks below use `session`, declared further down; services call them later, never in constructors.
+// Who hosted each server, when and for how long (.launcher/history.json).
+const history = new HostHistory({ launcher });
 const lock = new LockService({
     drive, launcher, me,
+    onStaleTakeover: (serverId, stale, endedAt) => {
+        void history.addUnstopped(serverId, stale, endedAt).catch((err: unknown) => console.warn('[history] the unstopped session was not noted:', err));
+    },
     onLost: (serverId, reason) => session.onLockLost(serverId, reason),
     onChange: (serverId, view) => session.lockChanged(serverId, view),
     remember: {
@@ -145,6 +151,7 @@ const session: SessionController = new SessionController({
     lock, sync, changes, minecraft, playit, settings, events, me,
     notify: (n) => notifyUser(n),
     serverName: (serverId) => servers.nameOf(serverId),
+    history,
 });
 /** electron-updater, loaded at run time instead of bundled: it reads the update settings electron-builder puts next to
  *  the installed app. A development build has none, so it gets no updater. */
@@ -579,7 +586,7 @@ if (!app.requestSingleInstanceLock()) {
     void app.whenReady().then(async () => {
         appData.migrateLegacy();
         registerHandlers(createHandle(ipcMain, isTrustedUrl), {
-            auth, servers, session, settings, sync, transfers, changes, dialogs, report: reports, backups, installer, java, modpacks, properties, whitelist, playit: playitLink,
+            auth, servers, session, settings, sync, transfers, changes, dialogs, report: reports, backups, installer, java, modpacks, history, properties, whitelist, playit: playitLink,
             app: {
                 quitResponse, openExternal: (url) => shell.openExternal(url), setLogoState: applyLogoState,
                 updateState: () => updates.get(), checkForUpdates: () => updates.check(), installUpdate,

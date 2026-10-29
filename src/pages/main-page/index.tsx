@@ -6,6 +6,7 @@ import MembersSection from '../../components/members-section';
 import TermsGate from '../../components/terms-gate';
 import CreateServerHost from '../../components/create-server';
 import Tour from '../../components/tour';
+import HistoryDrawer from '../../components/history-drawer';
 import { TERMS_VERSION } from '../../../shared/types';
 import { useAuthStore } from '../../stores/authStore';
 import { useServersStore } from '../../stores/serversStore';
@@ -46,6 +47,7 @@ export default function MainPage() {
             <section id='menu-section'>
                 <BurgerMenu />
             </section>
+            <HistoryDrawer />
             <CreateServerHost />
             <Tour />
         </section>

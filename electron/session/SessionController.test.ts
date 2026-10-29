@@ -53,7 +53,9 @@ function setup(overrides: { report?: SyncReport; journal?: boolean } = {}) {
             holding = false;
         }),
         isHolding: vi.fn(() => holding),
+        sessionId: 'sess-1',
     };
+    const history = { add: vi.fn(async () => undefined) };
     const sync = {
         preflight: vi.fn(async () => overrides.report ?? report()),
         resolve: vi.fn(async () => report()),
@@ -121,10 +123,11 @@ function setup(overrides: { report?: SyncReport; journal?: boolean } = {}) {
         lockPollMs: 1_000_000,
         notify: (n) => void notes.push(n),
         serverName: () => 'Survival',
+        history,
     };
     const session = new SessionController(deps);
     return {
-        session, lock, sync, changes, minecraft, playit, settings, phases, events, notes,
+        session, history, lock, sync, changes, minecraft, playit, settings, phases, events, notes,
         setJava: (running: boolean) => {
             javaRunning = running;
         },
@@ -242,6 +245,33 @@ describe('SessionController: things going wrong while hosting', () => {
         t.session.onMinecraftExit(1, false);
         await vi.waitFor(() => expect(t.session.getState().phase).toBe('idle'));
         expect(t.sync.uploadSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('notes each hosted session in the history when it stops, with everyone who played', async () => {
+        const t = setup();
+        await t.session.start('s1');
+        t.session.onPlayers(['Steve']);
+        t.session.onPlayers(['Steve', 'Alex']);
+        t.session.onPlayers(['Alex']);
+        await t.session.stop();
+        await vi.waitFor(() => expect(t.history.add).toHaveBeenCalledTimes(1));
+        expect(t.history.add).toHaveBeenCalledWith('s1', expect.objectContaining({
+            id: 'sess-1', host: { name: ME.name, email: ME.email }, players: ['Steve', 'Alex'], ended: 'stopped',
+        }));
+    });
+
+    it('a Java crash is noted as crashed; a lost lock is left to whoever took over', async () => {
+        const t = setup();
+        await t.session.start('s1');
+        t.setJava(false);
+        t.session.onMinecraftExit(1, false);
+        await vi.waitFor(() => expect(t.history.add).toHaveBeenCalledWith('s1', expect.objectContaining({ ended: 'crashed' })));
+
+        const lost = setup();
+        await lost.session.start('s1');
+        lost.session.onLockLost('s1', 'Another member took over the server.');
+        await vi.waitFor(() => expect(lost.session.getState().phase).toBe('failed'));
+        expect(lost.history.add).not.toHaveBeenCalled();
     });
 
     it('losing the lock stops Java and uploads nothing', async () => {

@@ -347,6 +347,26 @@ describe('claim', () => {
         expect(bob.lock.isHolding(h.serverId)).toBe(true);
     });
 
+    it('taking over a session that never stopped reports it, for the history', async () => {
+        const alice = h.member(ALICE);
+        await alice.lock.claim(h.serverId, 0);
+        await alice.lock.update(h.serverId, { phase: 'running', startedAt: '2026-10-29T10:00:00.000Z', players: ['Steve'] });
+        alice.lock.dispose();
+        const taken: Array<[string, LockContent, string]> = [];
+        const bob = h.member(BOB, { onStaleTakeover: (serverId, lock, endedAt) => void taken.push([serverId, lock, endedAt]) });
+        h.store.advance(46_000);
+        await bob.lock.claim(h.serverId, 0);
+        expect(taken).toHaveLength(1);
+        expect(taken[0][1]).toMatchObject({ sessionId: alice.lock.sessionId, host: { email: ALICE.email }, startedAt: '2026-10-29T10:00:00.000Z', players: ['Steve'] });
+        expect(Number.isNaN(Date.parse(taken[0][2]))).toBe(false);
+
+        // A free lock (stopped normally) is not reported.
+        await bob.lock.release(h.serverId);
+        const carol = h.member(CAROL, { onStaleTakeover: () => void taken.push(['x', taken[0][1], '']) });
+        await carol.lock.claim(h.serverId, 0);
+        expect(taken).toHaveLength(1);
+    });
+
     it('refuses a stale "uploading" lock from someone else, but lets the same person resume it', async () => {
         const alice = h.member(ALICE);
         await alice.lock.claim(h.serverId, 3, { phase: 'uploading' });

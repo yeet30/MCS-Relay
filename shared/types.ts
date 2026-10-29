@@ -391,6 +391,17 @@ export interface PlayitTunnel {
     local: string;
 }
 
+/** One hosting session of a server, in its shared history. `ended`: "stopped" by its host, the Minecraft server
+ *  "crashed", or "unexpected": the host's app or PC went off while hosting (the end is its last sign of life). */
+export interface HostedSession {
+    id: string;                         // the lock's session id
+    host: { name: string; email: string };
+    startedAt: string;                  // when the server became "running"
+    endedAt: string;
+    players: string[];                  // everyone seen online during the session
+    ended: 'stopped' | 'crashed' | 'unexpected';
+}
+
 export interface LockContent {
     format: 2;
     sessionId: string;

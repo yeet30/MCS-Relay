@@ -10,6 +10,7 @@ import type { GoogleAuth } from '../auth/GoogleAuth';
 import type { BackupService } from '../backups/BackupService';
 import type { JavaInstaller } from '../installer/JavaInstaller';
 import type { ModpackService } from '../modpacks/ModpackService';
+import type { HostHistory } from '../history/HostHistory';
 import type { ServerInstaller } from '../installer/ServerInstaller';
 import type { PlayitLink } from '../playit/PlayitLink';
 import { isValidServerId } from '../store/appData';
@@ -42,6 +43,7 @@ export interface HandlerDeps {
     installer: Pick<ServerInstaller, 'versions' | 'folder' | 'install'>;
     java: Pick<JavaInstaller, 'install'>;
     modpacks: Pick<ModpackService, 'search' | 'versions' | 'install' | 'checkZip' | 'importZip' | 'info'>;
+    history: Pick<HostHistory, 'list'>;
     properties: Pick<ServerProperties, 'read' | 'write'>;
     whitelist: Pick<Whitelist, 'list' | 'add' | 'remove'>;
     playit: Pick<PlayitLink, 'getState' | 'link' | 'cancelLink' | 'check' | 'reopen' | 'unlink'>;
@@ -175,6 +177,7 @@ export function registerHandlers(handle: Handle, d: HandlerDeps): void {
     });
     handle('servers:openFolder', (serverId) => d.servers.openFolder(id(serverId)));
     handle('servers:info', (serverId) => d.servers.info(id(serverId)));
+    handle('servers:history', (serverId) => d.history.list(id(serverId)));
     handle('servers:select', (serverId) => d.session.select(serverId === null ? null : id(serverId)));
 
     handle('session:get', () => d.session.getState());

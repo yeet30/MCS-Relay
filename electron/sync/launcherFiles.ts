@@ -1,5 +1,5 @@
 // Access to the app's own files inside a server folder:
-//   <server folder>/.launcher/{lock.json, manifest.json, sync-rules.json, pending-delete/, backups/}
+//   <server folder>/.launcher/{lock.json, manifest.json, sync-rules.json, history.json, pending-delete/, backups/}
 // Drive allows several files with the same name in one folder, and two members can create one at the
 // same moment. Every lookup therefore takes the OLDEST match, and after creating a file or folder we
 // re-list and trash our own copy if an older one already existed.
@@ -7,7 +7,7 @@ import { DriveError, FOLDER_MIME } from '../drive/types';
 import type { DriveApi } from '../drive/types';
 
 export const LAUNCHER_FOLDER = '.launcher';
-export type LauncherFileName = 'lock.json' | 'manifest.json' | 'sync-rules.json';
+export type LauncherFileName = 'lock.json' | 'manifest.json' | 'sync-rules.json' | 'history.json';
 export type LauncherSubfolder = 'pending-delete' | 'backups';
 
 function isNotFound(err: unknown): boolean {

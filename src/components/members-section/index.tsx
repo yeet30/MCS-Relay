@@ -3,18 +3,12 @@ import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Clock, RotateCcw } from 'lucide-react';
 import { invoke } from '../../api';
+import { nameHue } from '../../lib/avatar';
 import { formatUptime } from '../../lib/format';
 import { describeServerChanges, isSessionBusy, livePresence } from '../../lib/sync';
 import { useNoticeStore } from '../../stores/noticeStore';
 import { useServersStore } from '../../stores/serversStore';
 import { lockFor, useSessionStore } from '../../stores/sessionStore';
-
-/** A colour for a player's initial that stays the same for that name. */
-function nameHue(name: string): number {
-    let hash = 0;
-    for (const ch of name.toLowerCase()) hash = (hash * 31 + ch.charCodeAt(0)) % 360;
-    return hash;
-}
 
 /** Players and uptime of the selected server, whoever hosts it, plus a refresh button. */
 export default function MembersSection() {

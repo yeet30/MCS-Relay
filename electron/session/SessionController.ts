@@ -9,6 +9,7 @@ import { formatDuration } from '../../shared/duration';
 import { ancestorsOf, parentOf } from '../../shared/paths';
 import { localJoinAddress } from './localAddress';
 import { AppError, toAppError } from '../errors';
+import type { HostHistory } from '../history/HostHistory';
 import type { LockService } from '../lock/LockService';
 import type { MinecraftProcess } from '../processes/MinecraftProcess';
 import type { PlayitRunner } from '../playit/PlayitRunner';
@@ -25,7 +26,7 @@ export interface EventSink {
 }
 
 export interface SessionDeps {
-    lock: Pick<LockService, 'inspect' | 'claim' | 'update' | 'release' | 'releaseIfMine' | 'isHolding'>;
+    lock: Pick<LockService, 'inspect' | 'claim' | 'update' | 'release' | 'releaseIfMine' | 'isHolding' | 'sessionId'>;
     sync: Pick<SyncEngine,
         'preflight' | 'resolve' | 'download' | 'uploadSession' | 'loadRules' | 'hasJournal' | 'serversWithJournal'
         | 'discardJournal' | 'baseRevision' | 'cleanupMyPlaceholders' | 'unfinishedRepair' | 'commitPartial'>;
@@ -42,6 +43,8 @@ export interface SessionDeps {
     /** Tells the user (notification, chime) that a start or stop finished. */
     notify?: (n: { title: string; body: string; outcome: 'done' | 'failed' }) => void;
     serverName?: (serverId: string) => string | null;
+    /** Where each hosting session is noted when it ends (who, when, how long). */
+    history?: Pick<HostHistory, 'add'>;
 }
 
 const MAX_STEPS = 100;
@@ -128,6 +131,8 @@ export class SessionController {
     private abandoning = false;
     private pollTimer: ReturnType<typeof setTimeout> | null = null;
     private nextStepId = 1;
+    /** The session this PC hosts now, for the server's history: noted when the Minecraft server stops. */
+    private hosting: { serverId: string; sessionId: string; startedAt: string; players: Set<string>; crashed: boolean } | null = null;
     private lastTransfer: TransferSnapshot | null = null;
     private readonly progress: OrchestrationProgress;
     private readonly now: () => number;
@@ -342,6 +347,7 @@ export class SessionController {
 
             this.progress.enter('watch', 'Watching the folder for changes');
             const startedAt = new Date(this.now()).toISOString();
+            this.hosting = { serverId, sessionId: this.d.lock.sessionId, startedAt, players: new Set(), crashed: false };
             this.setState({ phase: 'running', startedAt });
             await this.d.lock.update(serverId, { phase: 'running', startedAt, address: this.state.address, tunnels: this.state.tunnels });
             this.d.changes.clear();
@@ -495,6 +501,7 @@ export class SessionController {
             return;
         }
         this.setState({ javaRunning: false, players: [] });
+        this.noteHosted();
         if (javaRunning) this.progress.complete('stop-java', 'The Minecraft server has stopped');
         if (playitRunning) this.progress.enter('stop-playit', 'Stopping playit.gg');
         await this.d.playit.stop();
@@ -960,6 +967,21 @@ export class SessionController {
         await this.upload(serverId, 'repair');
     }
 
+    /** The session that just stopped goes into the server's history, in the background: the upload does not wait
+     *  for it, and a failure only costs the history line. */
+    private noteHosted(): void {
+        const hosting = this.hosting;
+        this.hosting = null;
+        if (!hosting || !this.d.history) return;
+        void (async () => {
+            const me = await this.d.me();
+            await this.d.history!.add(hosting.serverId, {
+                id: hosting.sessionId, host: { name: me.name, email: me.email }, startedAt: hosting.startedAt,
+                endedAt: new Date(this.now()).toISOString(), players: [...hosting.players], ended: hosting.crashed ? 'crashed' : 'stopped',
+            });
+        })().catch((err: unknown) => console.warn('[session] the session was not added to the history:', toAppError(err).detail ?? toAppError(err).message));
+    }
+
     private nameOf(serverId: string): string {
         return this.d.serverName?.(serverId) ?? 'The server';
     }
@@ -1023,6 +1045,7 @@ export class SessionController {
         this.setState({ javaRunning: false, players: [] });
         this.onMinecraftOutput([`[System] The server stopped (exit code ${code ?? 'unknown'})`]);
         if (this.state.phase === 'running' && !expected) {
+            if (this.hosting) this.hosting.crashed = true;
             this.step(`The Minecraft server stopped unexpectedly (exit code ${code ?? 'unknown'}); saving the world`, 'error', 'major');
             if (this.state.serverId) {
                 this.announce(this.state.serverId, 'failed', `${this.nameOf(this.state.serverId)} stopped unexpectedly`,
@@ -1034,6 +1057,7 @@ export class SessionController {
 
     onPlayers(players: string[]): void {
         this.setState({ players: [...players] });
+        for (const player of players) this.hosting?.players.add(player);
         const serverId = this.state.serverId;
         if (serverId && this.state.phase === 'running' && this.d.lock.isHolding(serverId)) {
             // Display only; a failed write is retried by the next renewal.
@@ -1046,6 +1070,8 @@ export class SessionController {
         if (serverId !== this.state.serverId || !this.isBusy()) return;
         console.error(`[session] lock lost for ${serverId}: ${reason}`);
         this.lockLost = true;
+        // Whoever took the server over notes this session from the lock they found.
+        this.hosting = null;
         this.abort?.abort();
         const info = this.lostInfo(reason);
         // During a run, its failure is announced with it; while the server just runs, say it here.

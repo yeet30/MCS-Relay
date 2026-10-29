@@ -26,6 +26,9 @@ export interface LockServiceDeps {
     /** This PC wrote the lock (claimed, changed or released it): how it looks now. The idle poll does not run during
      *  a session, so without this nobody would learn that the server is now hosted here. */
     onChange?: (serverId: string, view: LockView) => void;
+    /** A claim took over a stale lock of a session that was hosting (it never stopped): that lock, and roughly when it
+     *  ended (its last renewal). Called once the claim holds the server. */
+    onStaleTakeover?: (serverId: string, lock: LockContent, endedAt: string) => void;
 }
 
 export type LockPatch = Partial<Pick<LockContent, 'phase' | 'address' | 'players' | 'startedAt' | 'baseRevision' | 'tunnels'>>;
@@ -177,6 +180,7 @@ export class LockService {
     private readonly claimSettleMs: number;
     private readonly remember: LockServiceDeps['remember'];
     private readonly onChange: LockServiceDeps['onChange'];
+    private readonly onStaleTakeover: LockServiceDeps['onStaleTakeover'];
     private readonly claims = new Map<string, Claim>();
     private latestSessionId = randomUUID();
 
@@ -191,6 +195,7 @@ export class LockService {
         this.claimSettleMs = deps.claimSettleMs ?? 3_000;
         this.remember = deps.remember;
         this.onChange = deps.onChange;
+        this.onStaleTakeover = deps.onStaleTakeover;
     }
 
     /** The session id of the most recent claim (a new one per claim). */
@@ -276,6 +281,9 @@ export class LockService {
         claim.active = true;
         this.scheduleRenewal(claim);
         this.changed(serverId, { state: 'mine', lock: claim.content, ageSeconds: 0 });
+        if (before.state === 'stale' && before.lock.startedAt) {
+            this.onStaleTakeover?.(serverId, before.lock, new Date(Date.now() - before.ageSeconds * 1000).toISOString());
+        }
     }
 
     /** Changes what lock.json says. Checks ownership first; if the lock was taken over, calls onLost and
