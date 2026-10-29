@@ -1,12 +1,20 @@
 import './members-section.css';
 import { useEffect, useState } from 'react';
-import { RotateCcw } from 'lucide-react';
+import type { CSSProperties } from 'react';
+import { Clock, RotateCcw } from 'lucide-react';
 import { invoke } from '../../api';
 import { formatUptime } from '../../lib/format';
 import { describeServerChanges, isSessionBusy, livePresence } from '../../lib/sync';
 import { useNoticeStore } from '../../stores/noticeStore';
 import { useServersStore } from '../../stores/serversStore';
 import { lockFor, useSessionStore } from '../../stores/sessionStore';
+
+/** A colour for a player's initial that stays the same for that name. */
+function nameHue(name: string): number {
+    let hash = 0;
+    for (const ch of name.toLowerCase()) hash = (hash * 31 + ch.charCodeAt(0)) % 360;
+    return hash;
+}
 
 /** Players and uptime of the selected server, whoever hosts it, plus a refresh button. */
 export default function MembersSection() {
@@ -67,9 +75,29 @@ export default function MembersSection() {
             </button>
             {presence && (
                 <div className='members-div'>
-                    <h3>Online Players: <span>{presence.players.length}{maxPlayers !== null ? `/${maxPlayers}` : ''}</span></h3>
-                    {presence.players.map((player) => <span className='player-name' key={player}>{player}</span>)}
-                    {uptime !== null && <span className='uptime-span'>Uptime: {formatUptime(uptime)}</span>}
+                    <div className='members-head'>
+                        <span className='members-label'><span className='live-dot' />Online</span>
+                        <span className='members-count' title='Players online, out of the most the server allows'>
+                            {presence.players.length}{maxPlayers !== null && <small>/{maxPlayers}</small>}
+                        </span>
+                    </div>
+                    {presence.players.length === 0
+                        ? <span className='members-empty'>Nobody has joined yet.</span>
+                        : (
+                            <ul className='player-list'>
+                                {presence.players.map((player) => (
+                                    <li className='player-name' key={player} title={player}>
+                                        <span className='player-avatar' style={{ '--hue': nameHue(player) } as CSSProperties}>{player.charAt(0).toUpperCase()}</span>
+                                        <span className='player-text'>{player}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    {uptime !== null && (
+                        <span className='uptime-span' title='How long the server has been running'>
+                            <Clock size={13} /> {formatUptime(uptime)}
+                        </span>
+                    )}
                 </div>
             )}
         </section>

@@ -50,51 +50,94 @@
        transform: rotate(-20deg);
     }
 
+    /* The running server's players and uptime: a card like the rest of the page. */
     .members-div {
+        position: sticky;
+        top: 12px;
+        left: 1rem;
         display: flex;
         flex-direction: column;
-        position: sticky;
-        left: 1rem;
-        top: 12px;
-
+        gap: 8px;
         margin: 12px;
         margin-top: 1.9rem;
-        padding: 12px 14px;
+        padding: 10px 10px 11px;
         min-width: 140px;
-
+        box-sizing: border-box;
         background: var(--panel);
         border: 1px solid var(--line);
         border-radius: 14px;
     }
 
-    .members-div h3 {
-        margin: 0 0 10px 0;
-
-        font-size: 0.95rem;
-        font-weight: 600;
-        color: var(--text);
-
+    .members-head {
         display: flex;
-        justify-content: space-between;
         align-items: center;
-
-        border-bottom: 1px solid var(--line);
-        padding-bottom: 5px;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 0 2px;
     }
 
-    .members-div h3 span {
-        color: var(--accent);
+    .members-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.68rem;
         font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--good);
+    }
+
+    .live-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--good);
+        animation: live-pulse 2s ease-out infinite;
+    }
+
+    .members-count {
+        padding: 1px 8px;
+        border-radius: 999px;
+        background: rgba(var(--good-rgb), 0.12);
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+
+        small {
+            font-size: 0.72rem;
+            font-weight: 500;
+            color: var(--muted);
+        }
+    }
+
+    .members-empty {
+        padding: 2px 2px 0;
+        font-size: 0.8rem;
+        color: var(--muted);
+    }
+
+    .player-list {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        max-height: 40vh;
+        overflow-y: auto;
     }
 
     .player-name {
-        padding: 6px 8px;
-        border-radius: 5px;
-
-        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        padding: 4px 6px;
+        border-radius: 8px;
+        font-size: 0.86rem;
         color: var(--text-2);
-
-        transition: background-color 0.2s ease, color 0.2s ease;
+        transition: background-color 0.15s ease, color 0.15s ease;
     }
 
     .player-name:hover {
@@ -102,9 +145,37 @@
         color: var(--text-strong);
     }
 
+    /* The player's initial, in a colour that stays the same for that name. */
+    .player-avatar {
+        flex: none;
+        width: 22px;
+        height: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        background: hsl(var(--hue) 50% 45%);
+        color: #fff;
+        font-size: 0.72rem;
+        font-weight: 700;
+    }
+
+    .player-text {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
     .uptime-span {
-        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 2px 0;
+        border-top: 1px solid var(--line);
+        font-size: 0.8rem;
         color: var(--muted);
+        font-variant-numeric: tabular-nums;
     }
 }
 
@@ -115,4 +186,20 @@
   to {
     transform: rotate(-360deg);
   }
+}
+
+@keyframes live-pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(var(--good-rgb), 0.5);
+    }
+    70%,
+    100% {
+        box-shadow: 0 0 0 5px rgba(var(--good-rgb), 0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .members-section .live-dot {
+        animation: none;
+    }
 }
