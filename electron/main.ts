@@ -275,6 +275,22 @@ function loggedEvents(sink: ReturnType<typeof createEventSink>): ReturnType<type
 
 /* ------------------------------------------------------------------ notifications */
 
+/** Notifications still on screen or in the Action Center. Electron loses a notification's click handler when the
+ *  object is garbage collected, so each one is kept until it is clicked or closed. */
+const shownNotifications = new Set<Notification>();
+
+/** Shows a notification whose click brings the window to the front. */
+function showNotification(options: Electron.NotificationConstructorOptions): void {
+    const notification = new Notification(options);
+    shownNotifications.add(notification);
+    notification.on('click', () => {
+        shownNotifications.delete(notification);
+        showWindow();
+    });
+    notification.on('close', () => shownNotifications.delete(notification));
+    notification.show();
+}
+
 /** A run finished: a chime (if on), and a desktop notification (if on). Success is only notified when the window is
  *  not in front; a failure always is, so it is not missed. */
 function notifyUser(n: { title: string; body: string; outcome: 'done' | 'failed' }): void {
@@ -283,9 +299,7 @@ function notifyUser(n: { title: string; body: string; outcome: 'done' | 'failed'
     const inFront = win !== null && win.isVisible() && win.isFocused();
     if (!prefs.notifications || (inFront && n.outcome === 'done') || !Notification.isSupported()) return;
     // silent: the chime above is the sound, so Windows does not play its own on top of it.
-    const notification = new Notification({ title: n.title, body: n.body, silent: true, icon: path.join(process.env.VITE_PUBLIC, 'launcher.ico') });
-    notification.on('click', showWindow);
-    notification.show();
+    showNotification({ title: n.title, body: n.body, silent: true, icon: path.join(process.env.VITE_PUBLIC, 'launcher.ico') });
 }
 
 /** playit.gg was approved in the browser. The user is still looking at playit.gg's page, which does not say to come
@@ -293,15 +307,13 @@ function notifyUser(n: { title: string; body: string; outcome: 'done' | 'failed'
  *  window comes forward. Windows may only flash its taskbar button while another app is in front. */
 function playitLinked(address: string | null): void {
     if (Notification.isSupported()) {
-        const notification = new Notification({
+        showNotification({
             title: 'playit.gg is linked',
             body: address
                 ? `Everything is set. You can close the browser tab and go back to MCS-Relay. Friends will join at ${address}.`
                 : 'Everything is set. You can close the browser tab and go back to MCS-Relay.',
             icon: path.join(process.env.VITE_PUBLIC, 'launcher.ico'),
         });
-        notification.on('click', showWindow);
-        notification.show();
     }
     if (!win) return;
     if (win.isMinimized()) win.restore();
@@ -320,10 +332,18 @@ let quitAllowed = false;
 let quitting = false;
 let quitPending = false;
 
+/** The window in front of every other one: restored when minimized, shown when hidden in the tray. Windows only lets
+ *  the app already in front take the foreground, so the window is "always on top" for a moment to get there; this
+ *  runs when the user asked for the window (a notification or the tray clicked). */
 function showWindow(): void {
     if (!win) createWindow();
-    win?.show();
-    win?.focus();
+    if (!win) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.setAlwaysOnTop(true);
+    win.moveTop();
+    win.focus();
+    win.setAlwaysOnTop(false);
 }
 
 /** Close button, tray "Quit" and OS quit all come here. A busy session or a backup task asks the user first; quitting
